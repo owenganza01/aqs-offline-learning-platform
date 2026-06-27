@@ -1,0 +1,642 @@
+{
+	"info": {
+		"_postman_id": "8b5f3a02-ef92-4914-9964-6df599cbb215",
+		"name": "AQS Offline Learning Platform API",
+		"description": "API Test Suite for Africa Quantitative Sciences (AQS) Offline Learning Platform. Contains complete request endpoints, sample JSON payloads, dynamic path variables, and setup parameters for both Student and Instructor roles.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication & Profile",
+			"item": [
+				{
+					"name": "Get Profile details (Me)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							]
+						},
+						"description": "Acquires the currently logged-in user profile from the database, corresponding to the verified Firebase Auth ID Token. Automatically registers the user if it is their first time logging in."
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Role (Switch)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"role\": \"instructor\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/role",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"role"
+							]
+						},
+						"description": "Updates or toggles the user's role on the server. Allowed roles: 'learner', 'instructor'."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile (Name & Avatar)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Jane Doe\",\n    \"avatarUrl\": \"https://images.unsplash.com/photo-1494790108377-be9c29b29330\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"profile"
+							]
+						},
+						"description": "Updates the student's passport metadata such as full name and avatar picture URL."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Syllabus & Student Progress",
+			"item": [
+				{
+					"name": "List All Courses",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/courses",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"courses"
+							]
+						},
+						"description": "Fetches a high-level catalog of all available digital courses, including simple lists of lessons and associated quiz summaries."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Specific Course Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/courses/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"courses",
+								"1"
+							]
+						},
+						"description": "Retrieves comprehensive, detailed roadmap information for a specific course: lessons content, safe quiz questions (excluding correct options answers indices), lesson completion states, and recent grading scores."
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Lesson Complete",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/lessons/1/complete",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lessons",
+								"1",
+								"complete"
+							]
+						},
+						"description": "Registers progress state turning a branch green on the Progress Tree of Growth by completing the specified lesson chapter."
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Quiz for Secure Grading",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"answers\": [0, 2, 1]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/quizzes/1/submit",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"quizzes",
+								"1",
+								"submit"
+							]
+						},
+						"description": "Submits multiple-choice answer index selections to be graded securely on the server. Checks answers against private correct option indices, increments attempt scores, and returns passing state."
+					},
+					"response": []
+				},
+				{
+					"name": "PWA Sync Reconnection Sync Engine",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"lessonCompletions\": [\n        {\n            \"lessonId\": 1,\n            \"completedAt\": \"2026-06-24T09:12:00.000Z\"\n        }\n    ],\n    \"quizSubmissions\": [\n        {\n            \"quizId\": 1,\n            \"answers\": [0, 2, 1],\n            \"attemptedAt\": \"2026-06-24T09:15:30.000Z\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sync",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sync"
+							]
+						},
+						"description": "Bulk pushes offline operations cached within PouchDB local queues on the client to sync securely onto PostgreSQL database."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Instructor CMS Administration",
+			"item": [
+				{
+					"name": "Create Course (CMS)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Quantitative Agricultural Scaling\",\n    \"description\": \"Advanced techniques of evaluating soil density and spatial mapping algorithms under fluctuating humidity constraints.\",\n    \"thumbnail\": \"teal\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses"
+							]
+						},
+						"description": "Constructs a new course category in the student catalog. Restricted to verified Instructors and Admin users."
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Course (CMS)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Quantitative Agricultural Scaling (Updated)\",\n    \"description\": \"A comprehensive class map for modern agricultural statistics.\",\n    \"thumbnail\": \"teal\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1"
+							]
+						},
+						"description": "Edits description, title, or thumbnail layout values for the specified course."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Course (CMS)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1"
+							]
+						},
+						"description": "Deletes the selected course along with cascade deletions of all its curriculum lessons and quizzes."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Lesson Material (CMS)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Practical Spatial Algebra\",\n    \"content\": \"Spatial algebra helps scale coordinate distances against visual limits. For modern estimation formulas, we focus heavily on the bounds of scaling systems.\",\n    \"videoUrl\": \"https://www.youtube.com/embed/dQw4w9WgXcQ\",\n    \"sortOrder\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1/lessons",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1",
+								"lessons"
+							]
+						},
+						"description": "Constructs a new syllabus chapter lesson page node inside the specified course ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Lesson Material (CMS)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Practical Spatial Algebra (Slightly Edited)\",\n    \"content\": \"Revised reading texts for spatial agricultural scales.\",\n    \"videoUrl\": \"https://www.youtube.com/embed/dQw4w9WgXcQ\",\n    \"sortOrder\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1/lessons/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1",
+								"lessons",
+								"1"
+							]
+						},
+						"description": "Alters content readings or video paths for the specified lesson chapter."
+					},
+					"response": []
+				},
+				{
+					"name": "Reorder Syllabus Roadmap (CMS)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"orderedIds\": [2, 1, 3]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1/lessons/reorder",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1",
+								"lessons",
+								"reorder"
+							]
+						},
+						"description": "Resets the curriculum road ordering of specified lesson ID arrays, which updates tree node branch arrangements."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Lesson Material (CMS)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1/lessons/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1",
+								"lessons",
+								"1"
+							]
+						},
+						"description": "Permanently deletes the targeted lesson page from database."
+					},
+					"response": []
+				},
+				{
+					"name": "Deploy Quiz Sheet and Question lock",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Quantitative Scaling Basics Exam\",\n    \"questions\": [\n        {\n            \"questionText\": \"What spatial coordinate bounds are most vulnerable to humidity estimation error?\",\n            \"options\": [\"Northeastern sectors\", \"Western boundaries\", \"Southeastern sectors\", \"Central regions\"],\n            \"correctOptionIndex\": 0\n        },\n        {\n            \"questionText\": \"If moisture levels fall below 15%, what weight compensation constant should be active?\",\n            \"options\": [\"0.56 grams\", \"1.2 grams\", \"2.0 grams\", \"None of the options\"],\n            \"correctOptionIndex\": 2\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1/quiz",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1",
+								"quiz"
+							]
+						},
+						"description": "Creates or completely replaces a Course Quiz sheet, writing standard correct index integers to the database securely."
+					},
+					"response": []
+				},
+				{
+					"name": "Inject Single MCQ (CMS Database Injector)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"questionText\": \"Which soil depth range is ideal for extraction estimations under basic quantitative models?\",\n    \"options\": [\"0-10 cm\", \"10-30 cm\", \"30-60 cm\", \"Deep core beds\"],\n    \"correctOptionIndex\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/courses/1/quiz/questions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"courses",
+								"1",
+								"quiz",
+								"questions"
+							]
+						},
+						"description": "Invokes the direct MCQ injector to safely append a standalone question to the targeted course quiz paper database."
+					},
+					"response": []
+				},
+				{
+					"name": "Compile Analytics Metrics Summary",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/instructor/analytics",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"instructor",
+								"analytics"
+							]
+						},
+						"description": "Gathers aggregated quantitative information: overall students enrolled, course statistics (engaged users, graduations, quiz averages, passing rates), and chronological live student activity feeds."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "authToken",
+			"value": "PASTE_FIREBASE_ID_TOKEN_HERE",
+			"type": "string"
+		}
+	]
+}

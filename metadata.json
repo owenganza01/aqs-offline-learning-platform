@@ -1,0 +1,6 @@
+{
+  "name": "AQS Offline Learning Platform",
+  "description": "An offline-first learning platform for rural students, featuring course discovery, video lesson player, offline quiz engine with synced progress, and instructor CMS with visual statistics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
