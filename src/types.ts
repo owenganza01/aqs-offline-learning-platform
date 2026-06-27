@@ -53,8 +53,3 @@ export interface QuizAttempt {
   passed: boolean;
   attemptedAt: string;
 }
-
-export interface LocalOfflineQueue {
-  completedLessons: { lessonId: number; completedAt: string }[];
-  quizSubmissions: { quizId: number; answers: number[]; attemptedAt: string }[];
-}

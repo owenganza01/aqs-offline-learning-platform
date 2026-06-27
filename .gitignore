@@ -2,7 +2,32 @@ node_modules/
 build/
 dist/
 coverage/
+drizzle/
 .DS_Store
+Thumbs.db
 *.log
+
+# Environment & secrets
 .env*
 !.env.example
+
+# Firebase service account (private key - never commit)
+service-account.json
+
+# Generated reports
+analysis_report.md
+implementation_plan.md
+implementation_gap_plan.md
+srs_compliance_report.md
+
+# AI Studio artifacts
+metadata.json
+assets/.aistudio/
+
+# Dev-only utility scripts
+promote.ts
+db-test.ts
+
+# IDE
+.vscode/
+.idea/

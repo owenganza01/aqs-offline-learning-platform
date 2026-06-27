@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.ts";
 import * as schema from "./src/db/schema.ts";
 import { requireAuth, requireInstructor, AuthRequest } from "./src/middleware/auth.ts";
+import { scoreQuiz } from "./src/lib/scoring.ts";
 import { eq, and, desc } from "drizzle-orm";
 import dotenv from "dotenv";
 
@@ -255,18 +256,7 @@ async function startServer() {
         return res.status(404).json({ error: "No questions found for this quiz." });
       }
 
-      let correctCount = 0;
-      questionsList.forEach((q, idx) => {
-        const submittedAnswer = answers[idx];
-        if (submittedAnswer !== undefined && submittedAnswer === q.correctOptionIndex) {
-          correctCount++;
-        }
-      });
-
-      const totalQuestions = questionsList.length;
-      const rawScore = (correctCount / totalQuestions) * 100;
-      const score = Math.round(rawScore);
-      const passed = score >= 70; // 70% passing grade requirement from FR-03
+      const { correctCount, totalQuestions, score, passed } = scoreQuiz(questionsList, answers);
 
       // Save quiz attempt in database
       const attempt = await db.insert(schema.quizAttempts)
@@ -336,17 +326,7 @@ async function startServer() {
           .where(eq(schema.questions.quizId, quizId));
 
         if (questionsList.length > 0) {
-          let correctCount = 0;
-          questionsList.forEach((q, idx) => {
-            const val = answers[idx];
-            if (val !== undefined && val === q.correctOptionIndex) {
-              correctCount++;
-            }
-          });
-
-          const totalQuestions = questionsList.length;
-          const score = Math.round((correctCount / totalQuestions) * 100);
-          const passed = score >= 70;
+          const { correctCount, totalQuestions, score, passed } = scoreQuiz(questionsList, answers);
 
           // Insert quiz attempt
           const attempt = await db.insert(schema.quizAttempts)
@@ -716,12 +696,7 @@ async function startServer() {
           if (courseLessonsIds.length > 0) {
             const learnerCompletions = await db.select()
               .from(schema.lessonCompletions)
-              .where(
-                and(
-                  eq(schema.lessonCompletions.userId, learner.id),
-                  eq(schema.lessonCompletions.userId, learner.id) // dummy redundant to verify
-                )
-              );
+              .where(eq(schema.lessonCompletions.userId, learner.id));
 
             // Filter completions belonging to this course
             const courseCompletions = learnerCompletions.filter(c => courseLessonsIds.includes(c.lessonId));
