@@ -32,5 +32,9 @@ pool.on('error', (err) => {
 
 // Initialize and export the Drizzle database instance
 export const db = drizzle(pool, { schema });
+
+export async function shutdownDb() {
+  await pool.end();
+}
 export type DatabaseType = typeof db;
 export { schema };
