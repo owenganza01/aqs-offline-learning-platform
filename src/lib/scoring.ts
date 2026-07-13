@@ -14,10 +14,13 @@ export interface ScoreResult {
 
 const PASS_THRESHOLD = 70;
 
-export const scoreQuiz = (
-  questions: ScorableQuestion[],
-  answers: (number | undefined)[]
-): ScoreResult => {
+export const scoreQuiz = (questions: ScorableQuestion[], answers: (number | undefined)[]): ScoreResult => {
+  const totalQuestions = questions.length;
+
+  if (totalQuestions === 0) {
+    return { correctCount: 0, totalQuestions: 0, score: 0, passed: false };
+  }
+
   let correctCount = 0;
 
   questions.forEach((q, idx) => {
@@ -27,7 +30,6 @@ export const scoreQuiz = (
     }
   });
 
-  const totalQuestions = questions.length;
   const rawScore = (correctCount / totalQuestions) * 100;
   const score = Math.round(rawScore);
   const passed = score >= PASS_THRESHOLD;

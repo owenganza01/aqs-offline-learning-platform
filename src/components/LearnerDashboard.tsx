@@ -1,12 +1,22 @@
 // src/components/LearnerDashboard.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Course, Lesson, QuizAttempt, User } from '../types.ts';
-import { 
-  BookOpen, CheckCircle, ArrowRight, Search, X, 
-  Inbox, Sparkles, Plus, GraduationCap, Clock, Check
+import {
+  BookOpen,
+  CheckCircle,
+  ArrowRight,
+  Search,
+  X,
+  Inbox,
+  Sparkles,
+  Plus,
+  GraduationCap,
+  Clock,
+  Check,
 } from 'lucide-react';
 import { PouchDBService } from '../lib/pouchdb-service.ts';
 import { getCourseImage } from '../lib/utils.ts';
+import { apiFetch } from '../lib/api.ts';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface LearnerDashboardProps {
@@ -23,14 +33,15 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   courses,
   completedLessonIds,
   onSelectCourse,
+  token,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<number[]>([]);
-  
+
   // Tab/navigation state for the minimal student app
   const [activeTab, setActiveTab] = useState<'my-courses' | 'browse'>('my-courses');
-  const [hasSetDefaultTab, setHasSetDefaultTab] = useState(false);
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
     const loadEnrolled = async () => {
@@ -42,6 +53,14 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
 
   const handleEnroll = async (courseId: number) => {
     await PouchDBService.enrollInCourse(courseId);
+    // Persist enrollment to server (best-effort — offline will sync later)
+    if (token) {
+      apiFetch('/api/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId }),
+      }).catch(() => {});
+    }
     const ids = await PouchDBService.getEnrolledCourseIds();
     setEnrolledCourseIds(ids);
   };
@@ -52,11 +71,11 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
     }
     const text = `${course.title} ${course.description}`.toLowerCase();
     if (
-      text.includes('quant') || 
-      text.includes('math') || 
-      text.includes('stat') || 
-      text.includes('calculus') || 
-      text.includes('probab') || 
+      text.includes('quant') ||
+      text.includes('math') ||
+      text.includes('stat') ||
+      text.includes('calculus') ||
+      text.includes('probab') ||
       text.includes('algebra') ||
       text.includes('model') ||
       text.includes('science')
@@ -64,20 +83,20 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
       return 'Quantitative Sciences';
     }
     if (
-      text.includes('agri') || 
-      text.includes('crop') || 
-      text.includes('soil') || 
-      text.includes('farm') || 
+      text.includes('agri') ||
+      text.includes('crop') ||
+      text.includes('soil') ||
+      text.includes('farm') ||
       text.includes('estim') ||
       text.includes('yield')
     ) {
       return 'Agricultural Estimation';
     }
     if (
-      text.includes('scale') || 
-      text.includes('system') || 
-      text.includes('dynamic') || 
-      text.includes('tech') || 
+      text.includes('scale') ||
+      text.includes('system') ||
+      text.includes('dynamic') ||
+      text.includes('tech') ||
       text.includes('digit') ||
       text.includes('programm')
     ) {
@@ -91,73 +110,79 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   };
 
   // Filter courses based on active search state and category filter
-  const filteredCourses = courses.filter(course => {
+  const filteredCourses = courses.filter((course) => {
     const categoryName = getCourseCategory(course);
     const categoryMatch = selectedCategory === 'All' || categoryName === selectedCategory;
     const searchLow = searchQuery.toLowerCase().trim();
-    const searchMatch = !searchLow || 
-      course.title.toLowerCase().includes(searchLow) || 
+    const searchMatch =
+      !searchLow ||
+      course.title.toLowerCase().includes(searchLow) ||
       course.description.toLowerCase().includes(searchLow) ||
       categoryName.toLowerCase().includes(searchLow);
-      
+
     return categoryMatch && searchMatch;
   });
 
   // Split into "My Courses" (Enrolled) and "Featured Courses" (un-enrolled available courses)
-  const enrolledCourses = filteredCourses.filter(c => isEnrolled(c.id));
-  const featuredCourses = filteredCourses.filter(c => !isEnrolled(c.id));
+  const enrolledCourses = filteredCourses.filter((c) => isEnrolled(c.id));
+  const featuredCourses = filteredCourses.filter((c) => !isEnrolled(c.id));
 
   // Limit My Courses to exactly 5 display entries as requested
   const displayEnrolledCourses = enrolledCourses.slice(0, 5);
 
   // Auto-switch tabs for new students: if 0 enrolled, default to 'browse', otherwise default to 'my-courses'
   useEffect(() => {
-    if (courses.length > 0 && !hasSetDefaultTab) {
-      if (enrolledCourseIds.length === 0) {
-        setActiveTab('browse');
-      } else {
-        setActiveTab('my-courses');
-      }
-      setHasSetDefaultTab(true);
+    if (courses.length > 0 && !hasInitialized.current) {
+      hasInitialized.current = true;
+
+      setActiveTab(enrolledCourseIds.length === 0 ? 'browse' : 'my-courses');
     }
-  }, [enrolledCourseIds, courses, hasSetDefaultTab]);
+  }, [enrolledCourseIds, courses]);
 
   // Categories helper
   const dynamicCategories = Array.from(new Set(courses.map(getCourseCategory))) as string[];
-  const categoryCounts = dynamicCategories.reduce((acc, cat) => {
-    const count = courses.filter(c => {
-      const isCat = getCourseCategory(c) === cat;
-      const searchLow = searchQuery.toLowerCase().trim();
-      const isSearchMatch = !searchLow || 
-        c.title.toLowerCase().includes(searchLow) || 
-        c.description.toLowerCase().includes(searchLow) ||
-        cat.toLowerCase().includes(searchLow);
-      return isCat && isSearchMatch;
-    }).length;
-    acc[cat] = count;
-    return acc;
-  }, {} as Record<string, number>);
+  const categoryCounts = dynamicCategories.reduce(
+    (acc, cat) => {
+      const count = courses.filter((c) => {
+        const isCat = getCourseCategory(c) === cat;
+        const searchLow = searchQuery.toLowerCase().trim();
+        const isSearchMatch =
+          !searchLow ||
+          c.title.toLowerCase().includes(searchLow) ||
+          c.description.toLowerCase().includes(searchLow) ||
+          cat.toLowerCase().includes(searchLow);
+        return isCat && isSearchMatch;
+      }).length;
+      acc[cat] = count;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
-  const totalMatchingCount = courses.filter(c => {
+  const totalMatchingCount = courses.filter((c) => {
     const cat = getCourseCategory(c);
     const searchLow = searchQuery.toLowerCase().trim();
-    return !searchLow || 
-      c.title.toLowerCase().includes(searchLow) || 
+    return (
+      !searchLow ||
+      c.title.toLowerCase().includes(searchLow) ||
       c.description.toLowerCase().includes(searchLow) ||
-      cat.toLowerCase().includes(searchLow);
+      cat.toLowerCase().includes(searchLow)
+    );
   }).length;
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 md:px-6 py-4" id="learner-dashboard">
-      
       {/* Search & Filter Toolbar: Discover Classes & Syllabus Chapters */}
       <div className="bg-white border border-slate-150 rounded-3xl p-5 shadow-sm mb-6" id="course-filter-panel">
-        <label htmlFor="course-search-field" className="block text-sm font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider text-xs">
+        <label
+          htmlFor="course-search-field"
+          className="block text-sm font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider text-xs"
+        >
           🔍 Discover Classes & Syllabus Chapters
         </label>
-        
+
         <div className="relative w-full mb-4">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
             <Search className="w-4 h-4" />
           </div>
           <input
@@ -171,7 +196,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-500 hover:text-slate-600 transition-colors"
               title="Clear search context"
               id="clear-search-btn"
             >
@@ -192,9 +217,11 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
               id="category-pill-all"
             >
               <span>All Courses</span>
-              <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono leading-none ${
-                selectedCategory === 'All' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-500'
-              }`}>
+              <span
+                className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono leading-none ${
+                  selectedCategory === 'All' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-500'
+                }`}
+              >
                 {totalMatchingCount}
               </span>
             </button>
@@ -202,7 +229,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             {dynamicCategories.map((cat) => {
               const isSelected = selectedCategory === cat;
               const count = categoryCounts[cat] || 0;
-              
+
               return (
                 <button
                   key={cat}
@@ -215,9 +242,11 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                   id={`category-pill-${cat.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                 >
                   <span>{cat}</span>
-                  <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono leading-none ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-500'
-                  }`}>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono leading-none ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
                     {count}
                   </span>
                 </button>
@@ -243,7 +272,10 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             </span>
           )}
           {activeTab === 'my-courses' && (
-            <motion.div layoutId="activeTabUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
+            <motion.div
+              layoutId="activeTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"
+            />
           )}
         </button>
 
@@ -261,21 +293,23 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             </span>
           )}
           {activeTab === 'browse' && (
-            <motion.div layoutId="activeTabUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
+            <motion.div
+              layoutId="activeTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"
+            />
           )}
         </button>
       </div>
 
       {/* Main Container rendering tabs dynamically */}
       <div className="min-h-[350px]">
-        
         {/* Tab 1: My Courses */}
         {activeTab === 'my-courses' && (
           <div id="my-courses-tab-view">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm font-bold text-slate-850 uppercase tracking-wider font-sans">
+              <h2 className="text-sm font-bold text-slate-850 uppercase tracking-wider font-sans">
                 📚 Active Enrolled Classes
-              </h3>
+              </h2>
               {enrolledCourses.length > 5 && (
                 <span className="text-[11px] font-mono text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100">
                   Showing 5 of {enrolledCourses.length} classes
@@ -284,11 +318,15 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             </div>
 
             {enrolledCourses.length === 0 ? (
-              <div className="bg-slate-50 border border-dashed border-slate-200 p-10 text-center rounded-3xl" id="empty-my-courses">
+              <div
+                className="bg-slate-50 border border-dashed border-slate-200 p-10 text-center rounded-3xl"
+                id="empty-my-courses"
+              >
                 <Inbox className="w-10 h-10 text-slate-350 mx-auto mb-2" />
                 <p className="text-sm font-bold text-slate-700">You haven't chosen any courses yet.</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  Instructors have uploaded world-class study materials. Select "Featured courses" to choose what you want to learn!
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  Our content team has uploaded world-class study materials. Select "Featured courses" to choose what
+                  you want to learn!
                 </p>
                 <button
                   onClick={() => setActiveTab('browse')}
@@ -300,15 +338,14 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {displayEnrolledCourses.map((course) => {
+                {displayEnrolledCourses.map((course, idx) => {
                   const courseLessons = course.lessons || [];
-                  const courseCompletedCount = courseLessons.filter(l => completedLessonIds.includes(l.id)).length;
-                  const progressPct = courseLessons.length > 0 
-                    ? Math.round((courseCompletedCount / courseLessons.length) * 100) 
-                    : 0;
+                  const courseCompletedCount = courseLessons.filter((l) => completedLessonIds.includes(l.id)).length;
+                  const progressPct =
+                    courseLessons.length > 0 ? Math.round((courseCompletedCount / courseLessons.length) * 100) : 0;
 
                   return (
-                    <motion.div 
+                    <motion.div
                       key={`my-course-${course.id}`}
                       whileHover={{ y: -3 }}
                       transition={{ duration: 0.15 }}
@@ -317,9 +354,12 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                     >
                       <div>
                         <div className="relative h-40 overflow-hidden bg-slate-50">
-                          <img 
-                            src={getCourseImage(course)} 
+                          <img
+                            src={getCourseImage(course)}
                             alt={course.title}
+                            width={400}
+                            height={160}
+                            fetchpriority={idx === 0 ? 'high' : 'auto'}
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover"
                           />
@@ -337,12 +377,10 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                               {getCourseCategory(course)}
                             </span>
                           </div>
-                          <h4 className="text-base font-bold text-slate-900 tracking-tight leading-snug line-clamp-1">
+                          <h3 className="text-base font-bold text-slate-900 tracking-tight leading-snug line-clamp-1">
                             {course.title}
-                          </h4>
-                          <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">
-                            {course.description}
-                          </p>
+                          </h3>
+                          <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">{course.description}</p>
 
                           <div className="space-y-1.5 pt-1">
                             <div className="flex justify-between items-center text-xs font-mono font-bold text-slate-600">
@@ -350,12 +388,12 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                               <span>{progressPct}%</span>
                             </div>
                             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                              <div 
-                                className="bg-emerald-500 h-full rounded-full transition-all duration-300" 
+                              <div
+                                className="bg-emerald-500 h-full rounded-full transition-all duration-300"
                                 style={{ width: `${progressPct}%` }}
                               ></div>
                             </div>
-                            <p className="text-[10px] font-bold text-slate-400 font-mono">
+                            <p className="text-[10px] font-bold text-slate-500 font-mono">
                               {courseCompletedCount} of {courseLessons.length} chapters completed
                             </p>
                           </div>
@@ -396,21 +434,24 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
         {activeTab === 'browse' && (
           <div id="featured-courses-tab-view">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm font-bold text-slate-850 uppercase tracking-wider font-sans">
+              <h2 className="text-sm font-bold text-slate-850 uppercase tracking-wider font-sans">
                 ✨ Featured Academic Courses (Choose to Study)
-              </h3>
+              </h2>
             </div>
 
             {courses.length === 0 ? (
               <div className="bg-slate-50 border border-dashed border-slate-200 p-10 text-center rounded-3xl">
                 <Inbox className="w-10 h-10 text-slate-350 mx-auto mb-2" />
                 <p className="text-sm font-bold text-slate-700">No courses available.</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  Log in as an Instructor / Teacher to create custom courses, syllabus reading chapters, and secure exam quizzes.
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  Log in as an Admin to create custom courses, syllabus reading chapters, and secure exam quizzes.
                 </p>
               </div>
             ) : featuredCourses.length === 0 ? (
-              <div className="bg-emerald-50/50 border border-dashed border-emerald-200 p-10 text-center rounded-3xl" id="all-courses-enrolled">
+              <div
+                className="bg-emerald-50/50 border border-dashed border-emerald-200 p-10 text-center rounded-3xl"
+                id="all-courses-enrolled"
+              >
                 <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
                 <p className="text-sm font-bold text-emerald-800">🎉 You have accepted all available courses!</p>
                 <p className="text-xs text-emerald-600 mt-1 max-w-sm mx-auto font-medium">
@@ -427,7 +468,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             ) : (
               <div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {featuredCourses.map((course) => {
+                  {featuredCourses.map((course, idx) => {
                     const courseLessons = course.lessons || [];
                     const estMinutes = courseLessons.length * 20;
                     const hours = Math.floor(estMinutes / 60);
@@ -435,7 +476,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                     const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
 
                     return (
-                      <motion.div 
+                      <motion.div
                         key={`featured-browse-${course.id}`}
                         whileHover={{ y: -3 }}
                         transition={{ duration: 0.15 }}
@@ -444,9 +485,12 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                       >
                         <div>
                           <div className="relative h-40 overflow-hidden bg-slate-50">
-                            <img 
-                              src={getCourseImage(course)} 
+                            <img
+                              src={getCourseImage(course)}
                               alt={course.title}
+                              width={400}
+                              height={160}
+                              fetchpriority={idx === 0 ? 'high' : 'auto'}
                               referrerPolicy="no-referrer"
                               className="w-full h-full object-cover"
                             />
@@ -464,21 +508,19 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                                 {getCourseCategory(course)}
                               </span>
                             </div>
-                            <h4 className="text-base font-bold text-slate-900 tracking-tight leading-snug line-clamp-1">
+                            <h3 className="text-base font-bold text-slate-900 tracking-tight leading-snug line-clamp-1">
                               {course.title}
-                            </h4>
-                            <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">
-                              {course.description}
-                            </p>
+                            </h3>
+                            <p className="text-slate-500 text-xs leading-relaxed line-clamp-2">{course.description}</p>
 
-                            <div className="flex items-center gap-3.5 text-xs font-semibold text-slate-400 pt-1.5 font-sans">
+                            <div className="flex items-center gap-3.5 text-xs font-semibold text-slate-500 pt-1.5 font-sans">
                               <span className="flex items-center gap-1 text-[11px]">
-                                <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+                                <BookOpen className="w-3.5 h-3.5 text-slate-500" />
                                 <span>{courseLessons.length} lessons</span>
                               </span>
                               {courseLessons.length > 0 && (
                                 <span className="flex items-center gap-1 text-[11px]">
-                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <Clock className="w-3.5 h-3.5 text-slate-500" />
                                   <span>{durationStr}</span>
                                 </span>
                               )}
@@ -507,7 +549,8 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                       Ready to study?
                     </p>
                     <p className="text-slate-600 text-xs font-medium max-w-sm mx-auto mb-4 leading-relaxed">
-                      You have selected <strong>{enrolledCourses.length}</strong> dynamic course topics to study. Click below to begin learning right away!
+                      You have selected <strong>{enrolledCourses.length}</strong> dynamic course topics to study. Click
+                      below to begin learning right away!
                     </p>
                     <button
                       onClick={() => setActiveTab('my-courses')}

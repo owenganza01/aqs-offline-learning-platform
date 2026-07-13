@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://aqs-learning.org/sitemap.xml

@@ -1,23 +1,36 @@
 import { relations } from 'drizzle-orm';
-import { integer, pgTable, serial, text, timestamp, boolean, jsonb } from 'drizzle-orm/pg-core';
+import { integer, pgTable, serial, text, timestamp, boolean, jsonb, unique } from 'drizzle-orm/pg-core';
 
 // 1. Users table (synced from Firebase UID)
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  uid: text('uid').notNull().unique(), // Firebase Auth UID
-  email: text('email').notNull(),
+  uid: text('uid').notNull().unique(), // Firebase Auth UID (or 'pending-<uuid>' before first login)
+  email: text('email').notNull().unique(),
   name: text('name'),
   role: text('role').default('learner').notNull(), // 'learner' | 'instructor' | 'admin'
   avatarUrl: text('avatar_url'),
+  cohortId: integer('cohort_id').references(() => cohorts.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// 2. Courses table
+// 2. Cohorts table (instructor-owned class groups with invite codes)
+export const cohorts = pgTable('cohorts', {
+  id: serial('id').primaryKey(),
+  instructorId: integer('instructor_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: text('name').notNull(),
+  inviteCode: text('invite_code').notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 3. Courses table
 export const courses = pgTable('courses', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),
   description: text('description').notNull(),
   thumbnail: text('thumbnail'), // Data URL, image URL, or gradient code
+  createdBy: integer('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -84,11 +97,70 @@ export const quizAttempts = pgTable('quiz_attempts', {
   attemptedAt: timestamp('attempted_at').defaultNow().notNull(),
 });
 
+// 8. Course completions (server-side enforcement: all lessons done + quiz passed >= 70%)
+export const courseCompletions = pgTable('course_completions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull(),
+  courseId: integer('course_id')
+    .references(() => courses.id, { onDelete: 'cascade' })
+    .notNull(),
+  completionId: text('completion_id').notNull(),
+  quizPassed: boolean('quiz_passed').notNull().default(false),
+  allLessonsComplete: boolean('all_lessons_complete').notNull().default(false),
+  completedAt: timestamp('completed_at').defaultNow().notNull(),
+});
+
+// 9. Documents (uploaded lesson files stored in the database)
+export const documents = pgTable('documents', {
+  id: text('id').primaryKey(), // Application-generated UUID
+  lessonId: integer('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
+  originalFileName: text('original_file_name').notNull(),
+  storedFileName: text('stored_file_name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  fileSize: integer('file_size').notNull(),
+  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+  uploadedBy: integer('uploaded_by')
+    .references(() => users.id)
+    .notNull(),
+  fileData: text('file_data').notNull(), // Base64-encoded binary content
+});
+
+// 10. Enrollments (tracks which users are enrolled in which courses)
+export const enrollments = pgTable(
+  'enrollments',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    courseId: integer('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    enrolledAt: timestamp('enrolled_at').defaultNow().notNull(),
+  },
+  (table) => [unique('enrollments_user_course_key').on(table.userId, table.courseId)],
+);
+
 // Define Relationships
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   lessonCompletions: many(lessonCompletions),
   quizAttempts: many(quizAttempts),
+  enrollments: many(enrollments),
+  cohort: one(cohorts, {
+    fields: [users.cohortId],
+    references: [cohorts.id],
+  }),
+}));
+
+export const cohortsRelations = relations(cohorts, ({ one, many }) => ({
+  instructor: one(users, {
+    fields: [cohorts.instructorId],
+    references: [users.id],
+  }),
+  members: many(users),
 }));
 
 export const coursesRelations = relations(courses, ({ many, one }) => ({
@@ -96,6 +168,11 @@ export const coursesRelations = relations(courses, ({ many, one }) => ({
   quiz: one(quizzes, {
     fields: [courses.id],
     references: [quizzes.courseId],
+  }),
+  enrollments: many(enrollments),
+  creator: one(users, {
+    fields: [courses.createdBy],
+    references: [users.id],
   }),
 }));
 
@@ -140,5 +217,38 @@ export const quizAttemptsRelations = relations(quizAttempts, ({ one }) => ({
   quiz: one(quizzes, {
     fields: [quizAttempts.quizId],
     references: [quizzes.id],
+  }),
+}));
+
+export const courseCompletionsRelations = relations(courseCompletions, ({ one }) => ({
+  user: one(users, {
+    fields: [courseCompletions.userId],
+    references: [users.id],
+  }),
+  course: one(courses, {
+    fields: [courseCompletions.courseId],
+    references: [courses.id],
+  }),
+}));
+
+export const documentsRelations = relations(documents, ({ one }) => ({
+  lesson: one(lessons, {
+    fields: [documents.lessonId],
+    references: [lessons.id],
+  }),
+  uploader: one(users, {
+    fields: [documents.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
+export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
+  user: one(users, {
+    fields: [enrollments.userId],
+    references: [users.id],
+  }),
+  course: one(courses, {
+    fields: [enrollments.courseId],
+    references: [courses.id],
   }),
 }));

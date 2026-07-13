@@ -1,0 +1,111 @@
+{
+  "version": "6",
+  "dialect": "pg",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1750107547000,
+      "tag": "0000_add_submission_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1750109654000,
+      "tag": "0001_add_lesson_completion_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1750110096000,
+      "tag": "0002_add_enrollments",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1750117446000,
+      "tag": "0003_add_course_completions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1750119725000,
+      "tag": "0004_add_idempotency_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1750125352000,
+      "tag": "0005_add_performance_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1750348730000,
+      "tag": "0006_normalize_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1750350634000,
+      "tag": "0007_add_enrollments",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783415216640,
+      "tag": "0008_nice_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783505361463,
+      "tag": "0009_flimsy_network",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783514870547,
+      "tag": "0010_flimsy_diamondback",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784448000000,
+      "tag": "0011_add_cohorts_and_instructors",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784448010000,
+      "tag": "0012_add_role_check_constraint",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784448020000,
+      "tag": "0013_add_performance_indexes_2",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783946444689,
+      "tag": "0014_kind_marvel_apes",
+      "breakpoints": true
+    }
+  ]
+}

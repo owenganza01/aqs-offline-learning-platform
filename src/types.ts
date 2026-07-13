@@ -7,6 +7,7 @@ export interface User {
   name: string | null;
   role: 'learner' | 'instructor' | 'admin';
   avatarUrl?: string | null;
+  cohortId?: number | null;
   createdAt?: string;
 }
 
@@ -52,4 +53,13 @@ export interface QuizAttempt {
   score: number;
   passed: boolean;
   attemptedAt: string;
+}
+
+export interface DocumentMetadata {
+  id: string;
+  lessonId: number;
+  originalFileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedAt: string;
 }

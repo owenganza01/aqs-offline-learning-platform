@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ALTER COLUMN "lesson_id" DROP NOT NULL;

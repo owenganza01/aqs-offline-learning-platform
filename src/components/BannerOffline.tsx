@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
 import { PouchDBService } from '../lib/pouchdb-service.ts';
+import { apiFetch } from '../lib/api.ts';
+import { withBackoff } from '../server/services/sync-service.ts';
 
 interface BannerOfflineProps {
   onSyncComplete: () => void;
@@ -11,36 +13,10 @@ interface BannerOfflineProps {
 export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, token }) => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [syncing, setSyncing] = useState<boolean>(false);
-  const [syncMessage, setSyncMessage] = useState<string>('');
+  const [syncMessage, setSyncMessage] = useState<string>(
+    navigator.onLine ? '' : 'Working offline. All answers and lessons completed will save locally.',
+  );
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      // Automatically attempt sync when network resumes
-      triggerSync();
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-      setSyncStatus('idle');
-      setSyncMessage('Working offline. All answers and lessons completed will save locally.');
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    // Initial check
-    if (!navigator.onLine) {
-      setSyncMessage('Working offline. All answers and lessons completed will save locally.');
-    } else {
-      triggerSync();
-    }
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [token]);
 
   const triggerSync = async () => {
     if (!navigator.onLine || !token) {
@@ -62,57 +38,88 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
         return;
       }
 
-      // 2. Submit to backend /api/sync
-      const response = await fetch('/api/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      // 2. Submit to backend /api/sync with exponential backoff retry
+      await withBackoff(
+        async () => {
+          const { ok, data } = await apiFetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(queue),
+          });
+
+          if (!ok) {
+            throw new Error('Server sync response was not ok');
+          }
+
+          if (data.success) {
+            // 3. Save official state back locally
+            await PouchDBService.saveUserProgress(data.syncedCompletions, data.syncedAttempts);
+
+            // 4. Clear the local sync queue since it has been stored on production DB
+            await PouchDBService.clearSyncQueue();
+
+            setSyncStatus('success');
+            setSyncMessage(
+              `Synced ${queue.lessonCompletions.length} lessons & ${queue.quizSubmissions.length} quizzes!`,
+            );
+
+            // Let main app refresh its state
+            onSyncComplete();
+
+            // Clear success message after 5 seconds
+            setTimeout(() => {
+              setSyncMessage('');
+              setSyncStatus('idle');
+            }, 5000);
+          } else {
+            throw new Error('Sync failed server side');
+          }
         },
-        body: JSON.stringify(queue)
-      });
-
-      if (!response.ok) {
-        throw new Error('Server sync response was not ok');
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        // 3. Save official state back locally
-        await PouchDBService.saveUserProgress(result.syncedCompletions, result.syncedAttempts);
-        
-        // 4. Clear the local sync queue since it has been stored on production DB
-        await PouchDBService.clearSyncQueue();
-
-        setSyncStatus('success');
-        setSyncMessage(`Synced ${queue.lessonCompletions.length} lessons & ${queue.quizSubmissions.length} quizzes!`);
-        
-        // Let main app refresh its state
-        onSyncComplete();
-
-        // Clear success message after 5 seconds
-        setTimeout(() => {
-          setSyncMessage('');
-          setSyncStatus('idle');
-        }, 5000);
-      } else {
-        throw new Error('Sync failed server side');
-      }
+        {
+          onRetry: (attempt, _err) => {
+            setSyncMessage(`Retrying sync… attempt ${attempt + 1}`);
+          },
+        },
+      );
     } catch (err) {
-      console.error('Offline progress synchronization failed:', err);
+      console.error('Offline progress synchronization failed after all retries:', err);
       setSyncStatus('error');
-      setSyncMessage('Failed to sync. We will retry automatically when signal is stronger.');
+      setSyncMessage('Failed to sync after multiple attempts. Please check your connection and try again later.');
     } finally {
       setSyncing(false);
     }
   };
 
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      triggerSync();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSyncStatus('idle');
+      setSyncMessage('Working offline. All answers and lessons completed will save locally.');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check
+    if (!navigator.onLine) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSyncMessage('Working offline. All answers and lessons completed will save locally.');
+    } else {
+      triggerSync();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [token]);
+
   return (
-    <div 
-      className="w-full max-w-4xl mx-auto mb-6 px-4" 
-      id="connection-sync-banner"
-    >
+    <div className="w-full max-w-4xl mx-auto mb-6 px-4" id="connection-sync-banner">
       {!isOnline ? (
         <div className="bg-amber-50/80 border border-amber-200/80 p-4 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm backdrop-blur-sm">
           <div className="flex items-center gap-3">
@@ -120,11 +127,10 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
               <WifiOff className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-base font-bold text-amber-900 font-sans tracking-tight">
-                Offline Mode Active
-              </p>
+              <p className="text-base font-bold text-amber-900 font-sans tracking-tight">Offline Mode Active</p>
               <p className="text-sm font-medium leading-relaxed text-amber-805/90 mt-0.5">
-                {syncMessage || 'No internet signal detected. Study freely; everything you do will sync when reconnected.'}
+                {syncMessage ||
+                  'No internet signal detected. Study freely; everything you do will sync when reconnected.'}
               </p>
             </div>
           </div>
@@ -133,21 +139,25 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
           </span>
         </div>
       ) : syncMessage ? (
-        <div className={`border p-4 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm backdrop-blur-sm ${
-          syncStatus === 'success' 
-            ? 'bg-emerald-50/80 border-emerald-200/80 text-emerald-950' 
-            : syncStatus === 'error'
-            ? 'bg-rose-50/80 border-rose-200/80 text-rose-950'
-            : 'bg-indigo-50/80 border-indigo-200/80 text-indigo-950'
-        }`}>
+        <div
+          className={`border p-4 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm backdrop-blur-sm ${
+            syncStatus === 'success'
+              ? 'bg-emerald-50/80 border-emerald-200/80 text-emerald-950'
+              : syncStatus === 'error'
+                ? 'bg-rose-50/80 border-rose-200/80 text-rose-950'
+                : 'bg-indigo-50/80 border-indigo-200/80 text-indigo-950'
+          }`}
+        >
           <div className="flex items-center gap-3 w-full">
-            <div className={`p-3 rounded-2xl shrink-0 border ${
-              syncStatus === 'success' 
-                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
-                : syncStatus === 'error'
-                ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                : 'bg-indigo-500/10 text-indigo-650 border-indigo-500/20'
-            }`}>
+            <div
+              className={`p-3 rounded-2xl shrink-0 border ${
+                syncStatus === 'success'
+                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                  : syncStatus === 'error'
+                    ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                    : 'bg-indigo-500/10 text-indigo-650 border-indigo-500/20'
+              }`}
+            >
               {syncStatus === 'success' ? (
                 <CheckCircle className="w-6 h-6" />
               ) : syncStatus === 'error' ? (
@@ -158,15 +168,13 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
             </div>
             <div className="grow">
               <p className="text-base font-bold font-sans tracking-tight">
-                {syncStatus === 'success' 
-                  ? 'Sync Completed successfully!' 
+                {syncStatus === 'success'
+                  ? 'Sync Completed successfully!'
                   : syncStatus === 'error'
-                  ? 'Unable to Synchronize'
-                  : 'Internet Detected'}
+                    ? 'Unable to Synchronize'
+                    : 'Internet Detected'}
               </p>
-              <p className="text-sm font-medium leading-relaxed text-slate-600 mt-0.5 opacity-90">
-                {syncMessage}
-              </p>
+              <p className="text-sm font-medium leading-relaxed text-slate-600 mt-0.5 opacity-90">{syncMessage}</p>
             </div>
           </div>
 
