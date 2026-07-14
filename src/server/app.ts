@@ -17,7 +17,7 @@ import {
   AuthRequest,
   checkDocumentAccess,
 } from '../middleware/auth.ts';
-import { canPromoteToRole } from './services/authorization-service.ts';
+
 import {
   validateBody,
   registerSchema,
@@ -43,6 +43,7 @@ import { getMe, register, updateProfile } from './controllers/auth-controller.ts
 import { listCourses, getCourseById, completeCourseHandler, completeLesson } from './controllers/course-controller.ts';
 import { submitQuiz } from './controllers/quiz-controller.ts';
 import { syncHandler } from './controllers/sync-controller.ts';
+import { listUsers, changeUserRole } from './controllers/admin-user-controller.ts';
 
 export async function createApp() {
   const app = express();
@@ -182,15 +183,6 @@ export async function createApp() {
     message: 'Too many profile update requests, please try again later',
   });
 
-  // Pagination helper
-  const DEFAULT_PAGE_SIZE = 50;
-  const MAX_PAGE_SIZE = 100;
-  function parsePagination(req: express.Request): { limit: number; offset: number } {
-    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
-    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
-    return { limit, offset };
-  }
-
   // ==========================================
   // API ROUTES
   // ==========================================
@@ -251,18 +243,7 @@ export async function createApp() {
   );
 
   // Admin: List all users (paginated, backward-compatible array response)
-  app.get('/api/admin/users', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
-    try {
-      const { limit, offset } = parsePagination(req);
-      const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(schema.users);
-      const allUsers = await db.select().from(schema.users).limit(limit).offset(offset);
-      res.setHeader('X-Total-Count', Number(count));
-      res.json(allUsers);
-    } catch (error: any) {
-      console.error('List users error:', error);
-      res.status(500).json({ error: 'Failed to fetch users.' });
-    }
-  });
+  app.get('/api/admin/users', requireAuth, requireAdmin, listUsers);
 
   // Admin: Change a user's role (replaces old PUT /api/auth/role which only worked on self)
   app.put(
@@ -271,37 +252,7 @@ export async function createApp() {
     requireAdmin,
     authRateLimit,
     validateBody(changeRoleSchema),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const targetUserId = parseInt(req.params.userId);
-        const { role } = req.body;
-
-        if (isNaN(targetUserId)) {
-          return res.status(400).json({ error: 'Invalid user ID.' });
-        }
-
-        // Use canPromoteToRole to prevent self-demotion and validate permissions
-        const promotionCheck = await canPromoteToRole(req.dbUser!.id, targetUserId, role);
-        if (!promotionCheck.allowed) {
-          return res.status(403).json({ error: promotionCheck.error });
-        }
-
-        const updated = await db
-          .update(schema.users)
-          .set({ role })
-          .where(eq(schema.users.id, targetUserId))
-          .returning();
-
-        if (updated.length === 0) {
-          return res.status(404).json({ error: 'User not found.' });
-        }
-
-        res.json({ success: true, dbUser: updated[0] });
-      } catch (error: any) {
-        console.error('Error updating user role:', error);
-        res.status(500).json({ error: error.message });
-      }
-    },
+    changeUserRole,
   );
 
   // Courses: List all courses for Learner Discovery, including lessons (without full detail) and quizzes
