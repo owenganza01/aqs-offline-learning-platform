@@ -42,6 +42,7 @@ import { documentStorage } from './providers/document-storage.ts';
 import { ALLOWED_SLIDE_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.ts';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { getHealth } from './controllers/health-controller.ts';
+import { getMe, register, updateProfile } from './controllers/auth-controller.ts';
 
 export async function createApp() {
   const app = express();
@@ -198,97 +199,13 @@ export async function createApp() {
   app.get('/api/health', getHealth);
 
   // Auth: Get current user profile and role
-  app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-      res.json({
-        user: req.user,
-        dbUser: req.dbUser,
-      });
-    } catch (error: any) {
-      console.error('Error in /api/auth/me:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
+  app.get('/api/auth/me', requireAuth, getMe);
 
   // Auth: Student registration with cohort invite code (public — no auth required)
-  app.post(
-    '/api/auth/register',
-    registerRateLimit,
-    validateBody(registerSchema),
-    async (req: express.Request, res: Response) => {
-      try {
-        const { name, email, inviteCode } = req.body;
-
-        // Look up the invite code in cohorts
-        const cohortList = await db.select().from(schema.cohorts).where(eq(schema.cohorts.inviteCode, inviteCode));
-        if (cohortList.length === 0) {
-          return res.status(400).json({ error: 'Code not recognized — check with your instructor.' });
-        }
-        const cohort = cohortList[0];
-
-        // Check if email already exists
-        const existingUser = await db.select().from(schema.users).where(eq(schema.users.email, email));
-        if (existingUser.length > 0) {
-          if (existingUser[0].uid.startsWith('pending-')) {
-            return res.status(400).json({ error: 'An invitation is already pending for this email.' });
-          }
-          return res.status(400).json({ error: 'Email already registered.' });
-        }
-
-        // Create the learner account with placeholder UID (linked on first Google login)
-        const result = await db
-          .insert(schema.users)
-          .values({
-            uid: `pending-${randomUUID()}`,
-            email,
-            name,
-            role: 'learner',
-            cohortId: cohort.id,
-          })
-          .returning();
-
-        res.status(201).json({ success: true, user: result[0] });
-      } catch (error: any) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Failed to complete registration.' });
-      }
-    },
-  );
+  app.post('/api/auth/register', registerRateLimit, validateBody(registerSchema), register);
 
   // Auth: Update user physical profile (avatar url and name)
-  app.put(
-    '/api/auth/profile',
-    requireAuth,
-    profileRateLimit,
-    validateBody(updateProfileSchema),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const { avatarUrl, name } = req.body;
-        if (!req.dbUser) {
-          return res.status(404).json({ error: 'User profile not found.' });
-        }
-
-        const updateData: any = {};
-        if (avatarUrl !== undefined) {
-          updateData.avatarUrl = avatarUrl;
-        }
-        if (name !== undefined) {
-          updateData.name = name;
-        }
-
-        const updated = await db
-          .update(schema.users)
-          .set(updateData)
-          .where(eq(schema.users.id, req.dbUser.id))
-          .returning();
-
-        res.json({ success: true, dbUser: updated[0] });
-      } catch (error: any) {
-        console.error('Error in updating profile details:', error);
-        res.status(500).json({ error: error.message });
-      }
-    },
-  );
+  app.put('/api/auth/profile', requireAuth, profileRateLimit, validateBody(updateProfileSchema), updateProfile);
 
   // ==========================================
   // ADMIN USER MANAGEMENT
