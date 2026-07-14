@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
 import { AuthRequest, checkDocumentAccess } from '../../middleware/auth.ts';
 import { documentStorage } from '../providers/document-storage.ts';
 

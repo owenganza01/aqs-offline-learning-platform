@@ -32,3 +32,101 @@ export function resolveSyncConflicts<T extends SyncItem>(items: T[]): T[] {
 
   return Array.from(seen.values());
 }
+
+import { db } from '../../db/index.ts';
+import * as schema from '../../db/schema.ts';
+import { eq, and } from 'drizzle-orm';
+import { scoreQuiz } from '../../lib/scoring.ts';
+
+const MAX_SYNC_COMPLETIONS = 500;
+const MAX_SYNC_QUIZZES = 100;
+
+export function getMaxLimits() {
+  return { maxCompletions: MAX_SYNC_COMPLETIONS, maxQuizzes: MAX_SYNC_QUIZZES };
+}
+
+export async function processLessonCompletions(
+  userId: number,
+  localCompletions: Array<{ lessonId: string; completedAt?: string }>,
+) {
+  for (const comp of localCompletions) {
+    const lessonId = parseInt(comp.lessonId);
+    if (isNaN(lessonId)) continue;
+
+    const existRows = await db
+      .select({ id: schema.lessonCompletions.id })
+      .from(schema.lessonCompletions)
+      .where(and(eq(schema.lessonCompletions.userId, userId), eq(schema.lessonCompletions.lessonId, lessonId)));
+
+    if (existRows.length === 0) {
+      await db.insert(schema.lessonCompletions).values({
+        userId,
+        lessonId,
+        completedAt: comp.completedAt ? new Date(comp.completedAt) : new Date(),
+      });
+    }
+  }
+}
+
+export async function processQuizSubmissions(
+  userId: number,
+  localQuizzes: Array<{ quizId: string; answers: number[]; attemptedAt?: string }>,
+) {
+  const quizSyncItems = localQuizzes.map((sub: any) => ({
+    idempotencyKey: `${userId}:quiz:${sub.quizId}`,
+    type: 'quiz_submission' as const,
+    timestamp: sub.attemptedAt || new Date().toISOString(),
+    payload: sub,
+  }));
+  const deduplicatedQuizzes = resolveSyncConflicts(quizSyncItems);
+
+  const processedQuizzes = [];
+  for (const item of deduplicatedQuizzes) {
+    const sub = item.payload as { quizId: string; answers: number[]; attemptedAt?: string };
+    const quizId = parseInt(sub.quizId);
+    const answers = sub.answers;
+    if (isNaN(quizId) || !Array.isArray(answers)) continue;
+
+    const questionsList = await db
+      .select({ correctOptionIndex: schema.questions.correctOptionIndex })
+      .from(schema.questions)
+      .where(eq(schema.questions.quizId, quizId));
+
+    if (questionsList.length > 0) {
+      const { correctCount, totalQuestions, score, passed } = scoreQuiz(questionsList, answers);
+
+      const attemptResult = await db
+        .insert(schema.quizAttempts)
+        .values({
+          userId,
+          quizId,
+          score,
+          passed,
+          attemptedAt: sub.attemptedAt ? new Date(sub.attemptedAt) : new Date(),
+        })
+        .returning();
+
+      processedQuizzes.push({
+        quizId,
+        score,
+        passed,
+        attempt: attemptResult[0],
+      });
+    }
+  }
+
+  return processedQuizzes;
+}
+
+export async function getUserSyncState(userId: number) {
+  const allCompletions = await db
+    .select()
+    .from(schema.lessonCompletions)
+    .where(eq(schema.lessonCompletions.userId, userId));
+  const allAttempts = await db.select().from(schema.quizAttempts).where(eq(schema.quizAttempts.userId, userId));
+
+  return {
+    syncedCompletions: allCompletions.map((c) => c.lessonId),
+    syncedAttempts: allAttempts,
+  };
+}
