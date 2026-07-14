@@ -53,6 +53,7 @@ import {
   reorderLessons,
   deleteLesson,
 } from './controllers/admin-course-controller.ts';
+import { saveQuiz, addQuizQuestion } from './controllers/admin-quiz-controller.ts';
 
 export async function createApp() {
   const app = express();
@@ -331,52 +332,7 @@ export async function createApp() {
     requireAuth,
     requireInstructorOrAdmin,
     validateBody(quizSchema),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const courseId = parseInt(req.params.courseId);
-        const { title, questions } = req.body;
-
-        if (isNaN(courseId) || !title || !Array.isArray(questions)) {
-          return res.status(400).json({ error: 'Course ID, quiz title, and questions array are required.' });
-        }
-
-        // 1. Get or Create Quiz for this Course
-        let quizId: number;
-        const existingQuizzes = await db.select().from(schema.quizzes).where(eq(schema.quizzes.courseId, courseId));
-
-        if (existingQuizzes.length > 0) {
-          quizId = existingQuizzes[0].id;
-          await db.update(schema.quizzes).set({ title }).where(eq(schema.quizzes.id, quizId));
-          // Delete all old questions to refresh them
-          await db.delete(schema.questions).where(eq(schema.questions.quizId, quizId));
-        } else {
-          const newQuiz = await db.insert(schema.quizzes).values({ courseId, title }).returning();
-          quizId = newQuiz[0].id;
-        }
-
-        // 2. Batch insert all questions (single round-trip instead of N)
-        const questionValues = questions
-          .filter((q: any) => q.questionText && Array.isArray(q.options) && q.correctOptionIndex !== undefined)
-          .map((q: any) => ({
-            quizId,
-            questionText: q.questionText,
-            options: q.options,
-            correctOptionIndex: parseInt(q.correctOptionIndex),
-          }));
-
-        const insertedQuestions =
-          questionValues.length > 0 ? await db.insert(schema.questions).values(questionValues).returning() : [];
-
-        res.json({
-          success: true,
-          quizId,
-          uploadedQuestionsCount: insertedQuestions.length,
-        });
-      } catch (error: any) {
-        console.error('CMS Quiz synchronizing error:', error);
-        res.status(500).json({ error: 'Failed to save curriculum quiz.' });
-      }
-    },
+    saveQuiz,
   );
 
   // Quiz: Add a single multiple-choice question to an existing course's quiz
@@ -385,75 +341,7 @@ export async function createApp() {
     requireAuth,
     requireInstructorOrAdmin,
     validateBody(quizQuestionSchema),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const courseId = parseInt(req.params.courseId);
-        const { questionText, options, correctOptionIndex } = req.body;
-
-        if (isNaN(courseId) || !questionText || !Array.isArray(options) || correctOptionIndex === undefined) {
-          return res
-            .status(400)
-            .json({ error: 'Course ID, question text, options array, and correctOptionIndex are required.' });
-        }
-
-        const trimmedOptions = options.map((opt: any) => (typeof opt === 'string' ? opt.trim() : ''));
-        if (trimmedOptions.some((opt: string) => !opt)) {
-          return res.status(400).json({ error: 'All of the 4 options must be non-empty strings.' });
-        }
-
-        const parsedCorrectOptionIndex = parseInt(correctOptionIndex as any);
-        if (
-          isNaN(parsedCorrectOptionIndex) ||
-          parsedCorrectOptionIndex < 0 ||
-          parsedCorrectOptionIndex >= trimmedOptions.length
-        ) {
-          return res.status(400).json({ error: 'Invalid correct option index.' });
-        }
-
-        // Check if course exists
-        const courseExists = await db.select().from(schema.courses).where(eq(schema.courses.id, courseId));
-        if (courseExists.length === 0) {
-          return res.status(404).json({ error: 'Course not found.' });
-        }
-
-        // 1. Get or Create Quiz for this Course
-        let quizId: number;
-        const existingQuizzes = await db.select().from(schema.quizzes).where(eq(schema.quizzes.courseId, courseId));
-
-        if (existingQuizzes.length > 0) {
-          quizId = existingQuizzes[0].id;
-        } else {
-          const newQuiz = await db
-            .insert(schema.quizzes)
-            .values({
-              courseId,
-              title: `${courseExists[0].title} Exam`,
-            })
-            .returning();
-          quizId = newQuiz[0].id;
-        }
-
-        // 2. Insert the single new question
-        const question = await db
-          .insert(schema.questions)
-          .values({
-            quizId,
-            questionText: questionText.trim(),
-            options: trimmedOptions,
-            correctOptionIndex: parsedCorrectOptionIndex,
-          })
-          .returning();
-
-        res.json({
-          success: true,
-          quizId,
-          question: question[0],
-        });
-      } catch (error: any) {
-        console.error('Error creating single quiz question:', error);
-        res.status(500).json({ error: 'Failed to create quiz question.' });
-      }
-    },
+    addQuizQuestion,
   );
 
   // CMS Analytics: Get all stats (bulk-query version — eliminates N+1 per-learner per-course loops)
