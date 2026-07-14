@@ -36,13 +36,13 @@ import {
 import { rateLimit } from '../middleware/rate-limit.ts';
 import { scoreQuiz } from '../lib/scoring.ts';
 import { toYouTubeEmbed } from '../lib/utils.ts';
-import { completeCourse } from './services/course-service.ts';
 import { resolveSyncConflicts } from './services/sync-service.ts';
 import { documentStorage } from './providers/document-storage.ts';
 import { ALLOWED_SLIDE_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.ts';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { getHealth } from './controllers/health-controller.ts';
 import { getMe, register, updateProfile } from './controllers/auth-controller.ts';
+import { listCourses, getCourseById, completeCourseHandler, completeLesson } from './controllers/course-controller.ts';
 
 export async function createApp() {
   const app = express();
@@ -305,196 +305,16 @@ export async function createApp() {
   );
 
   // Courses: List all courses for Learner Discovery, including lessons (without full detail) and quizzes
-  app.get('/api/courses', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-      const { limit, offset } = parsePagination(req);
-      const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(schema.courses);
-      const allCourses = await db.select().from(schema.courses).limit(limit).offset(offset);
-      const courseIds = allCourses.map((c) => c.id);
-
-      // Bulk-fetch lessons and quizzes in 2 queries instead of 2N
-      const lessonsByCourse = new Map<
-        number,
-        {
-          id: number;
-          courseId: number;
-          title: string;
-          sortOrder: number;
-          videoUrl: string | null;
-          slidesUrl: string | null;
-        }[]
-      >();
-      const quizByCourse = new Map<number, { id: number; courseId: number; title: string }>();
-      if (courseIds.length > 0) {
-        const allLessons = await db
-          .select({
-            id: schema.lessons.id,
-            courseId: schema.lessons.courseId,
-            title: schema.lessons.title,
-            sortOrder: schema.lessons.sortOrder,
-            videoUrl: schema.lessons.videoUrl,
-            slidesUrl: schema.lessons.slidesUrl,
-          })
-          .from(schema.lessons)
-          .where(inArray(schema.lessons.courseId, courseIds))
-          .orderBy(schema.lessons.sortOrder);
-
-        for (const lesson of allLessons) {
-          if (!lessonsByCourse.has(lesson.courseId)) {
-            lessonsByCourse.set(lesson.courseId, []);
-          }
-          lessonsByCourse.get(lesson.courseId)!.push(lesson);
-        }
-
-        const allQuizzes = await db
-          .select({
-            id: schema.quizzes.id,
-            courseId: schema.quizzes.courseId,
-            title: schema.quizzes.title,
-          })
-          .from(schema.quizzes)
-          .where(inArray(schema.quizzes.courseId, courseIds));
-        for (const q of allQuizzes) {
-          quizByCourse.set(q.courseId, q);
-        }
-      }
-
-      const coursesWithDetails = allCourses.map((course) => ({
-        ...course,
-        lessons: lessonsByCourse.get(course.id) || [],
-        quiz: quizByCourse.get(course.id) || null,
-      }));
-
-      res.setHeader('X-Total-Count', Number(count));
-      res.json(coursesWithDetails);
-    } catch (error: any) {
-      console.error('Error fetching courses:', error);
-      res.status(500).json({ error: 'Failed to retrieve courses.' });
-    }
-  });
+  app.get('/api/courses', requireAuth, listCourses);
 
   // Courses: Get detailed course info, lessons, and secure questions (NO correct answers sent to client!)
-  app.get('/api/courses/:id', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-      const courseId = parseInt(req.params.id);
-      if (isNaN(courseId)) {
-        return res.status(400).json({ error: 'Invalid course ID' });
-      }
-
-      const courseList = await db.select().from(schema.courses).where(eq(schema.courses.id, courseId));
-      if (courseList.length === 0) {
-        return res.status(404).json({ error: 'Course not found' });
-      }
-
-      const course = courseList[0];
-
-      // Fetch lessons
-      const courseLessons = await db
-        .select()
-        .from(schema.lessons)
-        .where(eq(schema.lessons.courseId, courseId))
-        .orderBy(schema.lessons.sortOrder);
-
-      // Fetch general quiz info
-      const courseQuizzes = await db.select().from(schema.quizzes).where(eq(schema.quizzes.courseId, courseId));
-      let quiz = null;
-
-      if (courseQuizzes.length > 0) {
-        const fullQuiz = courseQuizzes[0];
-        // Fetch questions but OMIT correctOptionIndex for absolute secure assessment!
-        const quizQuestionsRaw = await db
-          .select({
-            id: schema.questions.id,
-            quizId: schema.questions.quizId,
-            questionText: schema.questions.questionText,
-            options: schema.questions.options,
-          })
-          .from(schema.questions)
-          .where(eq(schema.questions.quizId, fullQuiz.id));
-
-        quiz = {
-          ...fullQuiz,
-          questions: quizQuestionsRaw,
-        };
-      }
-
-      // Fetch learner's direct database progress for this course (only needed field)
-      const completions = await db
-        .select({ lessonId: schema.lessonCompletions.lessonId })
-        .from(schema.lessonCompletions)
-        .where(eq(schema.lessonCompletions.userId, req.dbUser!.id));
-
-      const completionsIds = completions.map((c) => c.lessonId);
-
-      const quizAttemptsList = quiz
-        ? await db
-            .select()
-            .from(schema.quizAttempts)
-            .where(and(eq(schema.quizAttempts.userId, req.dbUser!.id), eq(schema.quizAttempts.quizId, quiz.id)))
-            .orderBy(desc(schema.quizAttempts.attemptedAt))
-        : [];
-
-      res.json({
-        course,
-        lessons: courseLessons,
-        quiz,
-        completedLessonIds: completionsIds,
-        quizAttempts: quizAttemptsList,
-      });
-    } catch (error: any) {
-      console.error('Error loading course details:', error);
-      res.status(500).json({ error: 'Failed to load course details.' });
-    }
-  });
+  app.get('/api/courses/:id', requireAuth, getCourseById);
 
   // Course Completions: Mark a course complete — only succeeds if all lessons done + quiz passed >= 70%
-  app.post('/api/courses/:id/complete', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-      const courseId = parseInt(req.params.id);
-      if (isNaN(courseId)) {
-        return res.status(400).json({ error: 'Invalid course ID' });
-      }
-
-      const result = await completeCourse(req.dbUser!.id, courseId);
-      res.json({ success: true, completionId: result.completionId, completedAt: result.completedAt.toISOString() });
-    } catch (error: any) {
-      if (error.message?.startsWith('Course not completable:')) {
-        return res.status(422).json({ error: error.message });
-      }
-      console.error('Error in /api/courses/:id/complete:', error);
-      res.status(500).json({ error: error.message || 'Failed to complete course.' });
-    }
-  });
+  app.post('/api/courses/:id/complete', requireAuth, completeCourseHandler);
 
   // Lesson Completions: Mark a lesson complete (online)
-  app.post('/api/lessons/:id/complete', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-      const lessonId = parseInt(req.params.id);
-      if (isNaN(lessonId)) {
-        return res.status(400).json({ error: 'Invalid lesson ID' });
-      }
-
-      // Check if already completed
-      const existing = await db
-        .select()
-        .from(schema.lessonCompletions)
-        .where(
-          and(eq(schema.lessonCompletions.userId, req.dbUser!.id), eq(schema.lessonCompletions.lessonId, lessonId)),
-        );
-
-      if (existing.length === 0) {
-        await db.insert(schema.lessonCompletions).values({
-          userId: req.dbUser!.id,
-          lessonId,
-        });
-      }
-
-      res.json({ success: true, lessonId });
-    } catch (error: any) {
-      console.error('Error checking/creating lesson completion:', error);
-      res.status(500).json({ error: 'Failed to complete lesson.' });
-    }
-  });
+  app.post('/api/lessons/:id/complete', requireAuth, completeLesson);
 
   // Quiz: Submit and score a quiz securely on server
   app.post('/api/quizzes/:id/submit', requireAuth, quizSubmitRateLimit, async (req: AuthRequest, res: Response) => {
