@@ -1,0 +1,10 @@
+export { registerHealthRoutes } from './health.ts';
+export { registerAuthRoutes } from './auth.ts';
+export { registerAdminUserRoutes } from './admin-users.ts';
+export { registerCourseRoutes } from './courses.ts';
+export { registerQuizRoutes } from './quiz.ts';
+export { registerSyncRoutes } from './sync.ts';
+export { registerAdminCourseRoutes } from './admin-courses.ts';
+export { registerEnrollmentRoutes } from './enrollments.ts';
+export { registerCohortRoutes } from './cohorts.ts';
+export { registerDocumentRoutes } from './documents.ts';
