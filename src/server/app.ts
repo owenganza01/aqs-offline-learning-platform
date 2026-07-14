@@ -41,6 +41,7 @@ import { resolveSyncConflicts } from './services/sync-service.ts';
 import { documentStorage } from './providers/document-storage.ts';
 import { ALLOWED_SLIDE_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.ts';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { getHealth } from './controllers/health-controller.ts';
 
 export async function createApp() {
   const app = express();
@@ -194,14 +195,7 @@ export async function createApp() {
   // ==========================================
 
   // Health: Database connectivity check (no auth required — must be first)
-  app.get('/api/health', async (_req: express.Request, res: Response) => {
-    try {
-      await db.execute(sql`SELECT 1`);
-      res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
-    } catch {
-      res.status(503).json({ status: 'error', db: 'disconnected' });
-    }
-  });
+  app.get('/api/health', getHealth);
 
   // Auth: Get current user profile and role
   app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res: Response) => {

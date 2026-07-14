@@ -49,9 +49,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
   const handleExportCSV = () => {
     if (!analytics || !analytics.courseStats) return;
 
-    let csvContent = '=== DASHBOARD METRICS SUMMARY ===\r\n';
-    csvContent += `Total Enrolled Learners,${analytics.totalLearnersCount}\r\n`;
-    csvContent += `Active Classes,${courses.length}\r\n`;
+    const exportDate = new Date();
+    const formattedDate = exportDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    const formattedTime = exportDate.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
     const globalCompletionRate =
       analytics.courseStats?.length > 0
         ? Math.round(
@@ -59,21 +69,87 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
               analytics.courseStats.length,
           )
         : 0;
-    csvContent += `Global Completion Rate,${globalCompletionRate}%\r\n\r\n`;
-    csvContent += '=== COURSE COMPLETION & ENGAGEMENT STATISTICS ===\r\n';
-    csvContent +=
-      'Course ID,Course Title,Syllabus Lessons Count,Engaged Active Learners,Syllabus fully completed,Passed Quiz,Best Quiz Score Average (%),Completion Rate (%)\r\n';
 
-    analytics.courseStats.forEach((stat: any) => {
-      const escapedTitle = stat.title ? stat.title.replace(/"/g, '""') : '';
-      csvContent += `${stat.id},"${escapedTitle}",${stat.lessonsCount},${stat.activeStudents},${stat.completions},${stat.passedQuizzes},${stat.averageScore !== null ? `${stat.averageScore}%` : 'N/A'},${stat.completionRate}%\r\n`;
+    const totalLessons = analytics.courseStats.reduce((acc: number, s: any) => acc + (s.lessonsCount || 0), 0);
+    const totalActiveLearners = analytics.courseStats.reduce((acc: number, s: any) => acc + (s.activeStudents || 0), 0);
+    const totalCompletions = analytics.courseStats.reduce((acc: number, s: any) => acc + (s.completions || 0), 0);
+    const totalPassed = analytics.courseStats.reduce((acc: number, s: any) => acc + (s.passedQuizzes || 0), 0);
+
+    const blank = '\r\n';
+
+    let csv = '';
+
+    // ── Report Header ──
+    csv += 'AQS LEARNING PLATFORM  —  ANALYTICS REPORT\r\n';
+    csv += `Report Date:,"${formattedDate}"\r\n`;
+    csv += `Report Time:,"${formattedTime}"\r\n`;
+    csv += blank;
+    csv += blank;
+    csv += blank;
+
+    // ── Dashboard Summary ──
+    csv += 'DASHBOARD SUMMARY\r\n';
+    csv += blank;
+    csv += 'Metric,Value\r\n';
+    csv += `Total Enrolled Learners,${analytics.totalLearnersCount}\r\n`;
+    csv += `Active Courses,${courses.length}\r\n`;
+    csv += `Global Completion Rate,${globalCompletionRate}%\r\n`;
+    csv += blank;
+    csv += blank;
+    csv += blank;
+
+    // ── Course Statistics ──
+    csv += 'COURSE STATISTICS\r\n';
+    csv += blank;
+    csv += '#,Course ID,Course Title,Lessons,Active Learners,Completions,Passed Quiz,Avg Score,Completion Rate\r\n';
+    analytics.courseStats.forEach((stat: any, index: number) => {
+      const escapedTitle = stat.title ? `"${stat.title.replace(/"/g, '""')}"` : '""';
+      const avgScore = stat.averageScore !== null ? `${stat.averageScore}%` : 'N/A';
+      csv += `${index + 1},${stat.id},${escapedTitle},${stat.lessonsCount},${stat.activeStudents},${stat.completions},${stat.passedQuizzes},${avgScore},${stat.completionRate}%\r\n`;
     });
+    csv += blank;
+    csv += `,TOTALS,,${totalLessons},${totalActiveLearners},${totalCompletions},${totalPassed},,${globalCompletionRate}%\r\n`;
+    csv += blank;
+    csv += blank;
+    csv += blank;
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // ── Recent Activity ──
+    if (analytics.recentActivity?.length > 0) {
+      csv += 'RECENT ACTIVITY\r\n';
+      csv += blank;
+      csv += '#,Student,Type,Item,Score,Passed,Date,Time\r\n';
+      analytics.recentActivity.forEach((act: any, index: number) => {
+        const studentName = act.studentName ? `"${act.studentName.replace(/"/g, '""')}"` : '""';
+        const itemName =
+          act.type === 'quiz'
+            ? `"${(act.quizTitle || '').replace(/"/g, '""')}"`
+            : `"${(act.lessonTitle || '').replace(/"/g, '""')}"`;
+        const score = act.type === 'quiz' ? `${act.score}%` : '';
+        const passed = act.type === 'quiz' ? (act.passed ? 'Yes' : 'No') : '';
+        const actDate = new Date(act.completedAt || act.attemptedAt);
+        const dateStr = actDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const timeStr = actDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const typeLabel = act.type === 'quiz' ? 'Quiz' : 'Lesson';
+        csv += `${index + 1},${studentName},${typeLabel},${itemName},${score},${passed},"${dateStr}","${timeStr}"\r\n`;
+      });
+      csv += blank;
+      csv += `Total Activities:,${analytics.recentActivity.length}\r\n`;
+      csv += blank;
+      csv += blank;
+      csv += blank;
+    }
+
+    // ── Footer ──
+    csv += 'END OF REPORT\r\n';
+    csv += '"Generated by AQS Offline Learning Platform"\r\n';
+
+    // Add BOM for proper Unicode support in Excel
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `aqs_admin_analytics_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `aqs_admin_analytics_${exportDate.toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
