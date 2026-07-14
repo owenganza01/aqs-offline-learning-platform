@@ -1,6 +1,6 @@
 # AQS Offline Learning Platform — QA Test Report
 
-**Date:** 2026-07-06  
+**Date:** 2026-07-14  
 **Environment:** localhost:3000  
 **Tester:** Automated (API) + Puppeteer (UI)  
 **Firebase Auth:** Emulator on port 9099
@@ -11,13 +11,13 @@
 
 | Metric                   | Count |
 | ------------------------ | ----- |
-| **Total Tests Executed** | 42    |
-| **Passed**               | 38    |
+| **Total Tests Executed** | 43    |
+| **Passed**               | 39    |
 | **Failed**               | 0     |
 | **Blocked**              | 4     |
-| **Pass Rate**            | 90.5% |
+| **Pass Rate**            | 90.7% |
 
-**No critical bugs found.** All API security controls verified. UI tests blocked by Google OAuth in headless mode.
+**No critical bugs found.** Landing page rendering crash resolved. All API security controls verified. UI tests blocked by Google OAuth in headless mode.
 
 ---
 
@@ -112,10 +112,11 @@ _\*404 = quiz doesn't exist (not a security failure)_
 
 ### SECTION 15 — Role Gating (UI/Code)
 
-| Test                             | Status  | Notes                                                                                |
-| -------------------------------- | ------- | ------------------------------------------------------------------------------------ |
-| TC-AUTHZ-01: Student denied LMS  | ✅ PASS | Code verified: `App.tsx:353-378` checks `dbUser?.role === 'admin'`                   |
-| TC-ROLE-03: Access Denied screen | ✅ PASS | Code verified: ShieldAlert, "LMS Access Denied", email ref, "Go back to Student PWA" |
+| Test                                   | Status  | Notes                                                                                                   |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| TC-AUTHZ-01: Student denied LMS        | ✅ PASS | Code verified: `App.tsx` guards routes based on `dbUser?.role === 'admin'                               |     | dbUser?.role === 'instructor'` |
+| TC-ROLE-03: Access Denied screen       | ✅ PASS | Code verified: ShieldAlert, "LMS Access Denied", email ref, "Go back to Student PWA"                    |
+| TC-ROLE-04: Student hides admin toggle | ✅ PASS | Code verified: App.tsx checks user role (admin/instructor) before rendering header tabs/mobile toggles. |
 
 ---
 
@@ -138,13 +139,17 @@ _\*404 = quiz doesn't exist (not a security failure)_
 
 ---
 
-## Test Plan Edits Applied (This Session)
+## Test Plan Edits & Fixes Applied (2026-07-14)
 
-1. TC-COURSE-03 regression risk: Fixed "CASCADE delete not configured" → "CASCADE delete configured in schema"
-2. TC-AUTH-03 step 4: "Postman" → "curl"
-3. TC-ROLE-02: "tested via Postman" → "tested via curl"
-4. TC-ROLE-02 matrix: Updated Postman → curl references
-5. Test Environment Checklist: "Postman collection loaded" → "Curl/HTTP client available"
+1. **Fixed Client-Side Landing Page Crash (Uncaught ReferenceError: Buffer is not defined):**
+   - Redirected `withBackoff` import in `BannerOffline.tsx` to `src/lib/retry.ts` instead of `src/server/services/sync-service.ts`. This prevents Node's `pg` library/`Buffer` from leaking into the browser bundle.
+2. **Hidden Admin Toggle for Learners:**
+   - Modified `App.tsx` header tabs and mobile switcher component to hide them for users with the `learner` role.
+3. **TC-COURSE-03 regression risk:** Fixed "CASCADE delete not configured" → "CASCADE delete configured in schema"
+4. **TC-AUTH-03 step 4:** "Postman" → "curl"
+5. **TC-ROLE-02:** "tested via Postman" → "tested via curl"
+6. **TC-ROLE-02 matrix:** Updated Postman → curl references
+7. **Test Environment Checklist:** "Postman collection loaded" → "Curl/HTTP client available"
 
 ---
 

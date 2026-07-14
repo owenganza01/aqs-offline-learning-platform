@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
 import { PouchDBService } from '../lib/pouchdb-service.ts';
 import { apiFetch } from '../lib/api.ts';
-import { withBackoff } from '../server/services/sync-service.ts';
+import { withBackoff } from '../lib/retry.ts';
 
 interface BannerOfflineProps {
   onSyncComplete: () => void;

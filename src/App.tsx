@@ -246,7 +246,7 @@ export default function App() {
         {firebaseUser && dbUser && (
           <div className="flex items-center gap-4">
             {/* Decoupled Route Navigation Tabs */}
-            {firebaseUser && dbUser && (
+            {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (
               <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl border border-slate-200 h-11 items-center font-mono">
                 <button
                   onClick={() => {
@@ -523,7 +523,7 @@ export default function App() {
             )}
 
             {/* Float Mobile Route switcher helper */}
-            {firebaseUser && dbUser && (
+            {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (
               <div className="block sm:hidden fixed bottom-6 right-6 z-50">
                 <button
                   onClick={() => {
