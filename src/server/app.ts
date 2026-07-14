@@ -5,7 +5,6 @@ import compression from 'compression';
 import cors from 'cors';
 import path from 'path';
 import multer from 'multer';
-import { randomUUID } from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { db } from '../db/index.ts';
 import * as schema from '../db/schema.ts';
@@ -15,7 +14,6 @@ import {
   requireAdmin,
   requireInstructorOrAdmin,
   AuthRequest,
-  checkDocumentAccess,
 } from '../middleware/auth.ts';
 
 import {
@@ -35,7 +33,6 @@ import {
 } from '../middleware/validate.ts';
 import { rateLimit } from '../middleware/rate-limit.ts';
 import { toYouTubeEmbed } from '../lib/utils.ts';
-import { documentStorage } from './providers/document-storage.ts';
 import { ALLOWED_SLIDE_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.ts';
 import { eq, sql } from 'drizzle-orm';
 import { getHealth } from './controllers/health-controller.ts';
@@ -43,7 +40,7 @@ import { getMe, register, updateProfile } from './controllers/auth-controller.ts
 import { listCourses, getCourseById, completeCourseHandler, completeLesson } from './controllers/course-controller.ts';
 import { submitQuiz } from './controllers/quiz-controller.ts';
 import { syncHandler } from './controllers/sync-controller.ts';
-import { listUsers, changeUserRole } from './controllers/admin-user-controller.ts';
+import { listUsers, changeUserRole, createInstructor } from './controllers/admin-user-controller.ts';
 import {
   createCourse,
   updateCourse,
@@ -54,6 +51,15 @@ import {
   deleteLesson,
 } from './controllers/admin-course-controller.ts';
 import { saveQuiz, addQuizQuestion } from './controllers/admin-quiz-controller.ts';
+import { getAnalytics } from './controllers/admin-analytics-controller.ts';
+import { listEnrollments, enrollCourse } from './controllers/enrollment-controller.ts';
+import { createCohort, listCohorts, regenerateCohortCode } from './controllers/instructor-cohort-controller.ts';
+import {
+  uploadDocument,
+  getDocumentMetadata,
+  downloadDocument,
+  deleteDocument,
+} from './controllers/document-controller.ts';
 
 export async function createApp() {
   const app = express();
@@ -220,36 +226,7 @@ export async function createApp() {
     requireAdmin,
     authRateLimit,
     validateBody(createInstructorSchema),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const { name, email } = req.body;
-
-        // Check if email already exists
-        const existingUser = await db.select().from(schema.users).where(eq(schema.users.email, email));
-        if (existingUser.length > 0) {
-          if (existingUser[0].uid.startsWith('pending-')) {
-            return res.status(400).json({ error: 'An invitation is already pending for this email.' });
-          }
-          return res.status(400).json({ error: 'Email already registered.' });
-        }
-
-        // Create the instructor account with placeholder UID (linked on first Google login)
-        const result = await db
-          .insert(schema.users)
-          .values({
-            uid: `pending-${randomUUID()}`,
-            email,
-            name,
-            role: 'instructor',
-          })
-          .returning();
-
-        res.status(201).json({ success: true, user: result[0] });
-      } catch (error: any) {
-        console.error('Create instructor error:', error);
-        res.status(500).json({ error: 'Failed to create instructor account.' });
-      }
-    },
+    createInstructor,
   );
 
   // Admin: List all users (paginated, backward-compatible array response)
@@ -345,212 +322,13 @@ export async function createApp() {
   );
 
   // CMS Analytics: Get all stats (bulk-query version — eliminates N+1 per-learner per-course loops)
-  app.get('/api/admin/analytics', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
-    try {
-      // Bulk fetch 1: users
-      const allUsers = await db.select().from(schema.users);
-      const learners = allUsers.filter((u) => u.role === 'learner');
-      const learnerIds = new Set(learners.map((l) => l.id));
-      const totalLearnersCount = learners.length;
-
-      // Bulk fetch 2: courses
-      const courses = await db.select().from(schema.courses);
-
-      // Bulk fetch 3: lessons
-      const allLessons = await db.select().from(schema.lessons);
-
-      // Bulk fetch 4: quizzes
-      const allQuizzes = await db.select().from(schema.quizzes);
-
-      // Bulk fetch 5: lesson completions
-      const allCompletions = await db.select().from(schema.lessonCompletions);
-
-      // Bulk fetch 6: quiz attempts
-      const allAttempts = await db.select().from(schema.quizAttempts);
-
-      // Build in-memory lookup maps
-      const lessonsByCourse: Record<number, typeof allLessons> = {};
-      for (const lesson of allLessons) {
-        if (!lessonsByCourse[lesson.courseId]) lessonsByCourse[lesson.courseId] = [];
-        lessonsByCourse[lesson.courseId].push(lesson);
-      }
-
-      const quizByCourse: Record<number, (typeof allQuizzes)[0]> = {};
-      for (const q of allQuizzes) {
-        quizByCourse[q.courseId] = q;
-      }
-
-      const completionsByUser: Record<number, Set<number>> = {};
-      for (const c of allCompletions) {
-        if (!completionsByUser[c.userId]) completionsByUser[c.userId] = new Set();
-        completionsByUser[c.userId].add(c.lessonId);
-      }
-
-      const attemptsByKey: Record<string, typeof allAttempts> = {};
-      for (const a of allAttempts) {
-        const key = `${a.userId}:${a.quizId}`;
-        if (!attemptsByKey[key]) attemptsByKey[key] = [];
-        attemptsByKey[key].push(a);
-      }
-
-      // Compute per-course stats in memory
-      const courseStats = [];
-      for (const course of courses) {
-        const courseLessons = lessonsByCourse[course.id] || [];
-        const courseLessonIds = new Set(courseLessons.map((l) => l.id));
-        const quiz = quizByCourse[course.id] || null;
-
-        let activeStudentsCount = 0;
-        let completedCourseStudentsCount = 0;
-        let passedQuizStudentsCount = 0;
-        let sumScore = 0;
-        let scoreAttemptsCount = 0;
-
-        for (const learner of learners) {
-          const userCompletions = completionsByUser[learner.id];
-          if (userCompletions) {
-            const courseCompletionsCount = [...userCompletions].filter((id) => courseLessonIds.has(id)).length;
-            if (courseCompletionsCount > 0) {
-              activeStudentsCount++;
-              if (courseLessons.length > 0 && courseCompletionsCount >= courseLessons.length) {
-                completedCourseStudentsCount++;
-              }
-            }
-          }
-
-          if (quiz) {
-            const key = `${learner.id}:${quiz.id}`;
-            const attempts = attemptsByKey[key] || [];
-            if (attempts.length > 0) {
-              const bestAttempt = [...attempts].sort((a, b) => b.score - a.score)[0];
-              if (attempts.some((a) => a.passed)) {
-                passedQuizStudentsCount++;
-              }
-              sumScore += bestAttempt.score;
-              scoreAttemptsCount++;
-            }
-          }
-        }
-
-        const avgScore = scoreAttemptsCount > 0 ? Math.round(sumScore / scoreAttemptsCount) : null;
-        const completionRate =
-          totalLearnersCount > 0 ? Math.round((passedQuizStudentsCount / totalLearnersCount) * 100) : 0;
-
-        courseStats.push({
-          id: course.id,
-          title: course.title,
-          lessonsCount: courseLessons.length,
-          activeStudents: activeStudentsCount,
-          completions: completedCourseStudentsCount,
-          passedQuizzes: passedQuizStudentsCount,
-          averageScore: avgScore,
-          completionRate,
-        });
-      }
-
-      // Recent activity (computed from already-fetched bulk data, no extra queries)
-      const userMap = new Map(allUsers.map((u) => [u.id, u]));
-      const lessonMap = new Map(allLessons.map((l) => [l.id, l]));
-      const quizMap = new Map(allQuizzes.map((q) => [q.id, q]));
-
-      const recentCompletions = allCompletions
-        .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-        .slice(0, 8)
-        .map((comp) => {
-          const learner = userMap.get(comp.userId);
-          const lesson = lessonMap.get(comp.lessonId);
-          if (!learner || !lesson) return null;
-          return {
-            studentName: learner.name || learner.email,
-            lessonTitle: lesson.title,
-            completedAt: comp.completedAt,
-            type: 'lesson' as const,
-          };
-        })
-        .filter(Boolean);
-
-      const recentAttempts = allAttempts
-        .sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime())
-        .slice(0, 8)
-        .map((att) => {
-          const learner = userMap.get(att.userId);
-          const q = quizMap.get(att.quizId);
-          if (!learner || !q) return null;
-          return {
-            studentName: learner.name || learner.email,
-            quizTitle: q.title,
-            score: att.score,
-            passed: att.passed,
-            attemptedAt: att.attemptedAt,
-            type: 'quiz' as const,
-          };
-        })
-        .filter(Boolean);
-
-      const recentActivity = [...recentCompletions, ...recentAttempts]
-        .sort(
-          (a: any, b: any) =>
-            new Date(b.completedAt || b.attemptedAt).getTime() - new Date(a.completedAt || a.attemptedAt).getTime(),
-        )
-        .slice(0, 10);
-
-      res.json({
-        totalLearnersCount,
-        courseStats,
-        recentActivity,
-      });
-    } catch (error: any) {
-      console.error('CMS Analytics fetch error:', error);
-      res.status(500).json({ error: 'Failed to compile enrollment analytics.' });
-    }
-  });
+  app.get('/api/admin/analytics', requireAuth, requireAdmin, getAnalytics);
 
   // Enrollment: Get user's enrolled courses
-  app.get('/api/enrollments', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-      const rows = await db
-        .select({ courseId: schema.enrollments.courseId })
-        .from(schema.enrollments)
-        .where(eq(schema.enrollments.userId, req.dbUser!.id));
-      const courseIds = rows.map((r) => r.courseId);
-      res.json({ courseIds });
-    } catch (error: any) {
-      // If the enrollments table doesn't exist yet, return empty instead of 500
-      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
-        console.warn('Enrollments table not found — returning empty list. Run migrations to create it.');
-        return res.json({ courseIds: [] });
-      }
-      console.error('Error fetching enrollments:', error);
-      res.status(500).json({ error: 'Failed to fetch enrollments.' });
-    }
-  });
+  app.get('/api/enrollments', requireAuth, listEnrollments);
 
   // Enrollment: Enroll in a course
-  app.post(
-    '/api/enrollments',
-    requireAuth,
-    enrollmentRateLimit,
-    validateBody(enrollmentSchema),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const { courseId } = req.body;
-
-        await db
-          .insert(schema.enrollments)
-          .values({ userId: req.dbUser!.id, courseId })
-          .onConflictDoNothing({ target: [schema.enrollments.userId, schema.enrollments.courseId] });
-
-        res.json({ success: true, courseId });
-      } catch (error: any) {
-        if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
-          console.warn('Enrollments table not found — enrollment not persisted. Run migrations to create it.');
-          return res.json({ success: true, courseId: req.body.courseId });
-        }
-        console.error('Error creating enrollment:', error);
-        res.status(500).json({ error: 'Failed to create enrollment.' });
-      }
-    },
-  );
+  app.post('/api/enrollments', requireAuth, enrollmentRateLimit, validateBody(enrollmentSchema), enrollCourse);
 
   // ==========================================
   // COHORT MANAGEMENT
@@ -562,101 +340,14 @@ export async function createApp() {
     requireAuth,
     requireInstructorOrAdmin,
     validateBody(createCohortSchema),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const { name } = req.body;
-
-        // Generate a random 8-character invite code (uppercase alphanumeric)
-        const inviteCode = randomUUID().replace(/-/g, '').substring(0, 8).toUpperCase();
-
-        const result = await db
-          .insert(schema.cohorts)
-          .values({
-            instructorId: req.dbUser!.id,
-            name,
-            inviteCode,
-          })
-          .returning();
-
-        res.status(201).json(result[0]);
-      } catch (error: any) {
-        console.error('Create cohort error:', error);
-        res.status(500).json({ error: 'Failed to create cohort.' });
-      }
-    },
+    createCohort,
   );
 
   // Instructor/Admin: List cohorts (admin sees all, instructor sees own)
-  app.get('/api/instructor/cohorts', requireAuth, requireInstructorOrAdmin, async (req: AuthRequest, res: Response) => {
-    try {
-      const cohortsList = await db
-        .select({
-          id: schema.cohorts.id,
-          instructorId: schema.cohorts.instructorId,
-          name: schema.cohorts.name,
-          inviteCode: schema.cohorts.inviteCode,
-          createdAt: schema.cohorts.createdAt,
-          memberCount: sql<number>`count(${schema.users.id})::int`,
-        })
-        .from(schema.cohorts)
-        .leftJoin(schema.users, eq(schema.cohorts.id, schema.users.cohortId))
-        .where(req.dbUser!.role === 'admin' ? undefined : eq(schema.cohorts.instructorId, req.dbUser!.id))
-        .groupBy(
-          schema.cohorts.id,
-          schema.cohorts.instructorId,
-          schema.cohorts.name,
-          schema.cohorts.inviteCode,
-          schema.cohorts.createdAt,
-        );
-
-      res.json(cohortsList);
-    } catch (error: any) {
-      console.error('List cohorts error:', error);
-      res.status(500).json({ error: 'Failed to fetch cohorts.' });
-    }
-  });
+  app.get('/api/instructor/cohorts', requireAuth, requireInstructorOrAdmin, listCohorts);
 
   // Instructor/Admin: Regenerate invite code for a cohort
-  app.post(
-    '/api/instructor/cohorts/:id/regenerate-code',
-    requireAuth,
-    requireInstructorOrAdmin,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const cohortId = parseInt(req.params.id);
-        if (isNaN(cohortId)) {
-          return res.status(400).json({ error: 'Invalid cohort ID' });
-        }
-
-        // Look up the cohort
-        const cohortRows = await db.select().from(schema.cohorts).where(eq(schema.cohorts.id, cohortId));
-        if (cohortRows.length === 0) {
-          return res.status(404).json({ error: 'Cohort not found' });
-        }
-
-        const cohort = cohortRows[0];
-
-        // Ownership check: instructors can only manage their own cohorts
-        if (req.dbUser!.role !== 'admin' && cohort.instructorId !== req.dbUser!.id) {
-          return res.status(403).json({ error: 'Forbidden: You can only manage your own cohorts' });
-        }
-
-        // Generate new invite code
-        const newInviteCode = randomUUID().replace(/-/g, '').substring(0, 8).toUpperCase();
-
-        const updated = await db
-          .update(schema.cohorts)
-          .set({ inviteCode: newInviteCode })
-          .where(eq(schema.cohorts.id, cohortId))
-          .returning();
-
-        res.json(updated[0]);
-      } catch (error: any) {
-        console.error('Regenerate cohort code error:', error);
-        res.status(500).json({ error: 'Failed to regenerate invite code.' });
-      }
-    },
-  );
+  app.post('/api/instructor/cohorts/:id/regenerate-code', requireAuth, requireInstructorOrAdmin, regenerateCohortCode);
 
   // ==========================================
   // DOCUMENT UPLOAD / DOWNLOAD ENDPOINTS
@@ -681,104 +372,17 @@ export async function createApp() {
     requireInstructorOrAdmin,
     uploadRateLimit,
     upload.single('file'),
-    async (req: AuthRequest, res: Response) => {
-      try {
-        if (!req.file) {
-          return res.status(400).json({ error: 'No file provided.' });
-        }
-
-        const { lessonId } = req.body;
-        const parsedLessonId = lessonId ? parseInt(lessonId) : null;
-        if (lessonId && isNaN(parsedLessonId!)) {
-          return res.status(400).json({ error: 'Invalid lessonId.' });
-        }
-
-        const doc = await documentStorage.upload(req.file.buffer, {
-          lessonId: parsedLessonId && parsedLessonId > 0 ? parsedLessonId : null,
-          originalFileName: req.file.originalname,
-          storedFileName: `${randomUUID()}_${req.file.originalname}`,
-          mimeType: req.file.mimetype,
-          fileSize: req.file.size,
-          uploadedBy: req.dbUser!.id,
-        });
-
-        res.status(201).json({
-          id: doc.id,
-          originalFileName: doc.originalFileName,
-          mimeType: doc.mimeType,
-          fileSize: doc.fileSize,
-          url: `/api/documents/${doc.id}/file`,
-        });
-      } catch (err: any) {
-        console.error('Document upload error:', err);
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ error: 'File too large. Maximum size is 10MB.' });
-        }
-        console.error('Document upload error:', err);
-        res.status(500).json({ error: 'Upload failed.' });
-      }
-    },
+    uploadDocument,
   );
 
   // Documents: Get document metadata
-  app.get('/api/documents/:id', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-      const meta = await documentStorage.getMetadata(req.params.id);
-      if (!meta) {
-        return res.status(404).json({ error: 'Document not found.' });
-      }
-      if (!(await checkDocumentAccess(meta.lessonId, req.dbUser!))) {
-        return res.status(403).json({ error: 'Forbidden: You do not have access to this document.' });
-      }
-      res.json(meta);
-    } catch (err: any) {
-      console.error('Document metadata error:', err);
-      res.status(500).json({ error: 'Failed to retrieve document.' });
-    }
-  });
+  app.get('/api/documents/:id', requireAuth, getDocumentMetadata);
 
   // Documents: Download/serve file content (uses ?token= for <a> tag compatibility)
-  app.get('/api/documents/:id/file', requireAuthOrQueryToken, async (req: AuthRequest, res: Response) => {
-    try {
-      const result = await documentStorage.download(req.params.id);
-      if (!result) {
-        return res.status(404).json({ error: 'Document not found.' });
-      }
-      if (!(await checkDocumentAccess(result.metadata.lessonId, req.dbUser!))) {
-        return res.status(403).json({ error: 'Forbidden: You do not have access to this document.' });
-      }
-
-      res.setHeader('Content-Type', result.metadata.mimeType);
-      res.setHeader(
-        'Content-Disposition',
-        `inline; filename="${encodeURIComponent(result.metadata.originalFileName)}"`,
-      );
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      res.send(result.data);
-    } catch (err: any) {
-      console.error('Document download error:', err);
-      res.status(500).json({ error: 'Failed to retrieve document.' });
-    }
-  });
+  app.get('/api/documents/:id/file', requireAuthOrQueryToken, downloadDocument);
 
   // Documents: Delete a document
-  app.delete(
-    '/api/admin/documents/:id',
-    requireAuth,
-    requireInstructorOrAdmin,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const deleted = await documentStorage.delete(req.params.id);
-        if (!deleted) {
-          return res.status(404).json({ error: 'Document not found.' });
-        }
-        res.json({ success: true });
-      } catch (err: any) {
-        console.error('Document delete error:', err);
-        res.status(500).json({ error: 'Failed to delete document.' });
-      }
-    },
-  );
+  app.delete('/api/admin/documents/:id', requireAuth, requireInstructorOrAdmin, deleteDocument);
 
   // ==========================================
   // VITE SERVICE / STATIC ASSETS PIPELINE
