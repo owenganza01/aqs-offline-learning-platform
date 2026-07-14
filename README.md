@@ -81,6 +81,22 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to view the 
 
 ---
 
+## 🧪 API Testing with Firebase Auth
+
+The server uses **Firebase Auth** (Google Sign-In) — there is no email/password login endpoint. To test authenticated routes via `curl`, you need a Firebase ID token:
+
+1. Open the app in a browser, sign in via Google, and open DevTools → Application → Local Storage → find the `firebase:authUser` key.
+2. Extract the `stsTokenManager.accessToken` value (the ID token).
+3. Use it in requests:
+   ```bash
+   curl http://localhost:3000/api/courses \
+     -H "Authorization: Bearer <ID_TOKEN>"
+   ```
+
+Alternatively, generate a custom token via the Firebase Admin SDK for testing.
+
+---
+
 ## 🔮 Future Enhancement: Offline Video Support
 
 ### Current Approach

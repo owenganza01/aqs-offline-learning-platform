@@ -43,6 +43,7 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 import { getHealth } from './controllers/health-controller.ts';
 import { getMe, register, updateProfile } from './controllers/auth-controller.ts';
 import { listCourses, getCourseById, completeCourseHandler, completeLesson } from './controllers/course-controller.ts';
+import { submitQuiz } from './controllers/quiz-controller.ts';
 
 export async function createApp() {
   const app = express();
@@ -317,51 +318,7 @@ export async function createApp() {
   app.post('/api/lessons/:id/complete', requireAuth, completeLesson);
 
   // Quiz: Submit and score a quiz securely on server
-  app.post('/api/quizzes/:id/submit', requireAuth, quizSubmitRateLimit, async (req: AuthRequest, res: Response) => {
-    try {
-      const quizId = parseInt(req.params.id);
-      const { answers } = req.body; // e.g. [0, 2, 1] representing chosen answer indices corresponding to questions
-
-      if (isNaN(quizId) || !Array.isArray(answers)) {
-        return res.status(400).json({ error: 'Invalid quiz submission body' });
-      }
-
-      // Fetch questions with correct answers privately (only needed column)
-      const questionsList = await db
-        .select({ correctOptionIndex: schema.questions.correctOptionIndex })
-        .from(schema.questions)
-        .where(eq(schema.questions.quizId, quizId));
-
-      if (questionsList.length === 0) {
-        return res.status(404).json({ error: 'No questions found for this quiz.' });
-      }
-
-      const { correctCount, totalQuestions, score, passed } = scoreQuiz(questionsList, answers);
-
-      // Save quiz attempt in database
-      const attempt = await db
-        .insert(schema.quizAttempts)
-        .values({
-          userId: req.dbUser!.id,
-          quizId,
-          score,
-          passed,
-        })
-        .returning();
-
-      res.json({
-        success: true,
-        score,
-        passed,
-        correctCount,
-        totalQuestions,
-        attempt: attempt[0],
-      });
-    } catch (error: any) {
-      console.error('Error scoring quiz:', error);
-      res.status(500).json({ error: 'Failed to score and submit quiz.' });
-    }
-  });
+  app.post('/api/quizzes/:id/submit', requireAuth, quizSubmitRateLimit, submitQuiz);
 
   const MAX_SYNC_COMPLETIONS = 500;
   const MAX_SYNC_QUIZZES = 100;
