@@ -1,5 +1,6 @@
 // src/lib/pouchdb-service.ts
 import { Course } from '../types.ts';
+import { openDB, type IDBPDatabase } from 'idb';
 
 // We implement an ultra-reliable, zero-dependency LocalStorage backend with exactly the same
 // Promise-based interface as PouchDB, eliminating third-party modules that break in modern ESM environments.
@@ -215,5 +216,144 @@ export class PouchDBService {
       enrolled.push(courseId);
       localStorage.setItem(STORAGE_KEYS.ENROLLED_COURSES, JSON.stringify(enrolled));
     }
+  }
+}
+
+// ─── MIME type cache for self-hosted documents ──────────────────────
+
+async function ensureMimeDb(): Promise<IDBPDatabase> {
+  return openDB('aqs_doc_mime_db', 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache');
+    },
+  });
+}
+
+const CACHE_KEY_PREFIX = 'doc_';
+
+export async function getDocMimeType(docId: string, token: string): Promise<string> {
+  const db = await ensureMimeDb();
+
+  const cacheKey = CACHE_KEY_PREFIX + docId;
+  const cached = await db.get('cache', cacheKey);
+  if (cached) return cached.mimeType;
+
+  if (!navigator.onLine) return 'video/mp4';
+
+  try {
+    const res = await fetch(`/api/documents/${docId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.mimeType) {
+        await db.put('cache', { mimeType: data.mimeType }, cacheKey);
+        return data.mimeType;
+      }
+    }
+  } catch {
+    // fetch failed — fall through to default
+  }
+
+  return 'video/mp4';
+}
+
+export async function setDocMimeType(docId: string, mimeType: string): Promise<void> {
+  const db = await ensureMimeDb();
+  await db.put('cache', { mimeType }, CACHE_KEY_PREFIX + docId);
+}
+
+// ─── IndexedDB migration from localStorage ──────────────────────────
+
+async function ensureOfflineDb(): Promise<IDBPDatabase> {
+  return openDB('aqs_offline_db', 1, {
+    upgrade(db) {
+      for (const name of ['courses', 'progress', 'syncQueue', 'enrolledCourses']) {
+        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
+      }
+    },
+  });
+}
+
+export async function migrateStore(
+  storeName: string,
+  localStorageKey: string,
+  deserialize: (raw: string) => any,
+): Promise<void> {
+  const raw = localStorage.getItem(localStorageKey);
+  if (raw === null) return;
+
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('aqs_offline_db', 1);
+    request.onupgradeneeded = () => {
+      const d = request.result;
+      for (const name of ['courses', 'progress', 'syncQueue', 'enrolledCourses']) {
+        if (!d.objectStoreNames.contains(name)) d.createObjectStore(name);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+  // Check count using raw IDB
+  const count = await new Promise<number>((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).count();
+    req.onsuccess = () => {
+      resolve(req.result);
+    };
+    req.onerror = () => {
+      reject(req.error);
+    };
+  });
+  if (count > 0) {
+    db.close();
+    return;
+  }
+
+  const data = deserialize(raw);
+
+  // Write using raw IDB
+  const writeTx = db.transaction(storeName, 'readwrite');
+  const store = writeTx.objectStore(storeName);
+
+  function rawPut2(value: any, key: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const req = store.put(value, key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0] !== null && 'id' in data[0]) {
+    for (const item of data) {
+      await rawPut2(item, item.id);
+    }
+  } else {
+    await rawPut2(data, 'state');
+  }
+
+  await new Promise<void>((resolve) => {
+    writeTx.oncomplete = () => resolve();
+  });
+  db.close();
+  localStorage.removeItem(localStorageKey);
+}
+
+// ─── Testing helper — resets the MIME cache DB ──────────────────────
+
+export async function resetForTesting(): Promise<void> {
+  try {
+    const db = await openDB('aqs_doc_mime_db', 1, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache');
+      },
+    });
+    const tx = db.transaction('cache', 'readwrite');
+    await tx.objectStore('cache').clear();
+    await tx.done;
+    db.close();
+  } catch {
+    // DB doesn't exist yet — nothing to reset
   }
 }

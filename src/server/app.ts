@@ -1,5 +1,5 @@
 // src/server/app.ts
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
@@ -9,6 +9,7 @@ import { db } from '../db/index.ts';
 import * as schema from '../db/schema.ts';
 import { eq } from 'drizzle-orm';
 import { toYouTubeEmbed } from '../lib/utils.ts';
+import { MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.ts';
 import { rateLimit } from '../middleware/rate-limit.ts';
 import {
   registerHealthRoutes,
@@ -156,6 +157,31 @@ export async function createApp() {
   registerEnrollmentRoutes(app, { enrollmentRateLimit });
   registerCohortRoutes(app);
   registerDocumentRoutes(app, { uploadRateLimit });
+
+  // Global error handler — ensures all errors return JSON, not HTML
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const error = err as Error & { code?: string; name?: string; status?: number };
+
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      res
+        .status(413)
+        .json({ error: `File too large. Maximum size is ${Math.round(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))}MB.` });
+      return;
+    }
+
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      res.status(400).json({ error: 'Unexpected file field. Use field name "file".' });
+      return;
+    }
+
+    if (typeof error.message === 'string' && error.message.startsWith('Unsupported file type:')) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+
+    console.error('Unhandled error:', error);
+    res.status(error.status ?? 500).json({ error: error.message || 'Internal server error' });
+  });
 
   // Vite integration for dev vs prod
   if (process.env.NODE_ENV !== 'production') {

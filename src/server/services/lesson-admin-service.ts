@@ -25,6 +25,10 @@ export async function createLesson(
     const docId = data.slidesUrl.slice(4);
     await documentStorage.backfillLessonId(docId, savedLesson.id);
   }
+  if (data.videoUrl && data.videoUrl.startsWith('doc:')) {
+    const docId = data.videoUrl.slice(4);
+    await documentStorage.backfillLessonId(docId, savedLesson.id);
+  }
   return savedLesson;
 }
 
@@ -55,6 +59,10 @@ export async function updateLesson(
 
   if (data.slidesUrl && data.slidesUrl.startsWith('doc:')) {
     const docId = data.slidesUrl.slice(4);
+    await documentStorage.backfillLessonId(docId, lessonId);
+  }
+  if (data.videoUrl && data.videoUrl.startsWith('doc:')) {
+    const docId = data.videoUrl.slice(4);
     await documentStorage.backfillLessonId(docId, lessonId);
   }
   return updated[0];

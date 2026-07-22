@@ -1,7 +1,7 @@
 // src/components/LearnerCoursePlayer.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Course, Lesson, Quiz, Question, QuizAttempt } from '../types.ts';
-import { PouchDBService } from '../lib/pouchdb-service.ts';
+import { PouchDBService, getDocMimeType } from '../lib/pouchdb-service.ts';
 import { getCourseImage, toYouTubeEmbed } from '../lib/utils.ts';
 import { apiFetch } from '../lib/api.ts';
 import { withBackoff } from '../lib/retry.ts';
@@ -69,6 +69,9 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   const [completionData, setCompletionData] = useState<{ completionId: string; completedAt: string } | null>(null);
   const completionInFlight = useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [videoMime, setVideoMime] = useState<string>('video/mp4');
 
   const isOnline = useOnlineStatus();
 
@@ -155,6 +158,34 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
         });
     }
   }, [course, lessons, completedLessonIds, quizAttempts, courseId, token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const updateVideo = async () => {
+      const lesson = lessons[activeLessonIndex];
+      if (!lesson?.videoUrl) {
+        if (!cancelled) setVideoSrc(null);
+        return;
+      }
+      if (lesson.videoUrl.startsWith('doc:')) {
+        const docId = lesson.videoUrl.slice(4);
+        const mimeType = await getDocMimeType(docId, token ?? '');
+        if (!cancelled) {
+          setVideoMime(mimeType);
+          setVideoSrc(`/api/documents/${docId}/file${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+        }
+      } else {
+        if (!cancelled) {
+          setVideoSrc(null);
+          setVideoMime('video/mp4');
+        }
+      }
+    };
+    updateVideo();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeLessonIndex, lessons, token]);
 
   const handleMarkAsComplete = async (lessonId: number) => {
     if (!completedLessonIds.includes(lessonId)) {
@@ -667,16 +698,32 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     style={{ maxHeight: '400px' }}
                   >
                     {isOnline ? (
-                      <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                        <iframe
-                          src={toYouTubeEmbed(activeLesson.videoUrl) || ''}
-                          title="AQS Lecture Lesson Video"
-                          className="absolute inset-0 w-full h-full"
-                          allowFullScreen
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        ></iframe>
-                      </div>
+                      activeLesson.videoUrl.startsWith('doc:') && videoSrc ? (
+                        <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                          <video className="absolute inset-0 w-full h-full" controls preload="metadata">
+                            <source src={videoSrc} type={videoMime} />
+                          </video>
+                        </div>
+                      ) : activeLesson.videoUrl.startsWith('doc:') ? (
+                        <div
+                          className="flex flex-col items-center justify-center bg-slate-950 text-slate-100 p-8 text-center"
+                          style={{ minHeight: '225px' }}
+                        >
+                          <RefreshCw className="w-8 h-8 text-slate-500 animate-spin mb-3" />
+                          <h3 className="text-base font-bold font-sans">Loading Video...</h3>
+                        </div>
+                      ) : (
+                        <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                          <iframe
+                            src={toYouTubeEmbed(activeLesson.videoUrl) || ''}
+                            title="AQS Lecture Lesson Video"
+                            className="absolute inset-0 w-full h-full"
+                            allowFullScreen
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          ></iframe>
+                        </div>
+                      )
                     ) : (
                       <div
                         className="flex flex-col items-center justify-center bg-slate-950 text-slate-100 p-8 text-center"

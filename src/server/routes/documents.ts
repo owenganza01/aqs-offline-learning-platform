@@ -1,7 +1,7 @@
 import { Application, RequestHandler } from 'express';
 import multer from 'multer';
 import { requireAuth, requireInstructorOrAdmin, requireAuthOrQueryToken } from '../../middleware/auth.ts';
-import { ALLOWED_SLIDE_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../../lib/mime-types.ts';
+import { ALL_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../../lib/mime-types.ts';
 import {
   uploadDocument,
   getDocumentMetadata,
@@ -13,7 +13,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_SLIDE_MIME_TYPE_SET.has(file.mimetype)) {
+    if (ALL_MIME_TYPE_SET.has(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new Error(`Unsupported file type: ${file.mimetype}`));

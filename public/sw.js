@@ -14,16 +14,31 @@ const SHELL_URLS = [
   '/icon.svg'
 ];
 
+// Stock course thumbnail images — keyword-matched by getCourseImage() in src/lib/utils.ts
+// Precached at install so they display immediately offline, even on first load.
+const IMAGE_URLS = [
+  'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1509228468518-180dd4864904?auto=format&fit=crop&w=600&q=80',
+  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80',
+];
+
 // ─── INSTALL ────────────────────────────────────────────────────
-// Pre-cache the app shell so the app loads instantly offline.
+// Pre-cache the app shell (critical) and stock course images (nice-to-have)
+// so they work offline from the very first load. Image precaching is
+// isolated via .catch() so a CDN failure cannot block shell installation.
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE)
-      .then((cache) => cache.addAll(SHELL_URLS))
-      .then(() => {
-        // Activate immediately — don't wait for page reload
-        return self.skipWaiting();
-      })
+    Promise.all([
+      caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_URLS)),
+      caches.open(IMAGES_CACHE)
+        .then((cache) => cache.addAll(IMAGE_URLS))
+        .catch((err) => {
+          console.warn('[SW] Image precache failed, will rely on stale-while-revalidate fallback:', err);
+        }),
+    ]).then(() => self.skipWaiting())
   );
 });
 

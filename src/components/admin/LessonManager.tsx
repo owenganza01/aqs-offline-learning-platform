@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Course, Lesson } from '../../types.ts';
 import { apiFetch } from '../../lib/api.ts';
 import { toYouTubeEmbed } from '../../lib/utils.ts';
-import { Plus, Trash2, ArrowUp, ArrowDown, Edit3, RefreshCw, Download, FileText } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Edit3, RefreshCw, Download, FileText, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface LessonManagerProps {
@@ -23,6 +23,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
   const [editingLessonId, setEditingLessonId] = useState<number | null>(null);
   const [lessonForm, setLessonForm] = useState({ title: '', content: '', videoUrl: '', slidesUrl: '', sortOrder: 0 });
   const [uploadingSlides, setUploadingSlides] = useState<boolean>(false);
+  const [uploadingVideo, setUploadingVideo] = useState<boolean>(false);
 
   const handleSaveLesson = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +88,36 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
     } finally {
       setUploadingSlides(false);
       const input = document.getElementById('slides-file-upload') as HTMLInputElement | null;
+      if (input) input.value = '';
+    }
+  };
+
+  const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingVideo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('lessonId', String(editingLessonId || 0));
+
+      const { ok, data } = await apiFetch('/api/admin/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!ok) {
+        throw new Error(data?.error || 'Upload failed');
+      }
+
+      setLessonForm((l) => ({ ...l, videoUrl: `doc:${data.id}` }));
+    } catch (err: any) {
+      console.error('Failed to upload video:', err);
+      alert(`Failed to upload: ${err.message || 'Please try again.'}`);
+    } finally {
+      setUploadingVideo(false);
+      const input = document.getElementById('video-file-upload') as HTMLInputElement | null;
       if (input) input.value = '';
     }
   };
@@ -221,6 +252,50 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                 />
                 <p className="text-[9px] text-slate-400 mt-1 font-mono">
                   Tip: On YouTube → Share → Embed → copy the code and paste here
+                </p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">
+                  Upload Video File (Optional — plays offline):
+                </label>
+                <div className="flex flex-col md:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={lessonForm.videoUrl.startsWith('doc:') ? lessonForm.videoUrl : ''}
+                    onChange={(e) => setLessonForm((l) => ({ ...l, videoUrl: e.target.value }))}
+                    placeholder="doc:... (set automatically when you upload below)"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-semibold text-slate-855"
+                    readOnly
+                  />
+                  <div className="relative shrink-0">
+                    <input
+                      type="file"
+                      id="video-file-upload"
+                      onChange={handleUploadVideo}
+                      accept="video/*,.mp4,.webm,.ogv,.mov"
+                      className="hidden"
+                      disabled={uploadingVideo}
+                    />
+                    <label
+                      htmlFor="video-file-upload"
+                      className={`h-10 px-4 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 select-none ${uploadingVideo ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      {uploadingVideo ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Video className="w-4 h-4 text-slate-500" />
+                          <span>Upload MP4/WebM</span>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1 font-mono">
+                  Supported: MP4, WebM, OGV, MOV (max 100 MB). Served offline after first play.
                 </p>
               </div>
               <div>
