@@ -12,7 +12,6 @@
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "db:generate": "drizzle-kit generate --config=src/db/drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config=src/db/drizzle.config.ts",
-    "prebuild": "npm run db:generate",
     "prepare": "husky"
   },
   "dependencies": {
