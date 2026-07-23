@@ -752,13 +752,18 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                       const href = isDocRef
                         ? `/api/documents/${docId}/file${token ? `?token=${encodeURIComponent(token)}` : ''}`
                         : activeLesson.slidesUrl;
+                      // Self-hosted (doc:) files may already be cached by the service worker
+                      // from a prior online view, so the link should still render offline —
+                      // only external (non-doc:) links truly require a live network connection.
+                      const canAccessOffline = isDocRef;
+                      const showLiveLink = isOnline || canAccessOffline;
                       return (
                         <div className="mb-6 bg-indigo-50/50 border border-indigo-100 p-5 rounded-2.5xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-start gap-3">
                             <div
-                              className={`p-2.5 rounded-xl ${isOnline ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'}`}
+                              className={`p-2.5 rounded-xl ${showLiveLink ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'}`}
                             >
-                              <FileText className={`w-5 h-5 ${isOnline ? 'animate-pulse' : ''}`} />
+                              <FileText className={`w-5 h-5 ${showLiveLink ? 'animate-pulse' : ''}`} />
                             </div>
                             <div>
                               <h4 className="text-xs font-black uppercase text-indigo-950 font-mono tracking-wider">
@@ -769,11 +774,13 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                                   ? isDocRef
                                     ? 'A document file is attached for this topic. Click to view or download.'
                                     : 'A lecture slideshow/PDF file is attached for this topic.'
-                                  : 'Slides unavailable offline. Reconnect to access.'}
+                                  : isDocRef
+                                    ? 'Offline — available if previously viewed, otherwise reconnect to access.'
+                                    : 'Slides unavailable offline. Reconnect to access.'}
                               </p>
                             </div>
                           </div>
-                          {isOnline ? (
+                          {showLiveLink ? (
                             <a
                               href={href}
                               target="_blank"
