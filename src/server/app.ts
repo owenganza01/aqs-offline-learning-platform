@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
 import path from 'path';
+import timeout from 'connect-timeout';
 import { createServer as createViteServer } from 'vite';
 import { db } from '../db/index.ts';
 import * as schema from '../db/schema.ts';
@@ -29,6 +30,7 @@ export async function createApp() {
 
   // Middleware
   app.use(express.json({ limit: '10mb' }));
+  app.use(timeout('30s'));
 
   app.use(
     cors({
@@ -158,9 +160,20 @@ export async function createApp() {
   registerCohortRoutes(app);
   registerDocumentRoutes(app, { uploadRateLimit });
 
+  // HaltOnTimedout — stop processing timed-out requests
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    if (req.timedout) return;
+    next();
+  });
+
   // Global error handler — ensures all errors return JSON, not HTML
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     const error = err as Error & { code?: string; name?: string; status?: number };
+
+    if (req.timedout) {
+      res.status(503).json({ error: 'Request timed out' });
+      return;
+    }
 
     if (error.code === 'LIMIT_FILE_SIZE') {
       res
