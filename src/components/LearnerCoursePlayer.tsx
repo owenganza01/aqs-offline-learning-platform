@@ -700,7 +700,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     {isOnline ? (
                       activeLesson.videoUrl.startsWith('doc:') && videoSrc ? (
                         <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                          <video className="absolute inset-0 w-full h-full" controls preload="metadata">
+                          <video className="absolute inset-0 w-full h-full" controls preload="metadata" playsInline>
                             <source src={videoSrc} type={videoMime} />
                           </video>
                         </div>
