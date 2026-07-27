@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { integer, pgTable, serial, text, timestamp, boolean, jsonb, unique } from 'drizzle-orm/pg-core';
+import { integer, pgTable, serial, text, timestamp, boolean, jsonb, unique, index } from 'drizzle-orm/pg-core';
 
 // 1. Users table (synced from Firebase UID)
 export const users = pgTable('users', {
@@ -72,30 +72,41 @@ export const questions = pgTable('questions', {
 });
 
 // 6. Lesson completions (Progress tracker)
-export const lessonCompletions = pgTable('lesson_completions', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  lessonId: integer('lesson_id')
-    .references(() => lessons.id, { onDelete: 'cascade' })
-    .notNull(),
-  completedAt: timestamp('completed_at').defaultNow().notNull(),
-});
+export const lessonCompletions = pgTable(
+  'lesson_completions',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    lessonId: integer('lesson_id')
+      .references(() => lessons.id, { onDelete: 'cascade' })
+      .notNull(),
+    completedAt: timestamp('completed_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('lesson_completions_user_id_idx').on(table.userId),
+    index('lesson_completions_lesson_id_idx').on(table.lessonId),
+  ],
+);
 
 // 7. Quiz attempts (Passed score >= 70%)
-export const quizAttempts = pgTable('quiz_attempts', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  quizId: integer('quiz_id')
-    .references(() => quizzes.id, { onDelete: 'cascade' })
-    .notNull(),
-  score: integer('score').notNull(), // percentage scored (0 to 100)
-  passed: boolean('passed').notNull(), // true if score >= 70
-  attemptedAt: timestamp('attempted_at').defaultNow().notNull(),
-});
+export const quizAttempts = pgTable(
+  'quiz_attempts',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    quizId: integer('quiz_id')
+      .references(() => quizzes.id, { onDelete: 'cascade' })
+      .notNull(),
+    score: integer('score').notNull(), // percentage scored (0 to 100)
+    passed: boolean('passed').notNull(), // true if score >= 70
+    attemptedAt: timestamp('attempted_at').defaultNow().notNull(),
+  },
+  (table) => [index('quiz_attempts_user_id_idx').on(table.userId), index('quiz_attempts_quiz_id_idx').on(table.quizId)],
+);
 
 // 8. Course completions (server-side enforcement: all lessons done + quiz passed >= 70%)
 export const courseCompletions = pgTable('course_completions', {
@@ -113,19 +124,23 @@ export const courseCompletions = pgTable('course_completions', {
 });
 
 // 9. Documents (uploaded lesson files stored in the database)
-export const documents = pgTable('documents', {
-  id: text('id').primaryKey(), // Application-generated UUID
-  lessonId: integer('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
-  originalFileName: text('original_file_name').notNull(),
-  storedFileName: text('stored_file_name').notNull(),
-  mimeType: text('mime_type').notNull(),
-  fileSize: integer('file_size').notNull(),
-  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
-  uploadedBy: integer('uploaded_by')
-    .references(() => users.id)
-    .notNull(),
-  fileData: text('file_data').notNull(), // Base64-encoded binary content
-});
+export const documents = pgTable(
+  'documents',
+  {
+    id: text('id').primaryKey(), // Application-generated UUID
+    lessonId: integer('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
+    originalFileName: text('original_file_name').notNull(),
+    storedFileName: text('stored_file_name').notNull(),
+    mimeType: text('mime_type').notNull(),
+    fileSize: integer('file_size').notNull(),
+    uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
+    uploadedBy: integer('uploaded_by')
+      .references(() => users.id)
+      .notNull(),
+    fileData: text('file_data').notNull(), // Base64-encoded binary content
+  },
+  (table) => [index('documents_lesson_id_idx').on(table.lessonId)],
+);
 
 // 10. Enrollments (tracks which users are enrolled in which courses)
 export const enrollments = pgTable(
