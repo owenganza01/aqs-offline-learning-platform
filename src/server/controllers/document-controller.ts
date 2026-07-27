@@ -63,13 +63,30 @@ export async function getDocumentMetadata(req: AuthRequest, res: Response): Prom
 
 export async function downloadDocument(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const result = await documentStorage.download(req.params.id);
-    if (!result) {
+    // Access check: get metadata first
+    const meta = await documentStorage.getMetadata(req.params.id);
+    if (!meta) {
       res.status(404).json({ error: 'Document not found.' });
       return;
     }
-    if (!(await checkDocumentAccess(result.metadata.lessonId, req.dbUser!))) {
+    if (!(await checkDocumentAccess(meta.lessonId, req.dbUser!))) {
       res.status(403).json({ error: 'Forbidden: You do not have access to this document.' });
+      return;
+    }
+
+    // If provider supports signed URLs, redirect (enables native video streaming)
+    if (documentStorage.getSignedUrl) {
+      const url = await documentStorage.getSignedUrl(req.params.id);
+      if (url) {
+        res.redirect(302, url);
+        return;
+      }
+    }
+
+    // Fallback: buffer download (legacy base64 or non-video files)
+    const result = await documentStorage.download(req.params.id);
+    if (!result) {
+      res.status(404).json({ error: 'Document not found.' });
       return;
     }
 

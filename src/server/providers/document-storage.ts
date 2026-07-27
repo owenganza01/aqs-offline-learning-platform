@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { db } from '../../db/index.ts';
 import * as schema from '../../db/schema.ts';
 import { eq } from 'drizzle-orm';
+import { R2StorageProvider } from './r2-storage.ts';
 
 export interface StoredDocumentMetadata {
   id: string;
@@ -27,6 +28,7 @@ export interface DocumentStorageProvider {
   deleteByLessonId(lessonId: number): Promise<number>;
   getMetadata(documentId: string): Promise<StoredDocumentMetadata | null>;
   backfillLessonId(documentId: string, lessonId: number): Promise<boolean>;
+  getSignedUrl?(documentId: string): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,5 +130,18 @@ export class DatabaseStorageProvider implements DocumentStorageProvider {
   }
 }
 
-// Singleton — swap this for FirebaseStorageProvider when Storage is enabled
-export const documentStorage: DocumentStorageProvider = new DatabaseStorageProvider();
+function createStorageProvider(): DocumentStorageProvider {
+  const provider = (process.env.STORAGE_PROVIDER || 'database').toLowerCase();
+
+  if (provider === 'r2') {
+    return new R2StorageProvider();
+  }
+
+  if (provider !== 'database') {
+    throw new Error(`Invalid STORAGE_PROVIDER="${process.env.STORAGE_PROVIDER}". Must be "database" or "r2".`);
+  }
+
+  return new DatabaseStorageProvider();
+}
+
+export const documentStorage: DocumentStorageProvider = createStorageProvider();
