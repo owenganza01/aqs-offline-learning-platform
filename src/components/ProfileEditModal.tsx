@@ -134,6 +134,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
       >
         <button
           onClick={onClose}
+          aria-label="Close"
           className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-full cursor-pointer transition-all active:scale-90"
         >
           <X className="w-4 h-4" />

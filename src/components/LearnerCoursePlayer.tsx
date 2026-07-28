@@ -557,7 +557,11 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
             {/* Mobile close button */}
             <div className="flex items-center justify-between lg:hidden mb-2 p-4 pb-0">
               <h4 className="font-bold text-slate-800 text-sm">Navigation</h4>
-              <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+              <button
+                onClick={() => setSidebarOpen(false)}
+                aria-label="Close sidebar"
+                className="p-2 hover:bg-slate-100 rounded-lg"
+              >
                 <X className="w-5 h-5 text-slate-600" />
               </button>
             </div>

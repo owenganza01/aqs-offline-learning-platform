@@ -336,6 +336,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                   </div>
                   <button
                     onClick={() => handleRemoveQuestion(idx)}
+                    aria-label="Remove question"
                     className="p-1 px-1.5 text-red-500 hover:bg-red-50 rounded transition-colors active:scale-95 cursor-pointer shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
