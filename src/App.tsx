@@ -229,7 +229,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-500 selection:text-slate-900 flex flex-col font-sans">
       {/* Dynamic Navigation Top Header */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm select-none">
+      <header
+        className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm select-none"
+        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-3">
           <div className="bg-emerald-500/10 p-2.5 rounded-xl text-emerald-600 flex items-center justify-center font-semibold text-lg border border-emerald-500/20">
             <Compass className="w-6 h-6 animate-spin-slow text-emerald-600" />
@@ -524,7 +527,10 @@ export default function App() {
 
             {/* Float Mobile Route switcher helper */}
             {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (
-              <div className="block sm:hidden fixed bottom-6 right-6 z-50">
+              <div
+                className="block sm:hidden fixed bottom-6 right-6 z-50"
+                style={{ bottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+              >
                 <button
                   onClick={() => {
                     navigateTo(isLmsPath ? '/study' : '/lms');
