@@ -134,13 +134,19 @@ function createStorageProvider(): DocumentStorageProvider {
   const provider = (process.env.STORAGE_PROVIDER || 'database').toLowerCase();
 
   if (provider === 'r2') {
-    return new R2StorageProvider();
+    const instance = new R2StorageProvider();
+    console.log('Storage provider initialized', {
+      provider: 'Cloudflare R2',
+      bucket: process.env.R2_BUCKET || '(not set)',
+    });
+    return instance;
   }
 
   if (provider !== 'database') {
     throw new Error(`Invalid STORAGE_PROVIDER="${process.env.STORAGE_PROVIDER}". Must be "database" or "r2".`);
   }
 
+  console.log('Storage provider initialized', { provider: 'Database' });
   return new DatabaseStorageProvider();
 }
 

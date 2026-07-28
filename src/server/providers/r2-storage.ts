@@ -53,14 +53,25 @@ export class R2StorageProvider implements DocumentStorageProvider {
       : '';
     const storedFileName = `${id}${ext}`;
 
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: storedFileName,
-        Body: file,
-        ContentType: metadata.mimeType,
-      }),
-    );
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: storedFileName,
+          Body: file,
+          ContentType: metadata.mimeType,
+        }),
+      );
+    } catch (err) {
+      console.error('R2 upload failed', {
+        operation: 'upload',
+        documentId: id,
+        storedFileName,
+        bucket: this.bucket,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
 
     await db.insert(schema.documents).values({
       id,
@@ -99,7 +110,15 @@ export class R2StorageProvider implements DocumentStorageProvider {
           uploadedBy: row.uploadedBy,
         },
       };
-    } catch {
+    } catch (err) {
+      console.error('R2 download failed, falling back to base64', {
+        operation: 'download',
+        documentId,
+        storedFileName: row.storedFileName,
+        bucket: this.bucket,
+        hasBase64Fallback: !!row.fileData,
+        error: err instanceof Error ? err.message : String(err),
+      });
       if (row.fileData) {
         const data = Buffer.from(row.fileData, 'base64');
         return {
@@ -135,7 +154,14 @@ export class R2StorageProvider implements DocumentStorageProvider {
         expiresIn: 3600,
       });
       return url;
-    } catch {
+    } catch (err) {
+      console.error('R2 getSignedUrl failed', {
+        operation: 'getSignedUrl',
+        documentId,
+        storedFileName,
+        bucket: this.bucket,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return null;
     }
   }
@@ -149,8 +175,14 @@ export class R2StorageProvider implements DocumentStorageProvider {
     if (rows.length > 0 && rows[0].storedFileName) {
       try {
         await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: rows[0].storedFileName }));
-      } catch {
-        // Object may not exist in R2 (legacy base64) — ignore
+      } catch (err) {
+        console.error('R2 delete object failed', {
+          operation: 'delete',
+          documentId,
+          storedFileName: rows[0].storedFileName,
+          bucket: this.bucket,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -169,8 +201,14 @@ export class R2StorageProvider implements DocumentStorageProvider {
       for (const key of keys) {
         try {
           await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
-        } catch {
-          // Ignore per-object failures
+        } catch (err) {
+          console.error('R2 deleteByLessonId object failed', {
+            operation: 'deleteByLessonId',
+            lessonId,
+            storedFileName: key,
+            bucket: this.bucket,
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       }
     }
