@@ -5,6 +5,7 @@ import { listUsers, changeUserRole, createInstructor } from '../controllers/admi
 
 export interface AdminUserRouteDeps {
   authRateLimit: RequestHandler;
+  adminLimiter: RequestHandler;
 }
 
 export function registerAdminUserRoutes(app: Application, deps: AdminUserRouteDeps): void {
@@ -17,7 +18,7 @@ export function registerAdminUserRoutes(app: Application, deps: AdminUserRouteDe
     createInstructor,
   );
 
-  app.get('/api/admin/users', requireAuth, requireAdmin, listUsers);
+  app.get('/api/admin/users', requireAuth, requireAdmin, deps.adminLimiter, listUsers);
 
   app.put(
     '/api/admin/users/:userId/role',

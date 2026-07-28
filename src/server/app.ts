@@ -147,17 +147,32 @@ export async function createApp() {
     max: 10,
     message: 'Too many profile update requests, please try again later',
   });
+  const browseLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    message: 'Too many requests, please try again later',
+  });
+  const completionLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: 'Too many completion requests, please try again later',
+  });
+  const adminLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: 'Too many requests, please try again later',
+  });
 
   // Register route modules
   registerHealthRoutes(app);
   registerAuthRoutes(app, { registerRateLimit, profileRateLimit });
-  registerAdminUserRoutes(app, { authRateLimit });
-  registerCourseRoutes(app);
+  registerAdminUserRoutes(app, { authRateLimit, adminLimiter });
+  registerCourseRoutes(app, { browseLimiter, completionLimiter });
   registerQuizRoutes(app, { quizSubmitRateLimit });
   registerSyncRoutes(app, { syncRateLimit });
   registerAdminCourseRoutes(app);
   registerEnrollmentRoutes(app, { enrollmentRateLimit });
-  registerCohortRoutes(app);
+  registerCohortRoutes(app, { adminLimiter });
   registerDocumentRoutes(app, { uploadRateLimit });
 
   // HaltOnTimedout — stop processing timed-out requests

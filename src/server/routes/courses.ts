@@ -1,13 +1,18 @@
-import { Application } from 'express';
+import { Application, RequestHandler } from 'express';
 import { requireAuth } from '../../middleware/auth.ts';
 import { listCourses, getCourseById, completeCourseHandler, completeLesson } from '../controllers/course-controller.ts';
 
-export function registerCourseRoutes(app: Application): void {
-  app.get('/api/courses', requireAuth, listCourses);
+export interface CourseRouteDeps {
+  browseLimiter: RequestHandler;
+  completionLimiter: RequestHandler;
+}
 
-  app.get('/api/courses/:id', requireAuth, getCourseById);
+export function registerCourseRoutes(app: Application, deps: CourseRouteDeps): void {
+  app.get('/api/courses', requireAuth, deps.browseLimiter, listCourses);
 
-  app.post('/api/courses/:id/complete', requireAuth, completeCourseHandler);
+  app.get('/api/courses/:id', requireAuth, deps.browseLimiter, getCourseById);
 
-  app.post('/api/lessons/:id/complete', requireAuth, completeLesson);
+  app.post('/api/courses/:id/complete', requireAuth, deps.completionLimiter, completeCourseHandler);
+
+  app.post('/api/lessons/:id/complete', requireAuth, deps.completionLimiter, completeLesson);
 }
