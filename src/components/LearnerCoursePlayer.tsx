@@ -365,6 +365,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 <img
                   src={getCourseImage(course)}
                   alt={course.title}
+                  loading="lazy"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                 />

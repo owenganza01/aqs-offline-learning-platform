@@ -198,6 +198,7 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                       <img
                         src={getCourseImage(course)}
                         alt={course.title}
+                        loading="lazy"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />

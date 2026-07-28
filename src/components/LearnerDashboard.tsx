@@ -359,6 +359,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                             alt={course.title}
                             width={400}
                             height={160}
+                            loading="lazy"
                             fetchpriority={idx === 0 ? 'high' : 'auto'}
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover"
@@ -490,6 +491,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                               alt={course.title}
                               width={400}
                               height={160}
+                              loading="lazy"
                               fetchpriority={idx === 0 ? 'high' : 'auto'}
                               referrerPolicy="no-referrer"
                               className="w-full h-full object-cover"
