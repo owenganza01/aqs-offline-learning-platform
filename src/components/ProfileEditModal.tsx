@@ -4,7 +4,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase.ts';
 import { User } from '../types.ts';
 import { apiFetch } from '../lib/api.ts';
-import { X, UploadCloud, Loader2, Check, User as UserIcon } from 'lucide-react';
+import { X, UploadCloud, Loader2, Check } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ProfileEditModalProps {
@@ -123,26 +123,26 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop overlay */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-navy/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal Dialog Card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-[2rem] border border-slate-100 shadow-2xl w-full max-w-md overflow-hidden relative z-10 p-6 md:p-8"
+        className="bg-paper-2 rounded-2xl border border-rule shadow-2xl w-full max-w-md overflow-hidden relative z-10 p-6 md:p-8"
       >
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-6 right-6 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-full cursor-pointer transition-all active:scale-90"
+          className="absolute top-6 right-6 p-2 bg-paper hover:bg-rule text-ink-3 hover:text-ink rounded-full cursor-pointer transition-all active:scale-90"
         >
           <X className="w-4 h-4" />
         </button>
 
         <div className="text-center mb-6">
-          <h3 className="text-xl font-bold text-slate-900 font-sans tracking-tight">Edit My Profile</h3>
-          <p className="text-xs font-semibold text-slate-500 mt-1">Personalize your profile</p>
+          <h3 className="text-xl font-display font-bold text-ink tracking-tight">Edit My Profile</h3>
+          <p className="text-xs font-semibold text-ink-3 mt-1">Personalize your profile</p>
         </div>
 
         {/* Profile picture editor */}
@@ -154,13 +154,13 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
             onDrop={handleDrop}
             className={`group relative w-24 h-24 rounded-full flex items-center justify-center border-3 border-dashed transition-all ${
               dragActive
-                ? 'border-indigo-500 bg-indigo-50/60 scale-102'
-                : 'border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-indigo-400'
+                ? 'border-ochre bg-ochre-dim/60 scale-102'
+                : 'border-rule bg-paper hover:bg-white hover:border-ochre'
             }`}
             style={{ overflow: 'hidden' }}
           >
             {uploading && (
-              <div className="absolute inset-0 bg-slate-900/75 backdrop-blur-[1px] flex flex-col items-center justify-center text-white z-20">
+              <div className="absolute inset-0 bg-navy/75 backdrop-blur-[1px] flex flex-col items-center justify-center text-white z-20">
                 <Loader2 className="w-5 h-5 animate-spin text-white mb-1" />
                 <span className="text-[8px] font-bold tracking-wider font-mono">LOADING...</span>
               </div>
@@ -174,14 +174,14 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-indigo-600 text-white font-extrabold text-3xl flex items-center justify-center">
+              <div className="w-full h-full bg-accent text-white font-extrabold text-3xl flex items-center justify-center">
                 {user?.name ? user.name.slice(0, 2).toUpperCase() : user?.email?.slice(0, 2).toUpperCase()}
               </div>
             )}
 
             <label
               htmlFor="modal-avatar-file-input"
-              className="absolute inset-0 bg-slate-950/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-black tracking-wider cursor-pointer transition-opacity z-10"
+              className="absolute inset-0 bg-navy/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[9px] font-black tracking-wider cursor-pointer transition-opacity z-10"
             >
               <UploadCloud className="w-4 h-4 text-white mb-1" />
               <span>UPLOAD</span>
@@ -195,36 +195,30 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
             accept="image/*"
             onChange={handleFileChange}
           />
-          <p className="text-[10px] text-slate-500 mt-2 font-semibold">Drag and drop photo or click to upload</p>
+          <p className="text-[10px] text-ink-3 mt-2 font-semibold">Drag and drop photo or click to upload</p>
         </div>
 
         {/* Profile Name form */}
         <form onSubmit={handleSaveName} className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5 font-mono">
-              My Full Name:
-            </label>
+            <label className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono">My Full Name:</label>
             <input
               type="text"
               required
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               placeholder="e.g. John Doe"
-              className="w-full h-11 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-sans font-semibold text-sm outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all"
+              className="w-full h-11 px-3.5 bg-paper border border-rule rounded-lg text-ink font-medium text-sm outline-none focus:bg-white focus:ring-2 focus:ring-ochre/25 focus:border-ochre transition-all"
             />
           </div>
 
           {msg && (
             <div
-              className={`p-3 border rounded-xl text-xs font-semibold flex items-center gap-2 ${
-                msg.error
-                  ? 'bg-red-50 border-red-100 text-red-700'
-                  : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+              className={`p-3 border rounded-lg text-xs font-semibold flex items-center gap-2 ${
+                msg.error ? 'bg-error-bg border-error/30 text-error' : 'bg-success/10 border-success/30 text-success'
               }`}
             >
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 ${msg.error ? 'bg-red-500' : 'bg-emerald-500 animate-ping'}`}
-              />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${msg.error ? 'bg-error' : 'bg-success animate-ping'}`} />
               <p className="truncate">{msg.text}</p>
             </div>
           )}
@@ -233,7 +227,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
             <button
               type="submit"
               disabled={savingName || uploading}
-              className="h-11 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 flex-grow disabled:opacity-50"
+              className="h-11 bg-accent hover:opacity-90 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 flex-grow disabled:opacity-50"
             >
               {savingName ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -245,7 +239,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
             <button
               type="button"
               onClick={onClose}
-              className="h-11 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl cursor-pointer transition-all border border-slate-200"
+              className="h-11 px-4 bg-paper hover:bg-white text-ink-2 font-bold text-xs rounded-lg cursor-pointer transition-all border border-rule"
             >
               CLOSE
             </button>

@@ -1,7 +1,7 @@
 // src/components/ProgressTree.tsx
 import React from 'react';
 import { Lesson } from '../types.ts';
-import { Leaf, Award, Compass, Info } from 'lucide-react';
+import { Compass, Info } from 'lucide-react';
 
 interface ProgressTreeProps {
   lessons: Lesson[];
@@ -18,18 +18,18 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
   // Render an SVG based on completed lessons
   // We will build a central trunk and branches curving off left and right for each lesson
   return (
-    <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-md" id="progress-tree-card">
+    <div className="bg-paper rounded-3xl p-4 border border-rule shadow-md" id="progress-tree-card">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Compass className="w-6 h-6 text-emerald-600 animate-spin-slow" />
-          <h3 className="text-base font-bold text-slate-800 tracking-tight font-sans">Progress Tree</h3>
+          <Compass className="w-6 h-6 text-ochre" />
+          <h3 className="text-base font-display font-bold text-ink tracking-tight">Progress Tree</h3>
         </div>
-        <span className="bg-emerald-50 text-emerald-700 text-[11px] font-bold px-3 py-1 rounded-full border border-emerald-500/20 font-mono">
+        <span className="bg-ochre-dim text-ochre text-[11px] font-bold px-3 py-1 rounded-full border border-ochre/30 font-mono">
           {completedCount}/{totalLessons}
         </span>
       </div>
 
-      <div className="relative flex flex-col items-center bg-slate-50/60 rounded-2xl p-3 border border-slate-150 overflow-hidden h-[260px]">
+      <div className="relative flex flex-col items-center bg-paper-2/60 rounded-2xl p-3 border border-rule overflow-hidden h-[260px]">
         {/* Dynamic SVG Drawing */}
         <svg
           viewBox="0 0 200 240"
@@ -142,22 +142,22 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
         </svg>
 
         {/* Tree Key Info */}
-        <div className="absolute bottom-2 left-2 right-2 bg-white/95 border border-slate-200 px-3 py-1.5 rounded-xl flex items-center justify-between text-[11px] text-slate-550 font-mono shadow-sm">
+        <div className="absolute bottom-2 left-2 right-2 bg-paper/95 border border-rule px-3 py-1.5 rounded-xl flex items-center justify-between text-[11px] text-ink-3 font-mono shadow-sm">
           <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-650 inline-block"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-success border border-success/60 inline-block"></span>
             <span>Leaves = Lessons</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded bg-amber-400 border border-amber-500 inline-block animate-pulse"></span>
+            <span className="w-2.5 h-2.5 rounded bg-ochre border border-ochre inline-block animate-pulse"></span>
             <span>Flower = Quiz passed!</span>
           </div>
         </div>
       </div>
 
       {/* Narrative Progress Text Helper for clarity without needing high-literacy */}
-      <div className="mt-3 flex items-start gap-2 bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-200">
-        <Info className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-        <p className="text-[11px] font-sans font-medium leading-relaxed text-emerald-900">
+      <div className="mt-3 flex items-start gap-2 bg-ochre-dim/40 rounded-xl px-3 py-2 border border-ochre/30">
+        <Info className="w-4 h-4 text-ochre shrink-0 mt-0.5" />
+        <p className="text-[11px] font-sans font-medium leading-relaxed text-ink-2">
           {quizPassed
             ? 'Congratulations! Your tree is fully grown with a beautiful blossom. You have passed this course!'
             : `Keep growing! You completed ${completedCount} of ${totalLessons} lessons. Read all lessons to turn branches green, then take the test to bloom your golden flower.`}

@@ -121,25 +121,25 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
   return (
     <>
       {/* Direct MCQ Database Injector */}
-      <div className="bg-white border border-slate-150 p-6 rounded-[2rem] shadow-sm font-sans bg-gradient-to-br from-white to-pink-50/10">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 pb-3 border-b border-pink-50">
+      <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm font-sans">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 pb-3 border-b border-stroke">
           <div>
-            <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-pink-600" />
+            <h4 className="font-semibold text-text text-sm flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-steel" />
               <span>Direct MCQ Database Injector</span>
             </h4>
-            <p className="text-slate-500 text-[11px] mt-0.5">
+            <p className="text-text-3 text-[11px] mt-0.5">
               Deploy a single multiple-choice question instantly to this course's live database.
             </p>
           </div>
-          <span className="bg-pink-100 text-pink-800 text-[10px] uppercase font-mono font-bold px-2.5 py-0.5 rounded-full self-start sm:self-center tracking-wider">
+          <span className="bg-steel-lt text-steel text-[10px] uppercase font-mono font-semibold px-2.5 py-0.5 rounded-full self-start sm:self-center tracking-wider">
             Live Engine
           </span>
         </div>
 
         <form onSubmit={handleSaveDirectQuestion} className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">
+            <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
               Question Prompt:
             </label>
             <input
@@ -148,14 +148,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
               value={directQuestion.questionText}
               onChange={(e) => setDirectQuestion((q) => ({ ...q, questionText: e.target.value }))}
               placeholder="e.g. Which metric represents the variance in sample metrics?"
-              className="w-full p-2.5 border border-slate-155 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-pink-500/15 focus:border-pink-500 transition-all font-semibold text-slate-855"
+              className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-sans">
             {directQuestion.options.map((option, oIdx) => (
               <div key={oIdx}>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1 font-mono">
+                <label className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">
                   Choice {String.fromCharCode(65 + oIdx)}:
                 </label>
                 <input
@@ -168,39 +168,36 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                     setDirectQuestion((q) => ({ ...q, options: opts }));
                   }}
                   placeholder={`Option ${String.fromCharCode(65 + oIdx)}...`}
-                  className="w-full p-2.5 border border-slate-155 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-pink-500/15 focus:border-pink-500 transition-all font-semibold text-slate-700"
+                  className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                 />
               </div>
             ))}
           </div>
 
           <div className="pt-2 font-sans">
-            <label className="block text-[10px] font-bold text-slate-500 mb-2 font-mono">
+            <label className="block text-[11px] font-bold text-text-3 mb-2 font-mono">
               Mark the correct option index:
             </label>
-            <div className="flex flex-wrap gap-4 font-bold font-mono text-xs text-slate-700">
+            <div className="flex flex-wrap gap-4 font-bold font-mono text-xs text-text-2">
               {directQuestion.options.map((_, oIdx) => (
-                <label
-                  key={oIdx}
-                  className="flex items-center gap-2 cursor-pointer hover:text-pink-600 transition-colors"
-                >
+                <label key={oIdx} className="flex items-center gap-2 cursor-pointer hover:text-steel transition-colors">
                   <input
                     type="radio"
                     name="directCorrectIdx"
                     value={oIdx}
                     checked={directQuestion.correctOptionIndex === oIdx}
                     onChange={() => setDirectQuestion((q) => ({ ...q, correctOptionIndex: oIdx }))}
-                    className="w-4 h-4 text-pink-600 focus:ring-0 cursor-pointer"
+                    className="w-4 h-4 text-steel focus:ring-0 cursor-pointer"
                   />
-                  <span className="font-sans font-bold text-slate-755">Option {String.fromCharCode(65 + oIdx)}</span>
+                  <span className="font-sans font-semibold text-text-2">Option {String.fromCharCode(65 + oIdx)}</span>
                 </label>
               ))}
             </div>
           </div>
 
           {directSuccessMsg && (
-            <div className="p-3.5 bg-emerald-50 border border-emerald-150 text-emerald-800 text-xs font-semibold rounded-2xl flex items-center gap-2 animate-fade-in font-sans">
-              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
+            <div className="p-3.5 bg-success/10 border border-success/30 text-success text-xs font-semibold rounded-xl flex items-center gap-2 animate-fade-in font-sans">
+              <span className="w-2.5 h-2.5 bg-success rounded-full animate-ping shrink-0" />
               <span>{directSuccessMsg}</span>
             </div>
           )}
@@ -208,7 +205,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           <button
             type="submit"
             disabled={directIsLoading}
-            className="w-full h-11 bg-pink-600 hover:bg-pink-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 border border-pink-700/20 cursor-pointer"
+            className="w-full h-11 bg-steel hover:bg-[#2d4a70] disabled:opacity-40 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 border border-steel cursor-pointer"
           >
             {directIsLoading ? (
               <span className="font-mono text-xs animate-pulse">SAVING TO DATABASE...</span>
@@ -223,14 +220,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
       </div>
 
       {/* Course Exam Publisher */}
-      <div className="bg-white border border-slate-150 p-6 rounded-[2rem] shadow-sm font-sans">
-        <div className="border-b border-slate-100 pb-3 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+      <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm font-sans">
+        <div className="border-b border-stroke pb-3 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
-            <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <Award className="w-4.5 h-4.5 text-indigo-600" />
+            <h4 className="font-semibold text-text text-sm flex items-center gap-2">
+              <Award className="w-4.5 h-4.5 text-steel" />
               <span>Course Exam Publisher</span>
             </h4>
-            <p className="text-slate-505 text-[11px] mt-0.5">
+            <p className="text-text-3 text-[11px] mt-0.5">
               Assemble comprehensive multi-question evaluation assessments.
             </p>
           </div>
@@ -238,36 +235,36 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
 
         <div className="space-y-4 mb-6">
           <div>
-            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">Exam Title:</label>
+            <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">Exam Title:</label>
             <input
               type="text"
               value={quizForm.title}
               onChange={(e) => setQuizForm((q) => ({ ...q, title: e.target.value }))}
-              className="w-full p-2.5 border border-slate-155 rounded-xl text-xs bg-slate-50/55 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-bold text-slate-800"
+              className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-semibold"
               placeholder="e.g. Calculus & Inference Final Exam"
             />
           </div>
 
-          <div className="bg-slate-50/60 border border-slate-200 p-5 rounded-2.5xl">
-            <h5 className="font-bold text-slate-800 text-xs mb-3 flex items-center gap-1.5 uppercase tracking-tight">
-              <CheckSquare className="w-4 h-4 text-indigo-600" />
+          <div className="bg-canvas/60 border border-stroke p-5 rounded-xl">
+            <h5 className="font-semibold text-text text-xs mb-3 flex items-center gap-1.5 uppercase tracking-tight">
+              <CheckSquare className="w-4 h-4 text-steel" />
               <span>Formulate Question Node</span>
             </h5>
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1 font-mono">Question Text:</label>
+                <label className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">Question Text:</label>
                 <input
                   type="text"
                   value={newQuestion.questionText}
                   onChange={(e) => setNewQuestion((q) => ({ ...q, questionText: e.target.value }))}
                   placeholder="e.g. Which coefficient measures direct correlation?"
-                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-semibold text-slate-850"
+                  className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {newQuestion.options.map((option, oIdx) => (
                   <div key={oIdx}>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1 font-mono">
+                    <label className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">
                       Option {String.fromCharCode(65 + oIdx)}:
                     </label>
                     <input
@@ -279,25 +276,25 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                         setNewQuestion((q) => ({ ...q, options: opts }));
                       }}
                       placeholder={`Alternative Choice ${String.fromCharCode(65 + oIdx)}...`}
-                      className="w-full p-2.5 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-semibold text-slate-700"
+                      className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                     />
                   </div>
                 ))}
               </div>
               <div className="pt-2 font-sans">
-                <label className="block text-[10px] font-bold text-slate-500 mb-1.5 font-mono">
+                <label className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">
                   Select the correct alternative answer:
                 </label>
-                <div className="flex flex-wrap gap-4 font-bold font-mono text-[11px] text-slate-600">
+                <div className="flex flex-wrap gap-4 font-bold font-mono text-[11px] text-text-2">
                   {newQuestion.options.map((_, oIdx) => (
-                    <label key={oIdx} className="flex items-center gap-1.5 cursor-pointer hover:text-indigo-600">
+                    <label key={oIdx} className="flex items-center gap-1.5 cursor-pointer hover:text-steel">
                       <input
                         type="radio"
                         name="correctIdx"
                         value={oIdx}
                         checked={newQuestion.correctOptionIndex === oIdx}
                         onChange={() => setNewQuestion((q) => ({ ...q, correctOptionIndex: oIdx }))}
-                        className="w-4 h-4 text-indigo-600 focus:ring-0 cursor-pointer"
+                        className="w-4 h-4 text-steel focus:ring-0 cursor-pointer"
                       />
                       <span>Choice {String.fromCharCode(65 + oIdx)}</span>
                     </label>
@@ -307,7 +304,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
               <button
                 type="button"
                 onClick={handleAddQuestion}
-                className="h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 rounded-xl shadow-sm transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer border border-indigo-700/20"
+                className="h-10 bg-steel hover:bg-[#2d4a70] text-white font-semibold text-xs px-4 rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer border border-steel"
               >
                 <Plus className="w-4 h-4" />
                 <span>ADD QUESTION UNIT</span>
@@ -316,20 +313,20 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           </div>
 
           {quizForm.questions.length > 0 && (
-            <div className="space-y-2 border-t border-slate-100 pt-4">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mb-2">
+            <div className="space-y-2 border-t border-stroke pt-4">
+              <p className="text-[10px] font-bold text-text-3 uppercase tracking-widest font-mono mb-2">
                 Quiz Inscription Queue:
               </p>
               {quizForm.questions.map((q, idx) => (
                 <div
                   key={idx}
-                  className="bg-indigo-50/40 border border-indigo-100 p-4 rounded-xl flex items-center justify-between gap-4 text-xs shadow-sm"
+                  className="bg-steel-lt/40 border border-steel/30 p-4 rounded-xl flex items-center justify-between gap-4 text-xs shadow-sm"
                 >
                   <div className="min-w-0">
-                    <p className="font-bold text-indigo-950 font-sans leading-snug truncate">
+                    <p className="font-semibold text-text font-sans leading-snug truncate">
                       {idx + 1}. {q.questionText}
                     </p>
-                    <p className="text-slate-500 font-medium mt-1 truncate">
+                    <p className="text-text-3 font-medium mt-1 truncate">
                       Options: {q.options.join(' | ')} (Correct: Choice {String.fromCharCode(65 + q.correctOptionIndex)}
                       )
                     </p>
@@ -337,7 +334,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
                   <button
                     onClick={() => handleRemoveQuestion(idx)}
                     aria-label="Remove question"
-                    className="p-1 px-1.5 text-red-500 hover:bg-red-50 rounded transition-colors active:scale-95 cursor-pointer shrink-0"
+                    className="p-1 px-1.5 text-error hover:bg-error-bg rounded transition-colors active:scale-95 cursor-pointer shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -350,7 +347,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
         <button
           onClick={handleSaveQuiz}
           disabled={quizForm.questions.length === 0}
-          className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 shadow-sm active:scale-95 transition-all outline-none border border-indigo-700/20 cursor-pointer"
+          className="w-full h-12 bg-steel hover:bg-[#2d4a70] text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-2 disabled:opacity-40 shadow-sm active:scale-95 transition-all outline-none border border-steel cursor-pointer"
         >
           <Check className="w-5 h-5" />
           <span>PUBLISH COMPLETE COURSE EXAM SHEET</span>

@@ -5,6 +5,123 @@
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 }
 
+/*
+  Runtime-switchable design tokens.
+  Tailwind v4 `@theme inline` maps utility names to `var()` references that resolve
+  against the nearest `.theme-learner` / `.theme-lms` scope, so one token set serves
+  both product surfaces. Values live in the scoped blocks below.
+*/
+@theme inline {
+  --font-display: var(--font-display-theme);
+
+  --color-appbg: var(--app-bg);
+  --color-accent: var(--accent);
+
+  /* Learner design system (aqs-learner-v3.html) */
+  --color-navy: var(--navy);
+  --color-navy-2: var(--navy-2);
+  --color-navy-3: var(--navy-3);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ochre: var(--ochre);
+  --color-ochre-dim: var(--ochre-dim);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-navtext: var(--nav-text);
+  --color-navactive: var(--nav-active);
+  --color-success: var(--success);
+  --color-error: var(--error);
+
+  /* LMS design system (aqs-lms-v3.html) */
+  --color-lms: var(--slate);
+  --color-lms-2: var(--slate-2);
+  --color-lms-3: var(--slate-3);
+  --color-steel: var(--steel);
+  --color-steel-lt: var(--steel-lt);
+  --color-canvas: var(--canvas);
+  --color-stroke: var(--stroke);
+  --color-lmstext: var(--text);
+  --color-lmstext2: var(--text-2);
+  --color-lmstext3: var(--text-3);
+  --color-warning: var(--warning);
+  --color-error-bg: var(--error-bg);
+}
+
+/* Both palettes are declared in both scopes so every token resolves under either theme. */
+.theme-learner {
+  --app-bg: #fafaf7;
+  --accent: #d4922b;
+
+  --navy: #0d1b2a;
+  --navy-2: #162236;
+  --navy-3: #1e3045;
+  --paper: #fafaf7;
+  --paper-2: #f2f1ec;
+  --ochre: #d4922b;
+  --ochre-dim: #f0deb6;
+  --ink: #181c1b;
+  --ink-2: #4a5250;
+  --ink-3: #8b9490;
+  --rule: #e0ded6;
+  --nav-text: #b8c8cc;
+  --nav-active: #ffffff;
+  --success: #2a6644;
+  --error: #8b2020;
+  --font-display-theme: 'Fraunces', 'Inter', serif;
+
+  /* LMS fallback values so LMS utilities resolve even in the learner scope */
+  --slate: #1a2332;
+  --slate-2: #222e40;
+  --slate-3: #2c3a50;
+  --steel: #3d5a80;
+  --steel-lt: #e8eff7;
+  --canvas: #f4f6f9;
+  --stroke: #dde2ea;
+  --text: #1a2332;
+  --text-2: #4a5568;
+  --text-3: #8a9aad;
+  --warning: #7b4f0a;
+  --error-bg: #fbe9e9;
+}
+
+.theme-lms {
+  --app-bg: #f4f6f9;
+  --accent: #3d5a80;
+
+  --slate: #1a2332;
+  --slate-2: #222e40;
+  --slate-3: #2c3a50;
+  --steel: #3d5a80;
+  --steel-lt: #e8eff7;
+  --canvas: #f4f6f9;
+  --stroke: #dde2ea;
+  --text: #1a2332;
+  --text-2: #4a5568;
+  --text-3: #8a9aad;
+  --nav-text: #9fafc0;
+  --nav-active: #ffffff;
+  --success: #1d6b45;
+  --warning: #7b4f0a;
+  --error: #7b1f1f;
+  --error-bg: #fbe9e9;
+  --font-display-theme: 'DM Serif Display', 'Fraunces', serif;
+
+  /* Learner fallback values so learner utilities resolve even in the LMS scope */
+  --navy: #0d1b2a;
+  --navy-2: #222e40;
+  --navy-3: #2c3a50;
+  --paper: #fafaf7;
+  --paper-2: #f2f1ec;
+  --ochre: #d4922b;
+  --ochre-dim: #f0deb6;
+  --ink: #181c1b;
+  --ink-2: #4a5250;
+  --ink-3: #8b9490;
+  --rule: #e0ded6;
+}
+
 /* Custom visual micro-interactions and transitions */
 .animate-spin-slow {
   animation: spin 8s linear infinite;

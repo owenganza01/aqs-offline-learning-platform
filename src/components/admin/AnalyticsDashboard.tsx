@@ -157,12 +157,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
 
   if (analyticsLoading || !analytics) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-slate-705 h-[30vh]">
-        <RefreshCw className="w-10 h-10 animate-spin text-pink-500 mb-4" />
+      <div className="flex flex-col items-center justify-center p-12 text-text-2 h-[30vh]">
+        <RefreshCw className="w-10 h-10 animate-spin text-steel mb-4" />
         <p className="font-bold font-sans">Compiling student engagement metrics...</p>
       </div>
     );
   }
+
+  const avgQuizScore =
+    analytics.courseStats?.length > 0
+      ? Math.round(
+          analytics.courseStats.reduce((acc: number, item: any) => acc + (item.averageScore ?? 0), 0) /
+            analytics.courseStats.length,
+        )
+      : null;
+  const totalLessonsCompleted = analytics.courseStats?.reduce((acc: number, s: any) => acc + (s.lessonsCount || 0), 0);
 
   return (
     <motion.div
@@ -171,19 +180,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
       className="space-y-8 font-sans"
       id="analytics-command-center"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-150 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-stroke pb-5">
         <div>
-          <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Activity className="w-5 h-5 text-pink-600" />
-            <span>Academic Engagement Center</span>
+          <h3 className="text-lg font-display font-bold text-text tracking-tight flex items-center gap-2">
+            <Activity className="w-5 h-5 text-steel" />
+            <span>Analytics</span>
           </h3>
-          <p className="text-xs text-slate-505 mt-1 font-medium">
+          <p className="text-xs text-text-3 mt-1 font-medium">
             Export student graduation stats, curriculum completed nodes, and recent active assessments.
           </p>
         </div>
         <button
           onClick={handleExportCSV}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all hover:shadow-lg active:scale-95 border border-indigo-700/20 cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 bg-steel hover:bg-[#2d4a70] text-white font-semibold text-xs rounded-lg shadow-md transition-all hover:shadow-lg active:scale-95 border border-steel cursor-pointer"
           title="Export all data to CSV"
           id="export-csv-btn"
         >
@@ -192,36 +201,35 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-pink-50/50 border border-pink-100/70 rounded-[2rem] p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-pink-100 rounded-full -mr-8 -mt-8 opacity-40"></div>
-          <p className="text-[10px] uppercase font-bold tracking-widest text-pink-700 font-mono flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5" />
-            <span>Gross Enrolled Learners</span>
-          </p>
-          <p className="text-3.5xl font-black text-pink-950 font-mono mt-4">{analytics.totalLearnersCount}</p>
-          <p className="text-[11px] font-medium text-pink-850/80 mt-2 leading-relaxed">
-            Unique profiles registered automatically upon portal login.
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <p className="font-display text-[28px] text-text leading-none mb-1.5">{analytics.totalLearnersCount}</p>
+          <p className="text-[12px] text-text-3 font-medium">Total learners</p>
+          <p className="font-mono text-[11px] text-success mt-2">
+            <Users className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+            Unique profiles
           </p>
         </div>
-        <div className="bg-violet-50/50 border border-violet-100/70 rounded-[2rem] p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-violet-100 rounded-full -mr-8 -mt-8 opacity-40"></div>
-          <p className="text-[10px] uppercase font-bold tracking-widest text-violet-700 font-mono flex items-center gap-1.5">
-            <Layout className="w-3.5 h-3.5" />
-            <span>Active Lectures</span>
+        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <p className="font-display text-[28px] text-text leading-none mb-1.5">
+            {avgQuizScore === null ? '—' : `${avgQuizScore}%`}
           </p>
-          <p className="text-3.5xl font-black text-violet-950 font-mono mt-4">{courses.length}</p>
-          <p className="text-[11px] font-medium text-violet-850/80 mt-2 leading-relaxed">
-            Registered curriculum databases currently online.
+          <p className="text-[12px] text-text-3 font-medium">Avg. quiz score</p>
+          <p className="font-mono text-[11px] text-success mt-2">
+            <Sparkles className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+            Best attempts
           </p>
         </div>
-        <div className="bg-emerald-50/50 border border-emerald-100/70 rounded-[2rem] p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-100 rounded-full -mr-8 -mt-8 opacity-40"></div>
-          <p className="text-[10px] uppercase font-bold tracking-widest text-emerald-700 font-mono flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Average Graduation Rate</span>
+        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <p className="font-display text-[28px] text-text leading-none mb-1.5">{totalLessonsCompleted || 0}</p>
+          <p className="text-[12px] text-text-3 font-medium">Lessons completed</p>
+          <p className="font-mono text-[11px] text-success mt-2">
+            <Layout className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+            Syllabus units
           </p>
-          <p className="text-3.5xl font-black text-emerald-950 font-mono mt-4">
+        </div>
+        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <p className="font-display text-[28px] text-text leading-none mb-1.5">
             {analytics.courseStats?.length > 0
               ? Math.round(
                   analytics.courseStats.reduce((acc: number, item: any) => acc + (item.completionRate || 0), 0) /
@@ -230,50 +238,52 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
               : 0}
             %
           </p>
-          <p className="text-[11px] font-medium text-emerald-850/80 mt-2 leading-relaxed">
-            Proportion of active students who passed the course exams.
+          <p className="text-[12px] text-text-3 font-medium">Course completion</p>
+          <p className="font-mono text-[11px] text-success mt-2">
+            <Activity className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+            Passing rate
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-150 p-6 rounded-[2rem] shadow-sm">
-          <h4 className="text-sm font-bold text-slate-900 mb-1 font-sans flex items-center gap-2">
-            <BarChart2 className="w-4 h-4 text-pink-600" />
+        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm">
+          <h4 className="text-sm font-display font-bold text-text mb-1 flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-steel" />
             <span>Course Engagement Distribution</span>
           </h4>
-          <p className="text-xs text-slate-500 mb-6 font-medium">
+          <p className="text-xs text-text-3 mb-6 font-medium">
             Comparison of engaged student users against quiz graduation counts.
           </p>
           <div className="h-80 w-full" id="engagement-recharts-container">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={analytics.courseStats} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" />
-                <XAxis dataKey="title" stroke="#94a3b8" fontSize={9} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" />
+                <XAxis dataKey="title" stroke="#8a9aad" fontSize={9} tickLine={false} />
+                <YAxis stroke="#8a9aad" fontSize={9} tickLine={false} />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: '16px',
-                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    border: '1px solid #dde2ea',
                     boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
                     fontSize: '11px',
                     fontFamily: 'sans-serif',
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="activeStudents" fill="#3b82f6" name="Active Learners" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="passedQuizzes" fill="#10b981" name="Passed Exams" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="activeStudents" fill="#3d5a80" name="Active Learners" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="passedQuizzes" fill="#1d6b45" name="Passed Exams" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-150 p-6 rounded-[2rem] shadow-sm">
-          <h4 className="text-sm font-bold text-slate-900 mb-1 font-sans flex items-center gap-2">
-            <Activity className="w-4 h-4 text-pink-600" />
+        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm">
+          <h4 className="text-sm font-display font-bold text-text mb-1 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-steel" />
             <span>Course Completion Rates (%)</span>
           </h4>
-          <p className="text-xs text-slate-500 mb-6 font-medium">
+          <p className="text-xs text-text-3 mb-6 font-medium">
             Visualizing curriculum completion percentages across active courses.
           </p>
           <div className="h-80 w-full" id="completion-rates-recharts-container">
@@ -281,14 +291,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
               <AreaChart data={analytics.courseStats} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
                 <defs>
                   <linearGradient id="colorCompletion" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#ec4899" stopOpacity={0.01} />
+                    <stop offset="5%" stopColor="#3d5a80" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#3d5a80" stopOpacity={0.01} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" />
-                <XAxis dataKey="title" stroke="#94a3b8" fontSize={9} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" />
+                <XAxis dataKey="title" stroke="#8a9aad" fontSize={9} tickLine={false} />
                 <YAxis
-                  stroke="#94a3b8"
+                  stroke="#8a9aad"
                   fontSize={9}
                   tickLine={false}
                   domain={[0, 100]}
@@ -296,8 +306,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
                 />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: '16px',
-                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    border: '1px solid #dde2ea',
                     boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
                     fontSize: '11px',
                     fontFamily: 'sans-serif',
@@ -308,7 +318,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
                 <Area
                   type="monotone"
                   dataKey="completionRate"
-                  stroke="#ec4899"
+                  stroke="#3d5a80"
                   fillOpacity={1}
                   fill="url(#colorCompletion)"
                   name="Completion Rate"
@@ -321,33 +331,33 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-white border border-slate-150 p-6 rounded-[2rem] shadow-sm font-sans">
-          <h4 className="font-bold text-slate-900 text-sm mb-4 border-b border-slate-100 pb-2 flex items-center gap-2">
-            <Layout className="w-4.5 h-4.5 text-pink-600" />
+        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm font-sans">
+          <h4 className="font-display font-bold text-text text-sm mb-4 border-b border-stroke pb-2 flex items-center gap-2">
+            <Layout className="w-4.5 h-4.5 text-steel" />
             <span>Academic Matrix Ledger</span>
           </h4>
           {analytics.courseStats?.length === 0 ? (
-            <p className="text-slate-500 italic text-xs">No metrics records.</p>
+            <p className="text-text-3 italic text-xs">No metrics records.</p>
           ) : (
-            <div className="space-y-3 font-mono text-[11px] text-slate-550">
+            <div className="space-y-3 font-mono text-[11px] text-text-2">
               {analytics.courseStats.map((stat: any) => (
-                <div key={stat.id} className="border-b border-slate-100 pb-3 flex flex-col gap-1.5 last:border-none">
-                  <p className="font-bold text-xs text-slate-800 font-sans">{stat.title}</p>
+                <div key={stat.id} className="border-b border-stroke pb-3 flex flex-col gap-1.5 last:border-none">
+                  <p className="font-bold text-xs text-text font-sans">{stat.title}</p>
                   <div className="flex items-center justify-between">
                     <span>Syllabus Size:</span>
-                    <span className="font-bold text-slate-700">{stat.lessonsCount} lessons</span>
+                    <span className="font-semibold text-text-2">{stat.lessonsCount} lessons</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Engaged Active Learners:</span>
-                    <span className="font-bold text-blue-650">{stat.activeStudents} active</span>
+                    <span className="font-semibold text-steel">{stat.activeStudents} active</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Passed Quiz (Completed):</span>
-                    <span className="font-bold text-emerald-650">{stat.passedQuizzes} graduated</span>
+                    <span className="font-semibold text-success">{stat.passedQuizzes} graduated</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Best Class Quiz Average:</span>
-                    <span className="font-bold text-indigo-650">
+                    <span className="font-semibold text-steel">
                       {stat.averageScore !== null ? `${stat.averageScore}%` : 'N/A'}
                     </span>
                   </div>
@@ -357,39 +367,39 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
           )}
         </div>
 
-        <div className="bg-white border border-slate-150 p-6 rounded-[2rem] shadow-sm font-sans">
-          <h4 className="font-bold text-slate-900 text-sm mb-4 border-b border-slate-100 pb-2 flex items-center gap-2">
-            <Activity className="w-4.5 h-4.5 text-pink-600" />
+        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm font-sans">
+          <h4 className="font-display font-bold text-text text-sm mb-4 border-b border-stroke pb-2 flex items-center gap-2">
+            <Activity className="w-4.5 h-4.5 text-steel" />
             <span>Live Student Activity Feed</span>
           </h4>
           {analytics.recentActivity?.length === 0 ? (
-            <p className="text-slate-500 italic text-[11px] py-12 text-center">No student activity logged yet.</p>
+            <p className="text-text-3 italic text-[11px] py-12 text-center">No student activity logged yet.</p>
           ) : (
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
               {analytics.recentActivity.map((act: any, idx: number) => (
                 <div
                   key={idx}
-                  className="bg-slate-50/50 border border-slate-100 p-3.5 rounded-xl flex items-start gap-2.5 text-xs"
+                  className="bg-canvas/60 border border-stroke p-3.5 rounded-xl flex items-start gap-2.5 text-xs"
                 >
                   <span
-                    className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${act.type === 'quiz' ? (act.passed ? 'bg-emerald-500 animate-pulse' : 'bg-red-500') : 'bg-blue-500 animate-pulse'}`}
+                    className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${act.type === 'quiz' ? (act.passed ? 'bg-success animate-pulse' : 'bg-error') : 'bg-steel animate-pulse'}`}
                   ></span>
                   <div>
-                    <p className="text-slate-800 font-bold leading-tight text-xs">{act.studentName}</p>
-                    <p className="text-slate-605 mt-1 text-[11px] leading-relaxed">
+                    <p className="text-text font-semibold leading-tight text-xs">{act.studentName}</p>
+                    <p className="text-text-2 mt-1 text-[11px] leading-relaxed">
                       {act.type === 'quiz' ? (
                         <span>
-                          Completed Exam: <strong className="text-slate-800">{act.quizTitle}</strong> scoring{' '}
-                          <strong className="font-mono text-slate-900">{act.score}%</strong> (
+                          Completed Exam: <strong className="text-text">{act.quizTitle}</strong> scoring{' '}
+                          <strong className="font-mono text-text">{act.score}%</strong> (
                           {act.passed ? 'PASSED' : 'FAILED'})
                         </span>
                       ) : (
                         <span>
-                          Completed lecture: <strong className="text-slate-800">{act.lessonTitle}</strong>
+                          Completed lecture: <strong className="text-text">{act.lessonTitle}</strong>
                         </span>
                       )}
                     </p>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 font-semibold">
+                    <p className="text-[10px] text-text-3 font-mono mt-1 font-semibold">
                       {new Date(act.completedAt || act.attemptedAt).toLocaleTimeString()} •{' '}
                       {new Date(act.completedAt || act.attemptedAt).toLocaleDateString()}
                     </p>

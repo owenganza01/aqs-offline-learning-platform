@@ -184,11 +184,11 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-150 p-6 rounded-[2rem] shadow-sm relative overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-1 bg-pink-500"></div>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-2 border-b border-slate-100">
-        <h4 className="font-bold text-slate-800 text-xs font-sans uppercase tracking-widest font-mono flex items-center gap-2">
-          <FileText className="w-4 h-4 text-indigo-600" />
+    <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-1 bg-steel"></div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 pb-2 border-b border-stroke">
+        <h4 className="font-bold text-text text-xs font-sans uppercase tracking-widest font-mono flex items-center gap-2">
+          <FileText className="w-4 h-4 text-steel" />
           <span>Curriculum Syllabus Chapters ({selectedCourse.lessons?.length || 0})</span>
         </h4>
         <button
@@ -203,7 +203,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
             });
             setShowAddLesson(true);
           }}
-          className="w-full sm:w-auto h-10 bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-4 rounded-xl border border-pink-700/20 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+          className="w-full sm:w-auto h-10 bg-steel hover:bg-[#2d4a70] text-white font-semibold text-xs px-4 rounded-lg border border-steel flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>ADD LESSON MATERIAL</span>
@@ -216,14 +216,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="bg-slate-50 border border-slate-200 p-5 rounded-2.5xl mb-4 font-sans text-sm shadow-inner"
+            className="bg-canvas border border-stroke p-5 rounded-xl mb-4 font-sans text-sm shadow-inner"
           >
-            <h5 className="font-bold text-slate-800 mb-3 text-xs tracking-tight uppercase border-b border-slate-200 pb-1.5">
-              {editingLessonId ? '✏️ Modify Lesson Unit' : '✨ Formulate New Curriculum Unit'}
+            <h5 className="font-semibold text-text mb-3 text-xs tracking-tight uppercase border-b border-stroke pb-1.5">
+              {editingLessonId ? '✏️ Modify Lesson Unit' : '✨ Create New Curriculum Unit'}
             </h5>
             <form onSubmit={handleSaveLesson} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
                   Lesson Title:
                 </label>
                 <input
@@ -232,11 +232,11 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                   value={lessonForm.title}
                   onChange={(e) => setLessonForm((l) => ({ ...l, title: e.target.value }))}
                   placeholder="e.g. Quantitative Assessment Metrics"
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-semibold text-slate-855"
+                  className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
                   YouTube Video (Optional):
                 </label>
                 <input
@@ -248,14 +248,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     if (norm !== e.target.value) setLessonForm((l) => ({ ...l, videoUrl: norm || '' }));
                   }}
                   placeholder="Paste YouTube embed code or URL (from Share → Embed)"
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-semibold text-slate-855"
+                  className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                 />
-                <p className="text-[9px] text-slate-400 mt-1 font-mono">
+                <p className="text-[11px] text-text-3 mt-1 font-mono">
                   Tip: On YouTube → Share → Embed → copy the code and paste here
                 </p>
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
                   Upload Video File (Optional — plays offline):
                 </label>
                 <div className="flex flex-col md:flex-row gap-2">
@@ -264,7 +264,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     value={lessonForm.videoUrl.startsWith('doc:') ? lessonForm.videoUrl : ''}
                     onChange={(e) => setLessonForm((l) => ({ ...l, videoUrl: e.target.value }))}
                     placeholder="doc:... (set automatically when you upload below)"
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-semibold text-slate-855"
+                    className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                     readOnly
                   />
                   <div className="relative shrink-0">
@@ -278,28 +278,28 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     />
                     <label
                       htmlFor="video-file-upload"
-                      className={`h-10 px-4 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 select-none ${uploadingVideo ? 'opacity-50 pointer-events-none' : ''}`}
+                      className={`h-10 px-4 border-[1.5px] border-stroke bg-white hover:bg-canvas rounded-lg text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 select-none ${uploadingVideo ? 'opacity-50 pointer-events-none' : ''}`}
                     >
                       {uploadingVideo ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+                          <RefreshCw className="w-4 h-4 animate-spin text-text-3" />
                           <span>Uploading...</span>
                         </>
                       ) : (
                         <>
-                          <Video className="w-4 h-4 text-slate-500" />
+                          <Video className="w-4 h-4 text-text-3" />
                           <span>Upload MP4/WebM</span>
                         </>
                       )}
                     </label>
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1 font-mono">
+                <p className="text-[11px] text-text-3 mt-1 font-mono">
                   Supported: MP4, WebM, OGV, MOV (max 100 MB). Served offline after first play.
                 </p>
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
                   PowerPoint / Slides Link or Upload Document (Optional):
                 </label>
                 <div className="flex flex-col md:flex-row gap-2">
@@ -308,7 +308,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     value={lessonForm.slidesUrl}
                     onChange={(e) => setLessonForm((l) => ({ ...l, slidesUrl: e.target.value }))}
                     placeholder="e.g. Google Slides link, OneDrive PowerPoint embed URL, PDF link"
-                    className="flex-grow p-2.5 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all font-semibold text-slate-855"
+                    className="flex-grow p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                   />
                   <div className="relative shrink-0">
                     <input
@@ -321,16 +321,16 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     />
                     <label
                       htmlFor="slides-file-upload"
-                      className={`h-10 px-4 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 select-none ${uploadingSlides ? 'opacity-50 pointer-events-none' : ''}`}
+                      className={`h-10 px-4 border-[1.5px] border-stroke bg-white hover:bg-canvas rounded-lg text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 select-none ${uploadingSlides ? 'opacity-50 pointer-events-none' : ''}`}
                     >
                       {uploadingSlides ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+                          <RefreshCw className="w-4 h-4 animate-spin text-text-3" />
                           <span>Uploading...</span>
                         </>
                       ) : (
                         <>
-                          <Download className="w-4 h-4 text-slate-500 rotate-180" />
+                          <Download className="w-4 h-4 text-text-3 rotate-180" />
                           <span>Upload PPT/PDF</span>
                         </>
                       )}
@@ -339,7 +339,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1 font-mono">
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
                   Detailed Course Readings Summary (Content Text/Markdown):
                 </label>
                 <textarea
@@ -347,13 +347,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                   value={lessonForm.content}
                   onChange={(e) => setLessonForm((l) => ({ ...l, content: e.target.value }))}
                   placeholder="Provide student reference textbooks or technical content summaries..."
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs bg-white h-44 outline-none focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-500 transition-all text-slate-755 font-medium leading-relaxed"
+                  className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text-2 h-44 outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all bg-white font-medium leading-relaxed"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-4 h-10 rounded-xl transition-all shadow-sm active:scale-95 border border-pink-700/20 cursor-pointer"
+                  className="bg-steel hover:bg-[#2d4a70] text-white font-semibold text-xs px-4 h-10 rounded-lg transition-all shadow-sm active:scale-95 border border-steel cursor-pointer"
                 >
                   SAVE MATERIALS
                 </button>
@@ -363,7 +363,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     setShowAddLesson(false);
                     setEditingLessonId(null);
                   }}
-                  className="bg-white hover:bg-slate-100 text-slate-600 font-bold text-xs px-4 h-10 rounded-xl border border-slate-200 transition-all shadow-sm cursor-pointer"
+                  className="bg-white hover:bg-canvas text-text-2 font-semibold text-xs px-4 h-10 rounded-lg border border-stroke transition-all shadow-sm cursor-pointer"
                 >
                   ABANDON
                 </button>
@@ -374,21 +374,21 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
       </AnimatePresence>
 
       {(selectedCourse.lessons || []).length === 0 ? (
-        <div className="text-center py-8 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
-          <p className="text-xs italic text-slate-500">No lessons built yet. Click ADD LESSON MATERIAL above.</p>
+        <div className="text-center py-8 border border-dashed border-stroke rounded-xl bg-canvas/50">
+          <p className="text-xs italic text-text-3">No lessons built yet. Click ADD LESSON MATERIAL above.</p>
         </div>
       ) : (
         <div className="space-y-2.5">
           {(selectedCourse.lessons || []).map((lesson, index) => (
             <div
               key={lesson.id}
-              className="bg-slate-50/60 border border-slate-150 p-4 rounded-2xl flex items-center justify-between gap-4 font-sans shadow-sm"
+              className="bg-canvas/60 border border-stroke p-4 rounded-xl flex items-center justify-between gap-4 font-sans shadow-sm"
             >
               <div className="flex items-center gap-3 min-w-0 pr-2">
-                <span className="font-mono font-black text-slate-450 text-xs shrink-0">{index + 1}.</span>
+                <span className="font-mono font-bold text-text-3 text-xs shrink-0">{index + 1}.</span>
                 <div className="min-w-0">
-                  <p className="font-bold text-slate-800 text-xs truncate">{lesson.title}</p>
-                  <p className="text-[10px] text-slate-500 font-mono font-semibold mt-1">
+                  <p className="font-semibold text-text text-xs truncate">{lesson.title}</p>
+                  <p className="text-[10px] text-text-3 font-mono font-semibold mt-1">
                     ID #{lesson.id} • Order index: {lesson.sortOrder}
                   </p>
                 </div>
@@ -398,31 +398,31 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                   onClick={() => handleMoveLesson(index, 'up')}
                   disabled={index === 0}
                   title="Move up"
-                  className="p-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg disabled:opacity-30 active:scale-95 cursor-pointer shadow-sm"
+                  className="p-1.5 bg-white border border-stroke hover:bg-canvas rounded-lg disabled:opacity-30 active:scale-95 cursor-pointer shadow-sm"
                 >
-                  <ArrowUp className="w-3.5 h-3.5 text-slate-600" />
+                  <ArrowUp className="w-3.5 h-3.5 text-text-2" />
                 </button>
                 <button
                   onClick={() => handleMoveLesson(index, 'down')}
                   disabled={index === (selectedCourse.lessons || []).length - 1}
                   title="Move down"
-                  className="p-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg disabled:opacity-30 active:scale-95 cursor-pointer shadow-sm"
+                  className="p-1.5 bg-white border border-stroke hover:bg-canvas rounded-lg disabled:opacity-30 active:scale-95 cursor-pointer shadow-sm"
                 >
-                  <ArrowDown className="w-3.5 h-3.5 text-slate-600" />
+                  <ArrowDown className="w-3.5 h-3.5 text-text-2" />
                 </button>
                 <button
                   onClick={() => handleEditLessonSetup(lesson)}
                   title="Edit"
-                  className="p-1.5 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 rounded-lg ml-1 active:scale-95 cursor-pointer"
+                  className="p-1.5 bg-steel-lt border border-steel/30 hover:bg-steel/20 rounded-lg ml-1 active:scale-95 cursor-pointer"
                 >
-                  <Edit3 className="w-3.5 h-3.5 text-indigo-650" />
+                  <Edit3 className="w-3.5 h-3.5 text-steel" />
                 </button>
                 <button
                   onClick={() => handleDeleteLesson(lesson.id)}
                   title="Delete"
-                  className="p-1.5 bg-red-50 border border-red-150 hover:bg-red-100 rounded-lg active:scale-95 cursor-pointer"
+                  className="p-1.5 bg-error-bg border border-error/20 hover:bg-error/15 rounded-lg active:scale-95 cursor-pointer"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                  <Trash2 className="w-3.5 h-3.5 text-error" />
                 </button>
               </div>
             </div>

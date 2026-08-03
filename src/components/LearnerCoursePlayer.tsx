@@ -1,6 +1,6 @@
 // src/components/LearnerCoursePlayer.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Course, Lesson, Quiz, Question, QuizAttempt } from '../types.ts';
+import { Course, Lesson, Quiz, QuizAttempt } from '../types.ts';
 import { PouchDBService, getDocMimeType } from '../lib/pouchdb-service.ts';
 import { getCourseImage, toYouTubeEmbed } from '../lib/utils.ts';
 import { apiFetch } from '../lib/api.ts';
@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle,
-  Play,
   FileText,
   HelpCircle,
   ChevronLeft,
@@ -20,7 +19,6 @@ import {
   WifiOff,
   Award,
   RefreshCw,
-  Sparkles,
   Check,
   GraduationCap,
   Clock,
@@ -65,6 +63,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   } | null>(null);
   const [quizLoading, setQuizLoading] = useState<boolean>(false);
   const [quizPendingSync, setQuizPendingSync] = useState<boolean>(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
 
   const [completionData, setCompletionData] = useState<{ completionId: string; completedAt: string } | null>(null);
   const completionInFlight = useRef(false);
@@ -289,10 +288,10 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-slate-800 min-h-[60vh]" id="loading-stage">
-        <RefreshCw className="w-12 h-12 animate-spin text-emerald-600 mb-4" />
-        <h2 className="text-xl font-bold font-sans">Compiling Lecture Terminal...</h2>
-        <p className="text-slate-500 font-mono text-xs mt-1">
+      <div className="flex flex-col items-center justify-center p-12 text-ink min-h-[60vh]" id="loading-stage">
+        <RefreshCw className="w-12 h-12 animate-spin text-ochre mb-4" />
+        <h2 className="text-xl font-display font-bold tracking-tight">Compiling Lecture Terminal...</h2>
+        <p className="text-ink-3 font-mono text-xs mt-1">
           Preparing high-contrast lessons, video components & tree visuals
         </p>
       </div>
@@ -302,17 +301,17 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   if (error || !course) {
     return (
       <div
-        className="bg-red-50 border border-red-200 p-8 rounded-[2rem] max-w-lg mx-auto my-12 text-center shadow-lg"
+        className="bg-paper-2 border border-error/30 p-8 rounded-2xl max-w-lg mx-auto my-12 text-center shadow-lg"
         id="error-stage"
       >
-        <AlertCircle className="w-12 h-12 text-red-650 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-red-950 font-sans">Error Loading Classroom</h2>
-        <p className="text-red-900 font-medium mt-2 text-sm">
+        <AlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
+        <h2 className="text-xl font-display font-bold text-ink tracking-tight">Error Loading Classroom</h2>
+        <p className="text-ink-2 font-medium mt-2 text-sm">
           {error || 'Course details missing in local offline storage.'}
         </p>
         <button
           onClick={onBack}
-          className="mt-6 h-12 w-full bg-slate-900 text-white rounded-xl hover:bg-slate-800 font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+          className="mt-6 h-12 w-full bg-navy text-white rounded-xl hover:bg-navy-2 font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
         >
           Return to Portal
         </button>
@@ -324,6 +323,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   const allLessonsCompleted = lessons.length > 0 && lessons.every((l) => completedLessonIds.includes(l.id));
   const latestAttempt = quizAttempts[0] || null;
   const isQuizPassed = quizAttempts.some((a) => a.passed);
+  const quizQuestions = quiz?.questions ?? [];
 
   const isSyllabusView = activeLessonIndex === -1 && !viewingQuiz;
 
@@ -337,9 +337,9 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
         <div className="mb-6">
           <button
             onClick={onBack}
-            className="h-11 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 px-4 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer"
+            className="h-11 bg-paper hover:bg-paper-2 text-ink-2 font-bold rounded-xl border border-rule px-4 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4 text-slate-500" />
+            <ArrowLeft className="w-4 h-4 text-ink-3" />
             <span>BACK TO DASHBOARD</span>
           </button>
         </div>
@@ -360,8 +360,8 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
           {/* RIGHT COLUMN: Course Content */}
           <div className="lg:col-span-8 space-y-6">
             {/* Course Banner Card */}
-            <div className="bg-white border border-slate-150 rounded-[2rem] overflow-hidden shadow-sm">
-              <div className="h-48 md:h-56 bg-slate-100 relative">
+            <div className="bg-paper border border-rule rounded-2xl overflow-hidden shadow-sm">
+              <div className="h-48 md:h-56 bg-navy relative">
                 <img
                   src={getCourseImage(course)}
                   alt={course.title}
@@ -369,35 +369,35 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent flex items-end p-6 md:p-8">
+                <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/30 to-transparent flex items-end p-6 md:p-8">
                   <div className="text-white space-y-1">
-                    <span className="bg-emerald-500 text-white text-[9px] uppercase px-2.5 py-0.5 rounded-full font-mono tracking-wider">
+                    <span className="bg-ochre text-white text-[9px] uppercase px-2.5 py-0.5 rounded-full font-mono tracking-wider">
                       Active Syllabus
                     </span>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight">{course.title}</h2>
+                    <h2 className="text-xl md:text-2xl font-display font-bold tracking-tight">{course.title}</h2>
                   </div>
                 </div>
               </div>
 
               <div className="p-6 md:p-8 space-y-5">
                 <div>
-                  <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest font-mono mb-2">
+                  <h3 className="text-xs font-bold text-ink-3 uppercase tracking-widest font-mono mb-2">
                     About This Course
                   </h3>
-                  <p className="text-slate-600 text-sm font-medium leading-relaxed">{course.description}</p>
+                  <p className="text-ink-2 text-sm font-medium leading-relaxed">{course.description}</p>
                 </div>
 
                 {/* Syllabus Progress */}
-                <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 space-y-3">
-                  <div className="flex justify-between items-center text-xs font-mono font-black text-slate-700">
+                <div className="bg-paper-2 border border-rule rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between items-center text-xs font-mono font-bold text-ink-2">
                     <span>COURSE PROGRESS</span>
                     <span>
                       {courseCompletedCount} of {lessons.length} units completed ({progressPct}%)
                     </span>
                   </div>
-                  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-rule rounded-full h-2 overflow-hidden">
                     <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                      className="bg-ochre h-full rounded-full transition-all duration-300"
                       style={{ width: `${progressPct}%` }}
                     ></div>
                   </div>
@@ -405,16 +405,18 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
 
                 {/* Completion Banner */}
                 {allLessonsCompleted && isQuizPassed && completionData && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-4">
-                    <div className="bg-emerald-500 text-white p-2.5 rounded-xl shrink-0">
+                  <div className="bg-success/10 border border-success/30 rounded-2xl p-5 flex items-start gap-4">
+                    <div className="bg-success text-white p-2.5 rounded-xl shrink-0">
                       <Award className="w-6 h-6" />
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-emerald-900 font-sans">Course Completed!</h3>
-                      <p className="text-sm font-medium text-emerald-700 mt-1">
+                      <h3 className="text-base font-display font-bold text-success tracking-tight">
+                        Course Completed!
+                      </h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
                         You have successfully completed this course.
                         {completionData.completedAt && (
-                          <span className="block text-xs font-mono mt-0.5 text-emerald-600">
+                          <span className="block text-xs font-mono mt-0.5 text-ink-3">
                             Completed {new Date(completionData.completedAt).toLocaleDateString()}
                           </span>
                         )}
@@ -426,9 +428,9 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
             </div>
 
             {/* Course Topics List */}
-            <div className="bg-white border border-slate-150 rounded-[2rem] p-6 md:p-8 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight mb-4 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-indigo-600" />
+            <div className="bg-paper border border-rule rounded-2xl p-6 md:p-8 shadow-sm">
+              <h3 className="text-lg font-display font-bold text-ink tracking-tight mb-4 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-ochre" />
                 <span>Course Topics</span>
               </h3>
 
@@ -442,25 +444,25 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                         setActiveLessonIndex(idx);
                         setViewingQuiz(false);
                       }}
-                      className="w-full bg-white border border-slate-150 hover:border-slate-250 p-4 rounded-2xl text-left flex items-center justify-between gap-4 transition-all shadow-sm hover:shadow active:scale-[0.99] cursor-pointer"
+                      className="w-full bg-paper border border-rule hover:border-ochre/40 p-4 rounded-2xl text-left flex items-center justify-between gap-4 transition-all shadow-sm hover:shadow active:scale-[0.99] cursor-pointer"
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
                         {isDone ? (
-                          <div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+                          <div className="w-6 h-6 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success shrink-0">
                             <Check className="w-4 h-4" />
                           </div>
                         ) : (
-                          <div className="w-6 h-6 rounded-full border-2 border-slate-200 shrink-0 bg-white"></div>
+                          <div className="w-6 h-6 rounded-full border-2 border-rule shrink-0 bg-paper-2"></div>
                         )}
                         <div className="min-w-0">
-                          <p className="font-bold text-slate-800 text-sm truncate leading-snug">{lesson.title}</p>
-                          <p className="text-[10px] font-semibold text-slate-500 mt-1 flex items-center gap-1 font-mono uppercase">
+                          <p className="font-bold text-ink text-sm truncate leading-snug">{lesson.title}</p>
+                          <p className="text-[10px] font-semibold text-ink-3 mt-1 flex items-center gap-1 font-mono uppercase">
                             <Clock className="w-3.5 h-3.5" />
                             <span>Topic {idx + 1} • Lecture Reading & Video</span>
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs font-bold text-slate-450 font-mono shrink-0">15 min</span>
+                      <span className="text-xs font-bold text-ink-3 font-mono shrink-0">15 min</span>
                     </button>
                   );
                 })}
@@ -474,18 +476,16 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     disabled={!allLessonsCompleted && !isQuizPassed}
                     className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between gap-4 transition-all ${
                       isQuizPassed
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        ? 'bg-success/10 border-success/30 text-success'
                         : !allLessonsCompleted
-                          ? 'bg-slate-50 border-slate-150 text-slate-500 cursor-not-allowed opacity-60'
-                          : 'bg-amber-50 border-amber-200 hover:border-amber-300 text-amber-955 cursor-pointer hover:shadow active:scale-[0.99]'
+                          ? 'bg-paper-2 border-rule text-ink-3 cursor-not-allowed opacity-60'
+                          : 'bg-ochre-dim/50 border-ochre/40 hover:border-ochre text-ink cursor-pointer hover:shadow active:scale-[0.99]'
                     }`}
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
                       <div
                         className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${
-                          isQuizPassed
-                            ? 'bg-emerald-500 border-emerald-600 text-white'
-                            : 'bg-white border-amber-300 text-amber-600'
+                          isQuizPassed ? 'bg-success border-success text-white' : 'bg-paper border-ochre/40 text-ochre'
                         }`}
                       >
                         <Award className="w-4 h-4" />
@@ -502,7 +502,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                       </div>
                     </div>
                     {isQuizPassed && (
-                      <span className="bg-emerald-600 text-white rounded-full text-[9px] font-bold px-2.5 py-1 uppercase tracking-wider font-mono">
+                      <span className="bg-success text-white rounded-full text-[9px] font-bold px-2.5 py-1 uppercase tracking-wider font-mono">
                         Pass
                       </span>
                     )}
@@ -526,23 +526,23 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
               setActiveLessonIndex(-1);
               setViewingQuiz(false);
             }}
-            className="h-11 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 px-4 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer"
+            className="h-11 bg-paper hover:bg-paper-2 text-ink-2 font-bold rounded-xl border border-rule px-4 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4 text-slate-500" />
+            <ArrowLeft className="w-4 h-4 text-ink-3" />
             <span className="hidden sm:inline">BACK TO SYLLABUS</span>
             <span className="sm:hidden">BACK</span>
           </button>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="h-11 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 px-3 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer lg:hidden"
+            className="h-11 bg-paper hover:bg-paper-2 text-ink-2 font-bold rounded-xl border border-rule px-3 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer lg:hidden"
           >
-            <BookOpen className="w-4 h-4 text-slate-500" />
+            <BookOpen className="w-4 h-4 text-ink-3" />
           </button>
         </div>
 
-        <div className="bg-slate-950 border border-slate-900 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-white shadow-sm overflow-hidden text-ellipsis whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="text-xs font-bold font-sans tracking-tight text-slate-200 truncate">{course.title}</span>
+        <div className="bg-navy border border-navy-2 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-white shadow-sm overflow-hidden text-ellipsis whitespace-nowrap">
+          <span className="w-2 h-2 rounded-full bg-ochre animate-pulse"></span>
+          <span className="text-xs font-display font-bold tracking-tight text-paper truncate">{course.title}</span>
         </div>
       </div>
 
@@ -556,20 +556,20 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
           >
             {/* Mobile close button */}
             <div className="flex items-center justify-between lg:hidden mb-2 p-4 pb-0">
-              <h4 className="font-bold text-slate-800 text-sm">Navigation</h4>
+              <h4 className="font-display font-bold text-ink text-sm">Navigation</h4>
               <button
                 onClick={() => setSidebarOpen(false)}
                 aria-label="Close sidebar"
-                className="p-2 hover:bg-slate-100 rounded-lg"
+                className="p-2 hover:bg-paper-2 rounded-lg"
               >
-                <X className="w-5 h-5 text-slate-600" />
+                <X className="w-5 h-5 text-ink-3" />
               </button>
             </div>
 
             {/* Curriculum Index Cards */}
-            <div className="bg-white rounded-[2rem] p-5 border border-slate-150 shadow-sm">
-              <h4 className="text-sm font-bold text-slate-900 mb-3 tracking-tight font-sans flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-emerald-600" />
+            <div className="bg-paper rounded-2xl p-5 border border-rule shadow-sm">
+              <h4 className="text-sm font-display font-bold text-ink mb-3 tracking-tight flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-ochre" />
                 <span>Syllabus Outline</span>
               </h4>
 
@@ -585,34 +585,33 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                         setActiveLessonIndex(index);
                         setViewingQuiz(false);
                         setQuizResult(null);
+                        setCurrentQuestionIndex(0);
                       }}
                       className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
                         isActive
-                          ? 'bg-indigo-50/70 border-indigo-200 text-indigo-950 font-bold shadow-inner'
-                          : 'bg-slate-50/50 border-slate-100 hover:bg-slate-100/70 text-slate-750'
+                          ? 'bg-ochre-dim/60 border-ochre/40 text-ink font-bold shadow-inner'
+                          : 'bg-paper-2/60 border-rule hover:bg-ochre-dim/25 text-ink-2'
                       }`}
                     >
                       <div className="flex items-start gap-2 min-w-0">
-                        <span className="font-mono font-bold text-slate-500 text-[10px] shrink-0 mt-0.5">
-                          {index + 1}.
-                        </span>
+                        <span className="font-mono font-bold text-ink-3 text-[10px] shrink-0 mt-0.5">{index + 1}.</span>
                         <div className="min-w-0">
                           <p
-                            className={`text-[11px] leading-snug truncate ${isActive ? 'font-bold text-indigo-950' : 'font-medium text-slate-800'}`}
+                            className={`text-[11px] leading-snug truncate ${isActive ? 'font-bold text-ink' : 'font-medium text-ink'}`}
                           >
                             {lesson.title}
                           </p>
-                          <p className="text-[9px] text-slate-500 mt-0.5 flex items-center gap-1 font-mono uppercase font-semibold">
-                            <Clock className="w-2.5 h-2.5 text-slate-500" />
+                          <p className="text-[9px] text-ink-3 mt-0.5 flex items-center gap-1 font-mono uppercase font-semibold">
+                            <Clock className="w-2.5 h-2.5 text-ink-3" />
                             <span>Reading & Video</span>
                           </p>
                         </div>
                       </div>
 
                       {isCompleted ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 bg-emerald-50 rounded-full p-0.5 border border-emerald-200" />
+                        <Check className="w-3.5 h-3.5 text-success shrink-0 bg-success/15 rounded-full p-0.5 border border-success/30" />
                       ) : (
-                        <span className="w-3 h-3 rounded-full border border-slate-250 inline-block shrink-0 bg-white"></span>
+                        <span className="w-3 h-3 rounded-full border border-rule inline-block shrink-0 bg-paper-2"></span>
                       )}
                     </button>
                   );
@@ -624,21 +623,22 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     onClick={() => {
                       setViewingQuiz(true);
                       setQuizResult(null);
+                      setCurrentQuestionIndex(0);
                     }}
                     disabled={!allLessonsCompleted && !isQuizPassed}
                     className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 ${
                       viewingQuiz
-                        ? 'bg-amber-50 border-amber-250 font-bold text-amber-950 shadow-inner'
+                        ? 'bg-ochre-dim/70 border-ochre/50 font-bold text-ink shadow-inner'
                         : !allLessonsCompleted && !isQuizPassed
-                          ? 'bg-slate-50 border-slate-150 text-slate-350 cursor-not-allowed opacity-50'
-                          : 'bg-amber-50/40 border-amber-100 hover:bg-amber-50 text-amber-900 cursor-pointer'
+                          ? 'bg-paper-2/60 border-rule text-ink-3 cursor-not-allowed opacity-50'
+                          : 'bg-ochre-dim/40 border-ochre/30 hover:bg-ochre-dim/60 text-ink cursor-pointer'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <Award className="w-3.5 h-3.5 text-ochre shrink-0" />
                       <div>
-                        <p className="font-bold text-[11px] text-slate-850">Course Assessment Quiz</p>
-                        <p className="text-[9px] mt-0.5 text-slate-450 font-medium">
+                        <p className="font-bold text-[11px] text-ink">Course Assessment Quiz</p>
+                        <p className="text-[9px] mt-0.5 text-ink-3 font-medium">
                           {isQuizPassed
                             ? 'Congratulations, passed!'
                             : allLessonsCompleted
@@ -649,11 +649,11 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     </div>
 
                     {isQuizPassed ? (
-                      <span className="bg-emerald-600 text-white rounded-full text-[8px] font-bold px-2 py-0.5 shrink-0 border border-emerald-700/10 uppercase tracking-wider font-mono">
+                      <span className="bg-success text-white rounded-full text-[8px] font-bold px-2 py-0.5 shrink-0 border border-success/30 uppercase tracking-wider font-mono">
                         Pass
                       </span>
                     ) : (
-                      <span className="w-3 h-3 rounded-full border border-amber-300 inline-block shrink-0 bg-white"></span>
+                      <span className="w-3 h-3 rounded-full border border-ochre/40 inline-block shrink-0 bg-paper"></span>
                     )}
                   </button>
                 )}
@@ -677,19 +677,19 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 id="lesson-study-stage"
               >
                 {/* Lesson Title Header */}
-                <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-sm">
+                <div className="bg-paper border border-rule rounded-2xl p-4 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <span className="inline-block bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-md border border-slate-200 font-mono mb-2">
+                      <span className="inline-block bg-ochre-dim/50 text-ochre text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-md border border-ochre/30 font-mono mb-2">
                         Lesson {activeLessonIndex + 1} of {lessons.length}
                       </span>
-                      <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">
+                      <h3 className="text-lg font-display font-bold text-ink tracking-tight leading-snug">
                         {activeLesson.title}
                       </h3>
                     </div>
 
                     {completedLessonIds.includes(activeLesson.id) && (
-                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-150 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest font-mono">
+                      <span className="bg-success/15 text-success border border-success/30 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest font-mono">
                         Completed
                       </span>
                     )}
@@ -699,7 +699,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 {/* Video Player — constrained height */}
                 {activeLesson.videoUrl && (
                   <div
-                    className="rounded-2xl overflow-hidden border border-slate-900 bg-slate-950 relative shadow-lg group animate-fade-in"
+                    className="rounded-2xl overflow-hidden border border-navy bg-navy relative shadow-lg group animate-fade-in"
                     style={{ maxHeight: '400px' }}
                   >
                     {isOnline ? (
@@ -711,10 +711,10 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                         </div>
                       ) : activeLesson.videoUrl.startsWith('doc:') ? (
                         <div
-                          className="flex flex-col items-center justify-center bg-slate-950 text-slate-100 p-8 text-center"
+                          className="flex flex-col items-center justify-center bg-navy text-paper p-8 text-center"
                           style={{ minHeight: '225px' }}
                         >
-                          <RefreshCw className="w-8 h-8 text-slate-500 animate-spin mb-3" />
+                          <RefreshCw className="w-8 h-8 text-ink-3 animate-spin mb-3" />
                           <h3 className="text-base font-bold font-sans">Loading Video...</h3>
                         </div>
                       ) : (
@@ -731,14 +731,14 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                       )
                     ) : (
                       <div
-                        className="flex flex-col items-center justify-center bg-slate-950 text-slate-100 p-8 text-center"
+                        className="flex flex-col items-center justify-center bg-navy text-paper p-8 text-center"
                         style={{ minHeight: '225px' }}
                       >
-                        <div className="bg-slate-900/60 p-4 rounded-full border border-slate-800 mb-3 animate-pulse">
-                          <WifiOff className="w-8 h-8 text-amber-500" />
+                        <div className="bg-navy-2/60 p-4 rounded-full border border-navy-3 mb-3 animate-pulse">
+                          <WifiOff className="w-8 h-8 text-ochre" />
                         </div>
-                        <h3 className="text-base font-bold font-sans">Video Unavailable Offline</h3>
-                        <p className="text-slate-500 font-medium max-w-sm text-xs mt-1 leading-relaxed">
+                        <h3 className="text-base font-display font-bold tracking-tight">Video Unavailable Offline</h3>
+                        <p className="text-ink-3 font-medium max-w-sm text-xs mt-1 leading-relaxed">
                           No internet detected. Standard video features are paused. Please restore connection to view
                           lesson material.
                         </p>
@@ -748,7 +748,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 )}
 
                 {/* Lesson Content Card */}
-                <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-sm">
+                <div className="bg-paper border border-rule rounded-2xl p-5 shadow-sm">
                   {/* Slides Document Link */}
                   {activeLesson.slidesUrl &&
                     (() => {
@@ -763,18 +763,18 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                       const canAccessOffline = isDocRef;
                       const showLiveLink = isOnline || canAccessOffline;
                       return (
-                        <div className="mb-6 bg-indigo-50/50 border border-indigo-100 p-5 rounded-2.5xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="mb-6 bg-ochre-dim/30 border border-ochre/30 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-start gap-3">
                             <div
-                              className={`p-2.5 rounded-xl ${showLiveLink ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'}`}
+                              className={`p-2.5 rounded-xl ${showLiveLink ? 'bg-ochre text-white' : 'bg-paper-2 text-ink-3'}`}
                             >
                               <FileText className={`w-5 h-5 ${showLiveLink ? 'animate-pulse' : ''}`} />
                             </div>
                             <div>
-                              <h4 className="text-xs font-black uppercase text-indigo-950 font-mono tracking-wider">
+                              <h4 className="text-xs font-bold uppercase text-ink font-mono tracking-wider">
                                 {isDocRef ? 'Uploaded Document' : 'Presentation Slides Included'}
                               </h4>
-                              <p className="text-slate-500 text-[11px] mt-1 font-medium">
+                              <p className="text-ink-3 text-[11px] mt-1 font-medium">
                                 {isOnline
                                   ? isDocRef
                                     ? 'A document file is attached for this topic. Click to view or download.'
@@ -790,13 +790,13 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                               href={href}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-4 h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 shrink-0"
+                              className="px-4 h-10 bg-ochre hover:bg-ochre/90 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 shrink-0"
                             >
                               <span>{isDocRef ? 'View / Download Document' : 'Open Slides / PDF'}</span>
                               <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
                             </a>
                           ) : (
-                            <span className="px-4 h-10 bg-slate-100 text-slate-400 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shrink-0 cursor-not-allowed">
+                            <span className="px-4 h-10 bg-paper-2 text-ink-3 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shrink-0 cursor-not-allowed">
                               <WifiOff className="w-3.5 h-3.5" />
                               <span>Offline</span>
                             </span>
@@ -806,26 +806,26 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     })()}
 
                   {/* Lesson Readings and Lecture Notes */}
-                  <div className="mb-8 prose prose-slate max-w-none text-slate-700 text-sm leading-relaxed font-sans">
-                    <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 mb-3 font-mono">
+                  <div className="mb-8 prose prose-slate max-w-none text-ink-2 text-sm leading-relaxed font-sans">
+                    <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-ink-3 mb-3 font-mono">
                       📖 Course Readings & Lecture Notes
                     </h4>
-                    <div className="bg-slate-50 border border-slate-150 p-5 rounded-2.5xl font-medium whitespace-pre-wrap whitespace-pre-line text-slate-800 text-sm leading-relaxed">
+                    <div className="bg-paper-2 border border-rule p-5 rounded-2xl font-medium whitespace-pre-wrap whitespace-pre-line text-ink text-sm leading-relaxed">
                       {activeLesson.content || 'No textbook or study summaries provided for this topic.'}
                     </div>
                   </div>
 
-                  {/* Action Buttons Area: 48px height complete button */}
+                  {/* Action Buttons Area: mark-complete as ghost + quiz CTA */}
                   <div className="flex flex-col sm:flex-row items-center gap-4">
                     {completedLessonIds.includes(activeLesson.id) ? (
-                      <div className="w-full h-12 bg-emerald-50 border border-emerald-250 text-emerald-800 font-bold px-4 text-xs rounded-xl flex items-center justify-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div className="w-full h-12 bg-success/10 border border-success/30 text-success font-bold px-4 text-xs rounded-xl flex items-center justify-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-success shrink-0" />
                         <span>COURSE UNIT MASTERED</span>
                       </div>
                     ) : (
                       <button
                         onClick={() => handleMarkAsComplete(activeLesson.id)}
-                        className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 rounded-xl transition-all flex items-center justify-center gap-2 border border-emerald-700/20 active:scale-[0.98] shadow-md cursor-pointer"
+                        className="w-full h-12 bg-transparent hover:bg-ochre-dim/40 text-ochre font-bold text-xs px-4 rounded-xl transition-all flex items-center justify-center gap-2 border-2 border-ochre/40 active:scale-[0.98] cursor-pointer"
                         style={{ minHeight: '48px' }}
                       >
                         <CheckCircle className="w-4 h-4 shrink-0" />
@@ -839,28 +839,28 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                         disabled={activeLessonIndex === 0}
                         onClick={() => setActiveLessonIndex((prev) => prev - 1)}
                         style={{ height: '48px' }}
-                        className="h-12 w-12 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl flex items-center justify-center active:scale-95 disabled:opacity-40 shadow-sm cursor-pointer"
+                        className="h-12 w-12 bg-paper border border-rule hover:bg-paper-2 rounded-xl flex items-center justify-center active:scale-95 disabled:opacity-40 shadow-sm cursor-pointer"
                         title="Previous Lesson"
                       >
-                        <ChevronLeft className="w-5 h-5 text-slate-700" />
+                        <ChevronLeft className="w-5 h-5 text-ink-2" />
                       </button>
                       {activeLessonIndex < lessons.length - 1 ? (
                         <button
                           onClick={() => setActiveLessonIndex((prev) => prev + 1)}
                           style={{ height: '48px' }}
-                          className="h-12 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl flex items-center justify-center px-4 font-bold text-xs gap-1 active:scale-95 shadow-sm cursor-pointer"
+                          className="h-12 text-ink-2 bg-paper border border-rule hover:bg-paper-2 rounded-xl flex items-center justify-center px-4 font-bold text-xs gap-1 active:scale-95 shadow-sm cursor-pointer"
                         >
                           <span>NEXT UNIT</span>
-                          <ChevronRight className="w-4 h-4 text-slate-700" />
+                          <ChevronRight className="w-4 h-4 text-ink-2" />
                         </button>
                       ) : quiz ? (
                         <button
                           onClick={() => setViewingQuiz(true)}
                           disabled={!allLessonsCompleted && !isQuizPassed}
                           style={{ height: '48px' }}
-                          className="h-12 text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-xl flex items-center justify-center px-4 font-bold text-xs gap-2 active:scale-95 disabled:opacity-40 shadow-sm cursor-pointer"
+                          className="h-12 text-white bg-ochre hover:bg-ochre/90 rounded-xl flex items-center justify-center px-4 font-bold text-xs gap-2 active:scale-95 disabled:opacity-40 shadow-sm cursor-pointer"
                         >
-                          <Award className="w-4 h-4 text-amber-950" />
+                          <Award className="w-4 h-4 text-white" />
                           <span>UNLOCKED QUIZ</span>
                         </button>
                       ) : null}
@@ -876,64 +876,63 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.3 }}
-                className="bg-white border border-slate-150 rounded-[2rem] p-6 shadow-sm"
+                className="bg-paper border border-rule rounded-2xl p-6 shadow-sm"
                 id="quiz-player-stage"
               >
-                <div className="flex items-center gap-3.5 bg-gradient-to-r from-amber-50 to-amber-100/40 border border-amber-200 rounded-2.5xl p-5 mb-6">
-                  <div className="bg-amber-500/15 p-3 rounded-2xl text-amber-700 border border-amber-500/10">
+                <div className="flex items-center gap-3.5 bg-gradient-to-r from-ochre-dim/70 to-ochre-dim/30 border border-ochre/40 rounded-2xl p-5 mb-6">
+                  <div className="bg-ochre/15 p-3 rounded-xl text-ochre border border-ochre/20">
                     <HelpCircle className="w-6 h-6 shrink-0" />
                   </div>
                   <div>
-                    <h4 className="text-base font-black text-amber-950 font-sans tracking-tight">
-                      Examination Workspace
-                    </h4>
-                    <p className="text-xs font-semibold text-amber-850 mt-1 leading-relaxed">
+                    <h4 className="text-base font-display font-bold text-ink tracking-tight">Examination Workspace</h4>
+                    <p className="text-xs font-semibold text-ink-2 mt-1 leading-relaxed">
                       Complete all questions to certify course completion. Standard passing score is 70%.
                     </p>
                   </div>
                 </div>
 
                 {quizPendingSync && (
-                  <div className="bg-indigo-50 border border-indigo-150 p-4 rounded-2xl text-indigo-950 mb-6 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <p className="text-xs font-bold font-mono uppercase tracking-wide">
-                      Notice: Offline test score cached locally. Will synch on network.
+                  <div className="flex items-start gap-2.5 bg-[#FBF5E6] border-l-[3px] border-ochre rounded-r-lg px-3.5 py-3 mb-6 max-w-[560px]">
+                    <AlertCircle className="w-3.5 h-3.5 text-ochre shrink-0 mt-0.5" />
+                    <p className="text-[12.5px] leading-relaxed text-[#7A5E18]">
+                      You're offline. Your answers are saved to this device and will be submitted and scored the next
+                      time you're online.
                     </p>
                   </div>
                 )}
 
                 {quizResult ? (
                   /* EXAM SUBMISSION RESPONSE BOX */
-                  <div className="bg-slate-50 border border-slate-150 p-8 rounded-2.5xl text-slate-800 mb-6 text-center relative overflow-hidden">
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-500"></div>
-                    <div className="bg-indigo-50 text-indigo-600 w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 border border-indigo-100 shadow-inner">
+                  <div className="bg-paper-2 border border-rule p-8 rounded-2xl text-ink mb-6 text-center relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-ochre"></div>
+                    <div className="bg-ochre-dim/60 text-ochre w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 border border-ochre/30 shadow-inner">
                       <Award className="w-8 h-8" />
                     </div>
 
                     {quizPendingSync ? (
                       <div>
-                        <h3 className="text-lg font-black font-sans text-slate-900">Quiz Logged Offline</h3>
-                        <p className="text-xs font-semibold text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
+                        <h3 className="text-lg font-display font-bold text-ink">Quiz Logged Offline</h3>
+                        <p className="text-xs font-semibold text-ink-3 mt-2 max-w-sm mx-auto leading-relaxed">
                           Your submission has been safely saved locally to local databases. It will be validated and
                           synced automatically when signal resumes.
                         </p>
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <h3 className="text-xl font-black font-sans text-slate-900">
+                        <h3 className="text-xl font-display font-bold text-ink">
                           {quizResult.passed ? '🎉 Congratulations, You Passed!' : 'Requires Further Study'}
                         </h3>
-                        <p className="text-4.5xl font-black font-mono text-indigo-600">{quizResult.score}%</p>
-                        <p className="text-xs font-bold text-slate-500 font-mono">
+                        <p className="text-4.5xl font-black font-mono text-ochre">{quizResult.score}%</p>
+                        <p className="text-xs font-bold text-ink-3 font-mono">
                           ({quizResult.correctCount} of {quizResult.totalQuestions} answers correct)
                         </p>
 
                         {quizResult.passed ? (
-                          <div className="mt-4 bg-emerald-50 border border-emerald-150 text-emerald-800 p-4 rounded-2xl font-bold max-w-md mx-auto text-xs leading-relaxed font-sans">
+                          <div className="mt-4 bg-success/10 border border-success/30 text-success p-4 rounded-2xl font-bold max-w-md mx-auto text-xs leading-relaxed font-sans">
                             Outstanding performance! Your Progress Tree now boasts a golden flower of achievement.
                           </div>
                         ) : (
-                          <div className="mt-4 bg-red-50 border border-red-150 text-red-800 p-4 rounded-2xl font-bold max-w-md mx-auto text-xs leading-relaxed font-sans">
+                          <div className="mt-4 bg-error-bg border border-error/30 text-error p-4 rounded-2xl font-bold max-w-md mx-auto text-xs leading-relaxed font-sans">
                             A minimum score of 70% is required. Review the curriculum text, check video components, and
                             retry anytime.
                           </div>
@@ -945,79 +944,118 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                       onClick={() => {
                         setQuizResult(null);
                         setSelectedAnswers({});
+                        setCurrentQuestionIndex(0);
                         loadCourseData();
                       }}
                       style={{ height: '48px' }}
-                      className="mt-6 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-6 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+                      className="mt-6 bg-navy hover:bg-navy-2 text-white font-bold text-xs px-6 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
                     >
                       ACKNOWLEDGE & RESET
                     </button>
                   </div>
                 ) : (
-                  /* INTERACTIVE QUESTION LIST */
-                  <div className="space-y-6">
-                    {quiz.questions &&
-                      quiz.questions.map((q, qIdx) => (
-                        <div key={q.id || qIdx} className="bg-slate-50/50 border border-slate-150 p-5 rounded-2.5xl">
-                          <p className="font-mono font-black text-[9px] text-indigo-600 uppercase tracking-widest">
-                            Syllabus Question {qIdx + 1} of {quiz.questions?.length}
-                          </p>
-                          <h4 className="text-base font-black text-slate-900 font-sans tracking-tight mt-1 mb-4 leading-relaxed">
-                            {q.questionText}
+                  /* INTERACTIVE QUESTION LIST — ONE QUESTION AT A TIME */
+                  <div>
+                    {/* Quiz masthead */}
+                    <div className="flex items-center justify-between mb-7">
+                      <h4 className="font-display text-xl font-bold text-ink tracking-tight">{quiz.title}</h4>
+                      <span className="font-mono text-xs text-ink-3">
+                        Question {currentQuestionIndex + 1} of {quizQuestions.length}
+                      </span>
+                    </div>
+
+                    {quizQuestions.length > 0 ? (
+                      <>
+                        {/* Progress track (6px, ochre fill by current position) */}
+                        <div className="h-[6px] bg-rule rounded-[3px] overflow-hidden mb-7 max-w-[500px]">
+                          <div
+                            className="h-full bg-ochre rounded-[3px] transition-all duration-300"
+                            style={{
+                              width: `${((currentQuestionIndex + 1) / quizQuestions.length) * 100}%`,
+                            }}
+                          />
+                        </div>
+
+                        {/* Question card */}
+                        <div className="bg-white border border-rule rounded-xl p-6 max-w-[560px]">
+                          <p className="font-mono text-[11px] text-ink-3 mb-2">Question {currentQuestionIndex + 1}</p>
+                          <h4 className="font-display text-[17px] font-semibold text-ink leading-relaxed mb-5">
+                            {quizQuestions[currentQuestionIndex].questionText}
                           </h4>
 
-                          {/* Large Touch-Target Options (FR-08 / 56px requirement) */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {q.options &&
-                              q.options.map((opt, optIdx) => {
-                                const isSelected = selectedAnswers[q.id] === optIdx;
-                                return (
-                                  <button
-                                    key={optIdx}
-                                    onClick={() => handleOptionSelect(q.id, optIdx)}
-                                    style={{ minHeight: '56px' }}
-                                    className={`w-full p-4 text-left rounded-xl border font-bold text-xs tracking-tight transition-all flex items-center justify-between gap-3 cursor-pointer ${
-                                      isSelected
-                                        ? 'bg-indigo-600 border-indigo-700 text-white shadow-md'
-                                        : 'bg-white border-slate-200 text-slate-700 hover:bg-indigo-50/30 hover:border-indigo-100'
+                          {/* Radio options — selected state is the only in-quiz feedback */}
+                          <div>
+                            {quizQuestions[currentQuestionIndex].options.map((opt, optIdx) => {
+                              const isSelected = selectedAnswers[quizQuestions[currentQuestionIndex].id] === optIdx;
+                              return (
+                                <button
+                                  key={optIdx}
+                                  onClick={() => handleOptionSelect(quizQuestions[currentQuestionIndex].id, optIdx)}
+                                  className={`w-full flex items-center gap-3 px-3.5 py-3 border-[1.5px] rounded-lg mb-2 text-left text-[13.5px] text-ink transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'border-ochre bg-[#FBF5E6]'
+                                      : 'border-rule bg-paper hover:border-[#b0aca2] hover:bg-[#f6f5f0]'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-4 h-4 rounded-full border-[1.5px] flex items-center justify-center shrink-0 ${
+                                      isSelected ? 'border-ochre' : 'border-[#c8c4bb]'
                                     }`}
                                   >
-                                    <span>{opt}</span>
-                                    <span
-                                      className={`w-6 h-6 rounded-full border flex items-center justify-center font-mono text-[10px] font-black shrink-0 ${
-                                        isSelected ? 'bg-white text-indigo-600 border-white' : 'border-slate-200'
-                                      }`}
-                                    >
-                                      {String.fromCharCode(65 + optIdx)}
-                                    </span>
-                                  </button>
-                                );
-                              })}
+                                    {isSelected && <span className="w-2 h-2 rounded-full bg-ochre" />}
+                                  </span>
+                                  {opt}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Footer navigation */}
+                          <div className="flex justify-end gap-2 mt-5">
+                            {currentQuestionIndex > 0 && (
+                              <button
+                                onClick={() => setCurrentQuestionIndex((i) => i - 1)}
+                                className="bg-paper border border-rule hover:border-[#b0aca2] text-ink font-semibold text-[13px] px-5 py-2.5 rounded-lg transition-all cursor-pointer"
+                              >
+                                Previous
+                              </button>
+                            )}
+
+                            {currentQuestionIndex < quizQuestions.length - 1 ? (
+                              <button
+                                onClick={() => setCurrentQuestionIndex((i) => i + 1)}
+                                className="bg-navy hover:bg-navy-2 text-white font-semibold text-[13px] px-5 py-2.5 rounded-lg transition-all cursor-pointer"
+                              >
+                                Next question →
+                              </button>
+                            ) : (
+                              <button
+                                onClick={handleQuizSubmit}
+                                disabled={quizLoading}
+                                style={{ minHeight: '48px' }}
+                                className="bg-navy hover:bg-navy-2 disabled:opacity-60 text-white font-semibold text-[13px] px-6 py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                              >
+                                {quizLoading ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Check className="w-4 h-4 shrink-0" />
+                                )}
+                                Submit quiz
+                              </button>
+                            )}
                           </div>
                         </div>
-                      ))}
-
-                    {/* Submit explicit 56px action button */}
-                    <button
-                      onClick={handleQuizSubmit}
-                      disabled={quizLoading}
-                      style={{ minHeight: '56px' }}
-                      className="w-full h-14 bg-amber-400 hover:bg-amber-300 text-amber-955 font-black text-sm px-6 rounded-2xl border border-amber-300 transition-all flex items-center justify-center gap-2 mt-4 shadow-md cursor-pointer"
-                    >
-                      {quizLoading ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Check className="w-5 h-5 shrink-0" />
-                      )}
-                      <span>SUBMIT COMPLETED EXAMINATION</span>
-                    </button>
+                      </>
+                    ) : (
+                      <div className="text-sm text-ink-2">This quiz has no questions yet.</div>
+                    )}
                   </div>
                 )}
               </motion.div>
             ) : (
-              <div className="bg-slate-50 border border-dashed border-slate-200 p-12 text-center rounded-[2rem]">
-                <GraduationCap className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <span className="italic text-slate-500 text-sm">Select a curriculum roadmap node to begin study.</span>
+              <div className="bg-paper-2 border border-dashed border-rule p-12 text-center rounded-2xl">
+                <GraduationCap className="w-10 h-10 text-ink-3 mx-auto mb-3" />
+                <span className="italic text-ink-3 text-sm">Select a curriculum roadmap node to begin study.</span>
               </div>
             )}
           </AnimatePresence>

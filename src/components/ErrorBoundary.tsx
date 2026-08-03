@@ -25,15 +25,11 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div
-          className="min-h-screen bg-slate-50 flex items-center justify-center p-8"
-          role="alert"
-          aria-live="assertive"
-        >
-          <div className="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-8 shadow-lg text-center">
-            <div className="w-16 h-16 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <div className="min-h-screen bg-appbg flex items-center justify-center p-8" role="alert" aria-live="assertive">
+          <div className="max-w-md w-full bg-paper border border-rule rounded-2xl p-8 shadow-lg text-center">
+            <div className="w-16 h-16 bg-error-bg border border-error/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
               <svg
-                className="w-8 h-8 text-rose-500"
+                className="w-8 h-8 text-error"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -47,19 +43,19 @@ export class ErrorBoundary extends Component<Props, State> {
                 />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 font-sans tracking-tight mb-2">Something went wrong</h1>
-            <p className="text-slate-500 text-sm leading-relaxed mb-6">
+            <h1 className="text-2xl font-display font-bold text-ink tracking-tight mb-2">Something went wrong</h1>
+            <p className="text-ink-2 text-sm leading-relaxed mb-6">
               An unexpected error occurred in the application. Your progress is safe — please refresh the page to
               continue.
             </p>
             {this.state.error && (
-              <p className="text-xs font-mono text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-3 mb-6 text-left break-words">
+              <p className="text-xs font-mono text-ink-2 bg-paper-2 border border-rule rounded-xl p-3 mb-6 text-left break-words">
                 {this.state.error.message}
               </p>
             )}
             <button
               onClick={() => window.location.reload()}
-              className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-sm active:scale-[0.98] cursor-pointer"
+              className="w-full h-12 bg-accent hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-sm active:scale-[0.98] cursor-pointer"
             >
               Refresh Page
             </button>
