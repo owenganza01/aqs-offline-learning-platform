@@ -18,6 +18,8 @@ import {
   AlertCircle,
   WifiOff,
   Award,
+  Play,
+  Video,
   RefreshCw,
   Check,
   GraduationCap,
@@ -324,13 +326,12 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   const latestAttempt = quizAttempts[0] || null;
   const isQuizPassed = quizAttempts.some((a) => a.passed);
   const quizQuestions = quiz?.questions ?? [];
+  const courseCompletedCount = lessons.filter((l) => completedLessonIds.includes(l.id)).length;
+  const progressPct = lessons.length > 0 ? Math.round((courseCompletedCount / lessons.length) * 100) : 0;
 
   const isSyllabusView = activeLessonIndex === -1 && !viewingQuiz;
 
   if (isSyllabusView) {
-    const courseCompletedCount = lessons.filter((l) => completedLessonIds.includes(l.id)).length;
-    const progressPct = lessons.length > 0 ? Math.round((courseCompletedCount / lessons.length) * 100) : 0;
-
     return (
       <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4" id="learner-syllabus-view">
         {/* Header Back Link */}
@@ -517,153 +518,41 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-2" id="learner-course-player">
-      {/* 1. Header Navigation Rail */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
+    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-4" id="learner-course-player">
+      {/* Breadcrumb + mobile curriculum toggle */}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            setActiveLessonIndex(-1);
+            setViewingQuiz(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
               setActiveLessonIndex(-1);
               setViewingQuiz(false);
-            }}
-            className="h-11 bg-paper hover:bg-paper-2 text-ink-2 font-bold rounded-xl border border-rule px-4 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 text-ink-3" />
-            <span className="hidden sm:inline">BACK TO SYLLABUS</span>
-            <span className="sm:hidden">BACK</span>
-          </button>
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="h-11 bg-paper hover:bg-paper-2 text-ink-2 font-bold rounded-xl border border-rule px-3 flex items-center justify-center gap-2 active:scale-95 transition-all text-xs shadow-sm cursor-pointer lg:hidden"
-          >
-            <BookOpen className="w-4 h-4 text-ink-3" />
-          </button>
+            }
+          }}
+          className="flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink transition-colors cursor-pointer select-none"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+          <span>Dashboard</span>
+          <span className="opacity-40 select-none">/ {course.title}</span>
         </div>
 
-        <div className="bg-navy border border-navy-2 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-white shadow-sm overflow-hidden text-ellipsis whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full bg-ochre animate-pulse"></span>
-          <span className="text-xs font-display font-bold tracking-tight text-paper truncate">{course.title}</span>
-        </div>
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="h-9 lg:hidden bg-paper hover:bg-paper-2 text-ink-2 font-bold rounded-lg border border-rule px-3 flex items-center justify-center gap-2 transition-all text-xs shadow-sm cursor-pointer"
+          aria-label="Toggle curriculum"
+        >
+          <BookOpen className="w-4 h-4 text-ink-3" />
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
-        {/* LEFT COLUMN: Syllabus Outline — toggleable on mobile, persistent on desktop */}
-        <div
-          className={`${sidebarOpen ? 'fixed inset-0 z-40 bg-black/30 lg:relative lg:bg-transparent' : 'hidden lg:block'} lg:col-span-4`}
-        >
-          <div
-            className={`${sidebarOpen ? 'absolute left-0 top-0 h-full w-80 overflow-y-auto bg-white shadow-2xl lg:relative lg:shadow-none lg:w-full' : 'hidden lg:block'} lg:sticky lg:top-4`}
-          >
-            {/* Mobile close button */}
-            <div className="flex items-center justify-between lg:hidden mb-2 p-4 pb-0">
-              <h4 className="font-display font-bold text-ink text-sm">Navigation</h4>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                aria-label="Close sidebar"
-                className="p-2 hover:bg-paper-2 rounded-lg"
-              >
-                <X className="w-5 h-5 text-ink-3" />
-              </button>
-            </div>
-
-            {/* Curriculum Index Cards */}
-            <div className="bg-paper rounded-2xl p-5 border border-rule shadow-sm">
-              <h4 className="text-sm font-display font-bold text-ink mb-3 tracking-tight flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-ochre" />
-                <span>Syllabus Outline</span>
-              </h4>
-
-              <div className="space-y-2">
-                {lessons.map((lesson, index) => {
-                  const isCompleted = completedLessonIds.includes(lesson.id);
-                  const isActive = activeLessonIndex === index && !viewingQuiz;
-
-                  return (
-                    <button
-                      key={lesson.id}
-                      onClick={() => {
-                        setActiveLessonIndex(index);
-                        setViewingQuiz(false);
-                        setQuizResult(null);
-                        setCurrentQuestionIndex(0);
-                      }}
-                      className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
-                        isActive
-                          ? 'bg-ochre-dim/60 border-ochre/40 text-ink font-bold shadow-inner'
-                          : 'bg-paper-2/60 border-rule hover:bg-ochre-dim/25 text-ink-2'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2 min-w-0">
-                        <span className="font-mono font-bold text-ink-3 text-[10px] shrink-0 mt-0.5">{index + 1}.</span>
-                        <div className="min-w-0">
-                          <p
-                            className={`text-[11px] leading-snug truncate ${isActive ? 'font-bold text-ink' : 'font-medium text-ink'}`}
-                          >
-                            {lesson.title}
-                          </p>
-                          <p className="text-[9px] text-ink-3 mt-0.5 flex items-center gap-1 font-mono uppercase font-semibold">
-                            <Clock className="w-2.5 h-2.5 text-ink-3" />
-                            <span>Reading & Video</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      {isCompleted ? (
-                        <Check className="w-3.5 h-3.5 text-success shrink-0 bg-success/15 rounded-full p-0.5 border border-success/30" />
-                      ) : (
-                        <span className="w-3 h-3 rounded-full border border-rule inline-block shrink-0 bg-paper-2"></span>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {/* Quiz Module Row trigger */}
-                {quiz && (
-                  <button
-                    onClick={() => {
-                      setViewingQuiz(true);
-                      setQuizResult(null);
-                      setCurrentQuestionIndex(0);
-                    }}
-                    disabled={!allLessonsCompleted && !isQuizPassed}
-                    className={`w-full p-3 rounded-xl border text-left transition-all flex items-center justify-between gap-3 ${
-                      viewingQuiz
-                        ? 'bg-ochre-dim/70 border-ochre/50 font-bold text-ink shadow-inner'
-                        : !allLessonsCompleted && !isQuizPassed
-                          ? 'bg-paper-2/60 border-rule text-ink-3 cursor-not-allowed opacity-50'
-                          : 'bg-ochre-dim/40 border-ochre/30 hover:bg-ochre-dim/60 text-ink cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Award className="w-3.5 h-3.5 text-ochre shrink-0" />
-                      <div>
-                        <p className="font-bold text-[11px] text-ink">Course Assessment Quiz</p>
-                        <p className="text-[9px] mt-0.5 text-ink-3 font-medium">
-                          {isQuizPassed
-                            ? 'Congratulations, passed!'
-                            : allLessonsCompleted
-                              ? 'Quiz Unlocked!'
-                              : 'Complete lessons to unlock'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {isQuizPassed ? (
-                      <span className="bg-success text-white rounded-full text-[8px] font-bold px-2 py-0.5 shrink-0 border border-success/30 uppercase tracking-wider font-mono">
-                        Pass
-                      </span>
-                    ) : (
-                      <span className="w-3 h-3 rounded-full border border-ochre/40 inline-block shrink-0 bg-paper"></span>
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: Player Active Screen (Video + Lesson Content or Quiz Sheet) */}
-        <div className="lg:col-span-8">
+      <div className="flex flex-col lg:flex-row gap-6 relative">
+        {/* PLAYER ACTIVE SCREEN (Video + Lesson Content or Quiz Sheet) */}
+        <div className="flex-1 min-w-0">
           <AnimatePresence mode="wait">
             {!viewingQuiz && activeLesson ? (
               /* MODULE B: FOCUSED LESSON STUDY STAGE */
@@ -676,79 +565,74 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 className="space-y-4"
                 id="lesson-study-stage"
               >
-                {/* Lesson Title Header */}
-                <div className="bg-paper border border-rule rounded-2xl p-4 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="inline-block bg-ochre-dim/50 text-ochre text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-md border border-ochre/30 font-mono mb-2">
-                        Lesson {activeLessonIndex + 1} of {lessons.length}
-                      </span>
-                      <h3 className="text-lg font-display font-bold text-ink tracking-tight leading-snug">
-                        {activeLesson.title}
-                      </h3>
-                    </div>
-
+                {/* Lesson eyebrow + 24px Fraunces heading */}
+                <div>
+                  <div className="flex items-center gap-3">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-ink-3">
+                      Lesson {activeLessonIndex + 1} of {lessons.length}
+                    </p>
                     {completedLessonIds.includes(activeLesson.id) && (
-                      <span className="bg-success/15 text-success border border-success/30 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest font-mono">
+                      <span className="text-[10px] font-bold text-success uppercase tracking-widest font-mono bg-success/10 border border-success/30 px-2.5 py-0.5 rounded-full">
                         Completed
                       </span>
                     )}
                   </div>
+                  <h3 className="font-display text-2xl font-bold text-ink tracking-[-0.02em] leading-snug mt-1.5 mb-[18px]">
+                    {activeLesson.title}
+                  </h3>
                 </div>
 
-                {/* Video Player — constrained height */}
+                {/* Video Player — dark 16:9 container */}
                 {activeLesson.videoUrl && (
-                  <div
-                    className="rounded-2xl overflow-hidden border border-navy bg-navy relative shadow-lg group animate-fade-in"
-                    style={{ maxHeight: '400px' }}
-                  >
+                  <div className="relative rounded-[10px] overflow-hidden bg-[#0a0e10] shadow-lg aspect-video">
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        background: 'radial-gradient(ellipse at 30% 40%, rgba(212,146,43,0.08) 0%, transparent 60%)',
+                      }}
+                    />
+
                     {isOnline ? (
                       activeLesson.videoUrl.startsWith('doc:') && videoSrc ? (
-                        <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                          <video className="absolute inset-0 w-full h-full" controls preload="metadata" playsInline>
-                            <source src={videoSrc} type={videoMime} />
-                          </video>
-                        </div>
+                        <video className="absolute inset-0 w-full h-full" controls preload="metadata" playsInline>
+                          <source src={videoSrc} type={videoMime} />
+                        </video>
                       ) : activeLesson.videoUrl.startsWith('doc:') ? (
-                        <div
-                          className="flex flex-col items-center justify-center bg-navy text-paper p-8 text-center"
-                          style={{ minHeight: '225px' }}
-                        >
-                          <RefreshCw className="w-8 h-8 text-ink-3 animate-spin mb-3" />
-                          <h3 className="text-base font-bold font-sans">Loading Video...</h3>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                          <span className="w-[54px] h-[54px] rounded-full bg-ochre/90 flex items-center justify-center">
+                            <Play className="w-5 h-5 text-white fill-white" />
+                          </span>
+                          <p className="text-xs text-white/50 font-medium">Preparing video…</p>
                         </div>
                       ) : (
-                        <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                          <iframe
-                            src={toYouTubeEmbed(activeLesson.videoUrl) || ''}
-                            title="AQS Lecture Lesson Video"
-                            className="absolute inset-0 w-full h-full"
-                            allowFullScreen
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          ></iframe>
-                        </div>
+                        <iframe
+                          src={toYouTubeEmbed(activeLesson.videoUrl) || ''}
+                          title="AQS Lecture Lesson Video"
+                          className="absolute inset-0 w-full h-full"
+                          allowFullScreen
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        ></iframe>
                       )
                     ) : (
-                      <div
-                        className="flex flex-col items-center justify-center bg-navy text-paper p-8 text-center"
-                        style={{ minHeight: '225px' }}
-                      >
-                        <div className="bg-navy-2/60 p-4 rounded-full border border-navy-3 mb-3 animate-pulse">
-                          <WifiOff className="w-8 h-8 text-ochre" />
-                        </div>
-                        <h3 className="text-base font-display font-bold tracking-tight">Video Unavailable Offline</h3>
-                        <p className="text-ink-3 font-medium max-w-sm text-xs mt-1 leading-relaxed">
-                          No internet detected. Standard video features are paused. Please restore connection to view
-                          lesson material.
-                        </p>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                        <span className="w-[54px] h-[54px] rounded-full bg-ochre/90 flex items-center justify-center">
+                          <Play className="w-5 h-5 text-white fill-white" />
+                        </span>
+                        <p className="text-xs text-white/50 font-medium">Video unavailable offline</p>
                       </div>
                     )}
+
+                    {/* Caption (non-blocking bottom-left) */}
+                    <div className="absolute bottom-3 left-3.5 text-[11px] text-white/50 flex items-center gap-1.5 pointer-events-none">
+                      <Video className="w-3 h-3" />
+                      <span>Video streams online · offline content saved separately</span>
+                    </div>
                   </div>
                 )}
 
-                {/* Lesson Content Card */}
-                <div className="bg-paper border border-rule rounded-2xl p-5 shadow-sm">
+                {/* Lesson body — constrained reading width */}
+                <div className="max-w-[600px] space-y-6">
                   {/* Slides Document Link */}
                   {activeLesson.slidesUrl &&
                     (() => {
@@ -806,66 +690,64 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     })()}
 
                   {/* Lesson Readings and Lecture Notes */}
-                  <div className="mb-8 prose prose-slate max-w-none text-ink-2 text-sm leading-relaxed font-sans">
+                  <div className="mb-8">
                     <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-ink-3 mb-3 font-mono">
                       📖 Course Readings & Lecture Notes
                     </h4>
-                    <div className="bg-paper-2 border border-rule p-5 rounded-2xl font-medium whitespace-pre-wrap whitespace-pre-line text-ink text-sm leading-relaxed">
+                    <div className="bg-paper-2 border border-rule p-5 rounded-2xl font-medium whitespace-pre-line text-ink text-[14.5px] leading-[1.8]">
                       {activeLesson.content || 'No textbook or study summaries provided for this topic.'}
                     </div>
                   </div>
+                </div>
 
-                  {/* Action Buttons Area: mark-complete as ghost + quiz CTA */}
-                  <div className="flex flex-col sm:flex-row items-center gap-4">
-                    {completedLessonIds.includes(activeLesson.id) ? (
-                      <div className="w-full h-12 bg-success/10 border border-success/30 text-success font-bold px-4 text-xs rounded-xl flex items-center justify-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-success shrink-0" />
-                        <span>COURSE UNIT MASTERED</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleMarkAsComplete(activeLesson.id)}
-                        className="w-full h-12 bg-transparent hover:bg-ochre-dim/40 text-ochre font-bold text-xs px-4 rounded-xl transition-all flex items-center justify-center gap-2 border-2 border-ochre/40 active:scale-[0.98] cursor-pointer"
-                        style={{ minHeight: '48px' }}
-                      >
-                        <CheckCircle className="w-4 h-4 shrink-0" />
-                        <span>MARK LESSON AS COMPLETE</span>
-                      </button>
-                    )}
-
-                    {/* Next/Previous linear navigation helper */}
-                    <div className="flex gap-2 w-full sm:w-auto shrink-0 font-mono">
-                      <button
-                        disabled={activeLessonIndex === 0}
-                        onClick={() => setActiveLessonIndex((prev) => prev - 1)}
-                        style={{ height: '48px' }}
-                        className="h-12 w-12 bg-paper border border-rule hover:bg-paper-2 rounded-xl flex items-center justify-center active:scale-95 disabled:opacity-40 shadow-sm cursor-pointer"
-                        title="Previous Lesson"
-                      >
-                        <ChevronLeft className="w-5 h-5 text-ink-2" />
-                      </button>
-                      {activeLessonIndex < lessons.length - 1 ? (
-                        <button
-                          onClick={() => setActiveLessonIndex((prev) => prev + 1)}
-                          style={{ height: '48px' }}
-                          className="h-12 text-ink-2 bg-paper border border-rule hover:bg-paper-2 rounded-xl flex items-center justify-center px-4 font-bold text-xs gap-1 active:scale-95 shadow-sm cursor-pointer"
-                        >
-                          <span>NEXT UNIT</span>
-                          <ChevronRight className="w-4 h-4 text-ink-2" />
-                        </button>
-                      ) : quiz ? (
-                        <button
-                          onClick={() => setViewingQuiz(true)}
-                          disabled={!allLessonsCompleted && !isQuizPassed}
-                          style={{ height: '48px' }}
-                          className="h-12 text-white bg-ochre hover:bg-ochre/90 rounded-xl flex items-center justify-center px-4 font-bold text-xs gap-2 active:scale-95 disabled:opacity-40 shadow-sm cursor-pointer"
-                        >
-                          <Award className="w-4 h-4 text-white" />
-                          <span>UNLOCKED QUIZ</span>
-                        </button>
-                      ) : null}
+                {/* Mark-complete ghost (retained) */}
+                <div className="max-w-[600px]">
+                  {completedLessonIds.includes(activeLesson.id) ? (
+                    <div className="w-full h-12 bg-success/10 border border-success/30 text-success font-bold px-4 text-xs rounded-xl flex items-center justify-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                      <span>COURSE UNIT MASTERED</span>
                     </div>
-                  </div>
+                  ) : (
+                    <button
+                      onClick={() => handleMarkAsComplete(activeLesson.id)}
+                      className="w-full h-12 bg-transparent hover:bg-ochre-dim/40 text-ochre font-bold text-xs px-4 rounded-xl transition-all flex items-center justify-center gap-2 border-2 border-ochre/40 active:scale-[0.98] cursor-pointer"
+                      style={{ minHeight: '48px' }}
+                    >
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                      <span>MARK LESSON AS COMPLETE</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Player footer: Previous (disabled on first) + Next lesson / Take the quiz */}
+                <div className="flex justify-between items-center pt-5 border-t border-rule max-w-[600px]">
+                  <button
+                    disabled={activeLessonIndex === 0}
+                    onClick={() => setActiveLessonIndex((prev) => prev - 1)}
+                    className="flex items-center gap-[7px] font-sans text-[13px] font-semibold px-[18px] py-2.5 rounded-[7px] border-[1.5px] border-rule bg-paper text-ink hover:bg-paper-2 transition-colors cursor-pointer disabled:opacity-[0.38] disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Previous
+                  </button>
+
+                  {activeLessonIndex < lessons.length - 1 ? (
+                    <button
+                      onClick={() => setActiveLessonIndex((prev) => prev + 1)}
+                      className="flex items-center gap-[7px] font-sans text-[13px] font-semibold px-[18px] py-2.5 rounded-[7px] bg-navy text-white hover:bg-navy-2 transition-colors cursor-pointer"
+                    >
+                      Next lesson
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  ) : quiz ? (
+                    <button
+                      onClick={() => setViewingQuiz(true)}
+                      disabled={!allLessonsCompleted && !isQuizPassed}
+                      className="flex items-center gap-[7px] font-sans text-[13px] font-semibold px-[18px] py-2.5 rounded-[7px] bg-navy text-white hover:bg-navy-2 transition-colors cursor-pointer disabled:opacity-[0.38] disabled:cursor-not-allowed"
+                    >
+                      Take the quiz
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  ) : null}
                 </div>
               </motion.div>
             ) : viewingQuiz && quiz ? (
@@ -1060,6 +942,130 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
             )}
           </AnimatePresence>
         </div>
+
+        {/* RIGHT SIDEBAR: Curriculum (260px) — toggleable on mobile, persistent on desktop */}
+        <aside
+          className={`${sidebarOpen ? 'fixed inset-0 z-40 bg-black/30' : 'hidden lg:block'} lg:relative lg:shrink-0`}
+          id="curriculum-sidebar"
+        >
+          <div
+            className={`${sidebarOpen ? 'absolute right-0 top-0 h-full w-80 overflow-y-auto bg-white shadow-2xl' : 'hidden lg:block'} lg:sticky lg:top-4 lg:w-[260px] lg:bg-paper-2 lg:border-l lg:border-rule lg:overflow-y-auto`}
+          >
+            {/* Mobile close button */}
+            <div className="flex items-center justify-between lg:hidden mb-2 p-4 pb-0">
+              <h4 className="font-display font-bold text-ink text-sm">Curriculum</h4>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                aria-label="Close sidebar"
+                className="p-2 hover:bg-paper-2 rounded-lg"
+              >
+                <X className="w-5 h-5 text-ink-3" />
+              </button>
+            </div>
+
+            {/* Sidebar header: course title + ochre progress track */}
+            <div className="p-[18px] pb-3 border-b border-rule">
+              <p className="text-[10px] uppercase tracking-[0.06em] text-ink-3 mb-1">Current course</p>
+              <h4 className="font-display text-[14px] font-semibold text-ink leading-[1.3]">{course.title}</h4>
+              <div className="flex items-center gap-2.5 mt-2.5">
+                <div className="flex-1 h-1 bg-rule rounded-[2px] overflow-hidden">
+                  <div className="h-full bg-ochre" style={{ width: `${progressPct}%` }} />
+                </div>
+                <span className="font-mono text-[11px] text-ochre font-medium">{progressPct}%</span>
+              </div>
+            </div>
+
+            {/* Curriculum items: done / current / todo (free navigation — no locked lessons) */}
+            <div className="py-2">
+              {lessons.map((lesson, index) => {
+                const isDone = completedLessonIds.includes(lesson.id);
+                const isCurrent = activeLessonIndex === index && !viewingQuiz;
+
+                return (
+                  <button
+                    key={lesson.id}
+                    onClick={() => {
+                      setActiveLessonIndex(index);
+                      setViewingQuiz(false);
+                      setQuizResult(null);
+                      setCurrentQuestionIndex(0);
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-[18px] py-2.5 text-left transition-colors border-l-[3px] cursor-pointer ${
+                      isCurrent ? 'bg-[#EEF6F2] border-ochre' : 'border-transparent hover:bg-black/[0.04]'
+                    }`}
+                  >
+                    {isDone ? (
+                      <span className="w-5 h-5 rounded-full bg-[#2A6644] flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                      </span>
+                    ) : isCurrent ? (
+                      <span className="w-5 h-5 rounded-full bg-ochre flex items-center justify-center shrink-0">
+                        <Play className="w-2.5 h-2.5 text-white fill-white" />
+                      </span>
+                    ) : (
+                      <span className="w-5 h-5 rounded-full border-[1.5px] border-rule flex items-center justify-center font-mono text-[9px] font-bold text-ink-3 shrink-0">
+                        {index + 1}
+                      </span>
+                    )}
+
+                    <div className="min-w-0">
+                      <p
+                        className={`text-[12.5px] leading-[1.3] truncate ${
+                          isCurrent ? 'font-semibold text-ink' : 'font-medium text-ink'
+                        }`}
+                      >
+                        {lesson.title}
+                      </p>
+                      <p className="text-[11px] text-ink-3 mt-0.5">Reading & Video</p>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Quiz Module Row */}
+              {quiz && (
+                <button
+                  onClick={() => {
+                    setViewingQuiz(true);
+                    setQuizResult(null);
+                    setCurrentQuestionIndex(0);
+                  }}
+                  disabled={!allLessonsCompleted && !isQuizPassed}
+                  className={`w-full flex items-center gap-2.5 px-[18px] py-2.5 text-left transition-colors border-l-[3px] ${
+                    viewingQuiz
+                      ? 'bg-[#EEF6F2] border-ochre cursor-pointer'
+                      : 'border-transparent hover:bg-black/[0.04]'
+                  } ${!allLessonsCompleted && !isQuizPassed ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  {viewingQuiz ? (
+                    <span className="w-5 h-5 rounded-full bg-ochre flex items-center justify-center shrink-0">
+                      <span className="text-[9px] font-bold text-white font-mono">Q</span>
+                    </span>
+                  ) : isQuizPassed ? (
+                    <span className="w-5 h-5 rounded-full bg-[#2A6644] flex items-center justify-center shrink-0">
+                      <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                    </span>
+                  ) : (
+                    <span className="w-5 h-5 rounded-full border-[1.5px] border-rule flex items-center justify-center shrink-0">
+                      <span className="text-[9px] font-bold text-ink-3 font-mono">Q</span>
+                    </span>
+                  )}
+
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-medium leading-[1.3] text-ink truncate">Course Assessment Quiz</p>
+                    <p className="text-[11px] text-ink-3 mt-0.5">
+                      {isQuizPassed
+                        ? 'Congratulations, passed!'
+                        : allLessonsCompleted
+                          ? 'Quiz Unlocked!'
+                          : 'Complete lessons to unlock'}
+                    </p>
+                  </div>
+                </button>
+              )}
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );
