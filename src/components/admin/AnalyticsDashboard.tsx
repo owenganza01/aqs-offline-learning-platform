@@ -202,7 +202,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+        <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
           <p className="font-display text-[28px] text-text leading-none mb-1.5">{analytics.totalLearnersCount}</p>
           <p className="text-[12px] text-text-3 font-medium">Total learners</p>
           <p className="font-mono text-[11px] text-success mt-2">
@@ -210,7 +210,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
             Unique profiles
           </p>
         </div>
-        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+        <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
           <p className="font-display text-[28px] text-text leading-none mb-1.5">
             {avgQuizScore === null ? '—' : `${avgQuizScore}%`}
           </p>
@@ -220,7 +220,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
             Best attempts
           </p>
         </div>
-        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+        <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
           <p className="font-display text-[28px] text-text leading-none mb-1.5">{totalLessonsCompleted || 0}</p>
           <p className="text-[12px] text-text-3 font-medium">Lessons completed</p>
           <p className="font-mono text-[11px] text-success mt-2">
@@ -228,7 +228,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
             Syllabus units
           </p>
         </div>
-        <div className="bg-white border border-stroke rounded-xl p-4 shadow-sm relative overflow-hidden">
+        <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
           <p className="font-display text-[28px] text-text leading-none mb-1.5">
             {analytics.courseStats?.length > 0
               ? Math.round(
@@ -247,7 +247,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm">
+        <div className="bg-white border border-stroke p-5 rounded-lg">
           <h4 className="text-sm font-display font-bold text-text mb-1 flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-steel" />
             <span>Course Engagement Distribution</span>
@@ -263,11 +263,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
                 <YAxis stroke="#8a9aad" fontSize={9} tickLine={false} />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid #dde2ea',
                     boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
                     fontSize: '11px',
-                    fontFamily: 'sans-serif',
+                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
@@ -278,7 +278,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
           </div>
         </div>
 
-        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm">
+        <div className="bg-white border border-stroke p-5 rounded-lg">
           <h4 className="text-sm font-display font-bold text-text mb-1 flex items-center gap-2">
             <Activity className="w-4 h-4 text-steel" />
             <span>Course Completion Rates (%)</span>
@@ -306,11 +306,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
                 />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid #dde2ea',
                     boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
                     fontSize: '11px',
-                    fontFamily: 'sans-serif',
+                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                   }}
                   formatter={(value) => [`${value}%`, 'Completion Rate']}
                 />
@@ -331,7 +331,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm font-sans">
+        <div className="bg-white border border-stroke p-5 rounded-lg font-sans">
           <h4 className="font-display font-bold text-text text-sm mb-4 border-b border-stroke pb-2 flex items-center gap-2">
             <Layout className="w-4.5 h-4.5 text-steel" />
             <span>Academic Matrix Ledger</span>
@@ -367,7 +367,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
           )}
         </div>
 
-        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm font-sans">
+        <div className="bg-white border border-stroke p-5 rounded-lg font-sans">
           <h4 className="font-display font-bold text-text text-sm mb-4 border-b border-stroke pb-2 flex items-center gap-2">
             <Activity className="w-4.5 h-4.5 text-steel" />
             <span>Live Student Activity Feed</span>
@@ -379,7 +379,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
               {analytics.recentActivity.map((act: any, idx: number) => (
                 <div
                   key={idx}
-                  className="bg-canvas/60 border border-stroke p-3.5 rounded-xl flex items-start gap-2.5 text-xs"
+                  className="bg-canvas/60 border border-stroke p-3.5 rounded-lg flex items-start gap-2.5 text-xs"
                 >
                   <span
                     className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${act.type === 'quiz' ? (act.passed ? 'bg-success animate-pulse' : 'bg-error') : 'bg-steel animate-pulse'}`}
