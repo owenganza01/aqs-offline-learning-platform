@@ -47,6 +47,12 @@
   --color-lmstext3: var(--text-3);
   --color-warning: var(--warning);
   --color-error-bg: var(--error-bg);
+
+  --color-slate: var(--slate);
+  --color-slate-3: var(--slate-3);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
 }
 
 /* Both palettes are declared in both scopes so every token resolves under either theme. */

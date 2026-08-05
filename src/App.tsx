@@ -41,7 +41,7 @@ function SyncBadge({ syncInProgress, pendingSyncCount }: SyncBadgeProps) {
       ? 'syncing'
       : 'synced';
 
-  const dotColor = state === 'offline' ? 'var(--ochre)' : state === 'syncing' ? '#5B8DD9' : 'var(--success)';
+  const dotColor = state === 'offline' ? 'var(--ochre)' : state === 'syncing' ? 'var(--ochre)' : 'var(--success)';
   const label =
     state === 'offline'
       ? 'Offline — saved locally'
@@ -357,18 +357,28 @@ export default function App() {
     >
       {/* Dynamic Navigation Top Header */}
       <header
-        className="sticky top-0 z-50 bg-navy text-navtext border-b border-white/[0.08] px-7 py-3 flex items-center justify-between shadow-sm select-none"
+        className={`sticky top-0 z-50 border-b px-7 py-3 flex items-center justify-between shadow-sm select-none ${
+          isLmsPath ? 'bg-lms text-white border-white/[0.06]' : 'bg-navy text-navtext border-white/[0.08]'
+        }`}
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="bg-ochre text-white rounded w-8 h-8 flex items-center justify-center shrink-0">
+          <div
+            className={`text-white rounded w-8 h-8 flex items-center justify-center shrink-0 ${
+              isLmsPath ? 'bg-steel' : 'bg-ochre'
+            }`}
+          >
             <BookOpen className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-[17px] font-display font-semibold tracking-tight leading-none text-navactive truncate">
+            <h1 className="text-[17px] font-display font-semibold tracking-tight leading-none text-white truncate">
               AQS Learning
             </h1>
-            <p className="text-[10px] font-bold text-navtext opacity-60 font-mono tracking-wider mt-1 uppercase truncate">
+            <p
+              className={`text-[10px] font-bold font-mono tracking-wider mt-1 uppercase truncate ${
+                isLmsPath ? 'text-white/60' : 'text-navtext opacity-60'
+              }`}
+            >
               {isLmsPath ? 'Instructor Portal' : 'Africa Quantitative Sciences'}
             </p>
           </div>
@@ -385,7 +395,7 @@ export default function App() {
                     navigateTo('/study');
                   }}
                   className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
-                    !isLmsPath ? 'bg-navy-2 text-navactive' : 'text-navtext hover:bg-navy-3 hover:text-navactive'
+                    !isLmsPath ? 'bg-navy-2 text-navactive' : 'text-white/70 hover:bg-lms-3 hover:text-white'
                   }`}
                 >
                   STUDENT APP
@@ -393,7 +403,7 @@ export default function App() {
                 <button
                   onClick={() => navigateTo('/lms')}
                   className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
-                    isLmsPath ? 'bg-navy-2 text-navactive' : 'text-navtext hover:bg-navy-3 hover:text-navactive'
+                    isLmsPath ? 'bg-lms-2 text-white' : 'text-navtext hover:bg-navy-3 hover:text-navactive'
                   }`}
                 >
                   ADMIN PORTAL
@@ -408,12 +418,18 @@ export default function App() {
               <div className="text-right hidden md:block">
                 <p
                   onClick={() => setShowProfileEdit(true)}
-                  className="text-xs font-semibold text-navtext hover:text-navactive transition-colors leading-none cursor-pointer"
+                  className={`text-xs font-semibold transition-colors leading-none cursor-pointer ${
+                    isLmsPath ? 'text-white/80 hover:text-white' : 'text-navtext hover:text-navactive'
+                  }`}
                 >
                   {dbUser.name || dbUser.email}
                 </p>
                 <div className="flex items-center gap-1.5 justify-end mt-1">
-                  <span className="text-[9px] font-semibold font-mono text-navtext opacity-50 uppercase tracking-widest">
+                  <span
+                    className={`text-[9px] font-semibold font-mono uppercase tracking-widest ${
+                      isLmsPath ? 'text-white/50' : 'text-navtext opacity-50'
+                    }`}
+                  >
                     ROLE: {dbUser.role}
                   </span>
                 </div>
@@ -422,7 +438,9 @@ export default function App() {
               {/* Circular Avatar Badge in Header */}
               <div
                 onClick={() => setShowProfileEdit(true)}
-                className="w-[30px] h-[30px] rounded-full overflow-hidden border border-white/15 bg-navy-3 flex items-center justify-center shrink-0 select-none shadow-sm cursor-pointer hover:ring-2 hover:ring-ochre/40 transition-all"
+                className={`w-[30px] h-[30px] rounded-full overflow-hidden border border-white/15 flex items-center justify-center shrink-0 select-none shadow-sm cursor-pointer hover:ring-2 transition-all ${
+                  isLmsPath ? 'bg-lms-3 hover:ring-steel/50' : 'bg-navy-3 hover:ring-ochre/40'
+                }`}
               >
                 {dbUser.avatarUrl ? (
                   <img
@@ -441,7 +459,10 @@ export default function App() {
               <button
                 onClick={handleLogout}
                 title="Sign Out of Account"
-                className="h-11 w-11 bg-navy-2 hover:bg-navy-3 text-navtext border border-white/10 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                aria-label="Sign out"
+                className={`h-11 w-11 border border-white/10 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                  isLmsPath ? 'bg-lms-2 hover:bg-lms-3 text-white/80' : 'bg-navy-2 hover:bg-navy-3 text-navtext'
+                }`}
               >
                 <LogOut className="w-5 h-5" />
               </button>
@@ -525,31 +546,58 @@ export default function App() {
                     </div>
                   )}
                   <form onSubmit={handleRegister} className="space-y-4">
-                    <input
-                      type="text"
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      placeholder="Full name"
-                      className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
-                      required
-                      autoFocus
-                    />
-                    <input
-                      type="email"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="Email address"
-                      className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={regCode}
-                      onChange={(e) => setRegCode(e.target.value)}
-                      placeholder="Class code (e.g. A1B2C3D4)"
-                      className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
-                      required
-                    />
+                    <div>
+                      <label
+                        htmlFor="reg-name"
+                        className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono"
+                      >
+                        Full Name
+                      </label>
+                      <input
+                        id="reg-name"
+                        type="text"
+                        value={regName}
+                        onChange={(e) => setRegName(e.target.value)}
+                        placeholder="Full name"
+                        className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="reg-email"
+                        className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono"
+                      >
+                        Email Address
+                      </label>
+                      <input
+                        id="reg-email"
+                        type="email"
+                        value={regEmail}
+                        onChange={(e) => setRegEmail(e.target.value)}
+                        placeholder="Email address"
+                        className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="reg-code"
+                        className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono"
+                      >
+                        Class Code
+                      </label>
+                      <input
+                        id="reg-code"
+                        type="text"
+                        value={regCode}
+                        onChange={(e) => setRegCode(e.target.value)}
+                        placeholder="Class code (e.g. A1B2C3D4)"
+                        className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
+                        required
+                      />
+                    </div>
                     <button
                       type="submit"
                       disabled={regLoading || !regName.trim() || !regEmail.trim() || !regCode.trim()}
@@ -630,7 +678,7 @@ export default function App() {
               )
             ) : (
               /* WORKSPACE B: STUDENT LEARNER MODULES */
-              <div className="w-full">
+              <div className={`w-full ${activeCourseId === null ? 'pb-24 lg:pb-0' : ''}`}>
                 <div className="flex gap-6">
                   {/* Left navigation — visible on dashboard views only (hidden inside course player, hidden on mobile) */}
                   {activeCourseId === null && (
@@ -706,6 +754,35 @@ export default function App() {
                     )}
                   </div>
                 </div>
+
+                {/* Mobile learner bottom navigation (hidden on lg+; hidden inside the course player) */}
+                {activeCourseId === null && (
+                  <nav
+                    aria-label="Learner navigation"
+                    className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-navy border-t border-white/10"
+                    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+                  >
+                    <div className="flex items-stretch justify-around px-1">
+                      {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+                        const isActive = activeNavItem === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleNavClick(key)}
+                            aria-current={isActive ? 'page' : undefined}
+                            className={`flex flex-col items-center justify-center gap-1 py-2.5 px-3 min-w-0 flex-1 cursor-pointer select-none transition-colors ${
+                              isActive ? 'text-ochre' : 'text-navtext hover:text-white'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5 shrink-0" />
+                            <span className="text-[10px] font-bold leading-none truncate">{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </nav>
+                )}
               </div>
             )}
 
@@ -713,14 +790,21 @@ export default function App() {
             {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (
               <div
                 className="block sm:hidden fixed bottom-6 right-6 z-50"
-                style={{ bottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+                style={{
+                  bottom:
+                    !isLmsPath && activeCourseId === null
+                      ? 'calc(max(1.5rem, env(safe-area-inset-bottom)) + 4.5rem)'
+                      : 'max(1.5rem, env(safe-area-inset-bottom))',
+                }}
               >
                 <button
                   onClick={() => {
                     navigateTo(isLmsPath ? '/study' : '/lms');
                   }}
                   style={{ height: '56px' }}
-                  className="bg-navy border-4 border-navy-2 p-4 rounded-2xl flex items-center gap-2 text-white font-black text-sm active:translate-y-1 shadow-lg cursor-pointer"
+                  className={`border-4 p-4 rounded-2xl flex items-center gap-2 text-white font-black text-sm active:translate-y-1 shadow-lg cursor-pointer ${
+                    isLmsPath ? 'bg-lms border-lms-2' : 'bg-navy border-navy-2'
+                  }`}
                 >
                   <RefreshCw className="w-5 h-5 animate-spin-slow text-accent" />
                   <span>SWITCH TO {isLmsPath ? 'STUDENT APP' : 'ADMIN PORTAL'}</span>

@@ -38,7 +38,7 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
           xmlns="http://www.w3.org/2000/svg"
         >
           {/* Ground / Roots area */}
-          <path d="M 20 220 C 60 215, 140 215, 180 220" stroke="#94a3b8" strokeWidth="4" strokeLinecap="round" />
+          <path d="M 20 220 C 60 215, 140 215, 180 220" stroke="#8B9490" strokeWidth="4" strokeLinecap="round" />
           <path d="M 100 200 C 100 215, 80 225, 70 230" stroke="#78350f" strokeWidth="3" strokeLinecap="round" />
           <path d="M 100 200 C 100 215, 120 225, 130 230" stroke="#78350f" strokeWidth="3" strokeLinecap="round" />
 
@@ -64,7 +64,7 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
                 {/* Branch Stem */}
                 <path
                   d={`M 100 ${startY} Q ${controlX} ${startY}, ${endX} ${endY}`}
-                  stroke={isCompleted ? '#10b981' : '#a1a1aa'}
+                  stroke={isCompleted ? '#2A6644' : '#8B9490'}
                   strokeWidth={isCompleted ? '5' : '3'}
                   strokeLinecap="round"
                   fill="none"
@@ -76,23 +76,23 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
                     {/* Leaf 1 */}
                     <path
                       d={`M ${endX} ${endY} Q ${endX + (isLeft ? -12 : 12)} ${endY - 6}, ${endX + (isLeft ? -10 : 10)} ${endY - 16} Q ${endX + (isLeft ? -2 : 2)} ${endY - 10}, ${endX} ${endY}`}
-                      fill="#059669"
-                      stroke="#047857"
+                      fill="#2A6644"
+                      stroke="#2A6644"
                       strokeWidth="1"
                     />
                     {/* Leaf 2 */}
                     <path
                       d={`M ${endX - (isLeft ? 8 : -8)} ${endY - 4} Q ${endX + (isLeft ? -18 : 18)} ${endY + 6}, ${endX + (isLeft ? -14 : 14)} ${endY - 4} Q ${endX + (isLeft ? -6 : 6)} ${endY - 4}, ${endX - (isLeft ? 8 : -8)} ${endY - 4}`}
-                      fill="#34d399"
-                      stroke="#059669"
+                      fill="#2A6644"
+                      stroke="#2A6644"
                       strokeWidth="1"
                     />
                     {/* Completion indicator node */}
-                    <circle cx={endX} cy={endY} r="4" fill="#fbbf24" stroke="#d97706" strokeWidth="1" />
+                    <circle cx={endX} cy={endY} r="4" fill="#D4922B" stroke="#D4922B" strokeWidth="1" />
                   </g>
                 ) : (
                   // Dormant small grey/brown bud if lesson incompleted
-                  <circle cx={endX} cy={endY} r="3.5" fill="#94a3b8" stroke="#64748b" strokeWidth="1" />
+                  <circle cx={endX} cy={endY} r="3.5" fill="#8B9490" stroke="#8B9490" strokeWidth="1" />
                 )}
 
                 {/* Lesson number visual text floating on the side */}
@@ -100,7 +100,7 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
                   x={isLeft ? endX - 16 : endX + 16}
                   y={endY + 4}
                   textAnchor="middle"
-                  className="font-mono font-black text-[9px] fill-slate-700 bg-white"
+                  className="font-mono font-black text-[9px] fill-ink bg-white"
                 >
                   L{index + 1}
                 </text>
@@ -112,19 +112,19 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
           {quizPassed ? (
             <g className="animate-bounce">
               {/* Stem linking apex to top trunk */}
-              <path d="M 100 45 L 100 30" stroke="#10b981" strokeWidth="4" />
+              <path d="M 100 45 L 100 30" stroke="#2A6644" strokeWidth="4" />
               {/* Flower Center */}
-              <circle cx="100" cy="24" r="9" fill="#fbbf24" stroke="#d97706" strokeWidth="2.5" />
+              <circle cx="100" cy="24" r="9" fill="#D4922B" stroke="#D4922B" strokeWidth="2.5" />
               {/* Petal Top */}
-              <circle cx="100" cy="11" r="6" fill="#fef08a" stroke="#fbbf24" strokeWidth="1.5" />
+              <circle cx="100" cy="11" r="6" fill="#F0DEB6" stroke="#D4922B" strokeWidth="1.5" />
               {/* Petal Bottom */}
-              <circle cx="100" cy="37" r="6" fill="#fef08a" stroke="#fbbf24" strokeWidth="1.5" />
+              <circle cx="100" cy="37" r="6" fill="#F0DEB6" stroke="#D4922B" strokeWidth="1.5" />
               {/* Petal Left */}
-              <circle cx="87" cy="24" r="6" fill="#fef08a" stroke="#fbbf24" strokeWidth="1.5" />
+              <circle cx="87" cy="24" r="6" fill="#F0DEB6" stroke="#D4922B" strokeWidth="1.5" />
               {/* Petal Right */}
-              <circle cx="113" cy="24" r="6" fill="#fef08a" stroke="#fbbf24" strokeWidth="1.5" />
+              <circle cx="113" cy="24" r="6" fill="#F0DEB6" stroke="#D4922B" strokeWidth="1.5" />
               {/* Little crown award */}
-              <path d="M 97 22 L 100 18 L 103 22" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M 97 22 L 100 18 L 103 22" stroke="#D4922B" strokeWidth="1.5" strokeLinecap="round" />
             </g>
           ) : (
             // A closed green bud at apex if course not fully completed/quiz not passed yet
@@ -133,8 +133,8 @@ export const ProgressTree: React.FC<ProgressTreeProps> = ({ lessons, completedLe
               {/* Closed green/amber bud ready to bloom */}
               <path
                 d="M 100 34 C 92 34, 94 20, 100 16 C 106 20, 108 34, 100 34"
-                fill={completionPercentage > 60 ? '#d97706' : '#64748b'}
-                stroke={completionPercentage > 60 ? '#b45309' : '#475569'}
+                fill={completionPercentage > 60 ? '#D4922B' : '#8B9490'}
+                stroke={completionPercentage > 60 ? '#D4922B' : '#8B9490'}
                 strokeWidth="1.5"
               />
             </g>

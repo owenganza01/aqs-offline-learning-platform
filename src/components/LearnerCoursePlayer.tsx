@@ -692,7 +692,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                   {/* Lesson Readings and Lecture Notes */}
                   <div className="mb-8">
                     <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-ink-3 mb-3 font-mono">
-                      📖 Course Readings & Lecture Notes
+                      Course Readings & Lecture Notes
                     </h4>
                     <div className="bg-paper-2 border border-rule p-5 rounded-2xl font-medium whitespace-pre-line text-ink text-[14.5px] leading-[1.8]">
                       {activeLesson.content || 'No textbook or study summaries provided for this topic.'}
@@ -802,9 +802,9 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     ) : (
                       <div className="space-y-2">
                         <h3 className="text-xl font-display font-bold text-ink">
-                          {quizResult.passed ? '🎉 Congratulations, You Passed!' : 'Requires Further Study'}
+                          {quizResult.passed ? 'Congratulations, You Passed!' : 'Requires Further Study'}
                         </h3>
-                        <p className="text-4.5xl font-black font-mono text-ochre">{quizResult.score}%</p>
+                        <p className="text-4xl font-black font-mono text-ochre">{quizResult.score}%</p>
                         <p className="text-xs font-bold text-ink-3 font-mono">
                           ({quizResult.correctCount} of {quizResult.totalQuestions} answers correct)
                         </p>
@@ -995,7 +995,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     }`}
                   >
                     {isDone ? (
-                      <span className="w-5 h-5 rounded-full bg-[#2A6644] flex items-center justify-center shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-success flex items-center justify-center shrink-0">
                         <Check className="w-3 h-3 text-white" strokeWidth={3} />
                       </span>
                     ) : isCurrent ? (
@@ -1042,7 +1042,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                       <span className="text-[9px] font-bold text-white font-mono">Q</span>
                     </span>
                   ) : isQuizPassed ? (
-                    <span className="w-5 h-5 rounded-full bg-[#2A6644] flex items-center justify-center shrink-0">
+                    <span className="w-5 h-5 rounded-full bg-success flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3 text-white" strokeWidth={3} />
                     </span>
                   ) : (

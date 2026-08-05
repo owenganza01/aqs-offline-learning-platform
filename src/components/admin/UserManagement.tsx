@@ -103,7 +103,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
     <div className="space-y-8">
       <div className="flex items-center gap-3">
         <Users className="w-5 h-5 text-steel" />
-        <h2 className="text-lg font-display font-bold tracking-tight text-text">Manage Users</h2>
+        <h2 className="text-lg font-display font-bold tracking-tight text-text">Manage users</h2>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -184,8 +184,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
 
             <form onSubmit={handleCreateInstructor} className="space-y-3">
               <div>
-                <label className="text-[10px] font-bold text-text-3 uppercase tracking-wider">Name</label>
+                <label
+                  htmlFor="new-instructor-name"
+                  className="text-[10px] font-bold text-text-3 uppercase tracking-wider"
+                >
+                  Name
+                </label>
                 <input
+                  id="new-instructor-name"
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
@@ -195,8 +201,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-text-3 uppercase tracking-wider">Email</label>
+                <label
+                  htmlFor="new-instructor-email"
+                  className="text-[10px] font-bold text-text-3 uppercase tracking-wider"
+                >
+                  Email
+                </label>
                 <input
+                  id="new-instructor-email"
                   type="email"
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}

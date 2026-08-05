@@ -1,5 +1,5 @@
 // src/components/ProfileEditModal.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase.ts';
 import { User } from '../types.ts';
@@ -20,6 +20,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
   const [savingName, setSavingName] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [msg, setMsg] = useState<{ text: string; error: boolean } | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user?.name) {
@@ -27,6 +28,23 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
       setNameInput(user.name);
     }
   }, [user]);
+
+  // Dialog focus management: focus the panel on open, close on Escape, restore focus on unmount.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onClose]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -127,6 +145,11 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
 
       {/* Modal Dialog Card */}
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-edit-title"
+        tabIndex={-1}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
@@ -141,7 +164,9 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
         </button>
 
         <div className="text-center mb-6">
-          <h3 className="text-xl font-display font-bold text-ink tracking-tight">Edit My Profile</h3>
+          <h3 id="profile-edit-title" className="text-xl font-display font-bold text-ink tracking-tight">
+            Edit My Profile
+          </h3>
           <p className="text-xs font-semibold text-ink-3 mt-1">Personalize your profile</p>
         </div>
 
@@ -201,8 +226,11 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
         {/* Profile Name form */}
         <form onSubmit={handleSaveName} className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono">My Full Name:</label>
+            <label htmlFor="profile-name" className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono">
+              My Full Name:
+            </label>
             <input
+              id="profile-name"
               type="text"
               required
               value={nameInput}

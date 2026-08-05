@@ -139,10 +139,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
 
         <form onSubmit={handleSaveDirectQuestion} className="space-y-4">
           <div>
-            <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+            <label
+              htmlFor="direct-question-text"
+              className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono"
+            >
               Question Prompt:
             </label>
             <input
+              id="direct-question-text"
               type="text"
               required
               value={directQuestion.questionText}
@@ -155,10 +159,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-sans">
             {directQuestion.options.map((option, oIdx) => (
               <div key={oIdx}>
-                <label className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">
+                <label
+                  htmlFor={`direct-option-${oIdx}`}
+                  className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono"
+                >
                   Choice {String.fromCharCode(65 + oIdx)}:
                 </label>
                 <input
+                  id={`direct-option-${oIdx}`}
                   type="text"
                   required
                   value={option}
@@ -235,8 +243,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
 
         <div className="space-y-4 mb-6">
           <div>
-            <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">Exam Title:</label>
+            <label
+              htmlFor="quiz-exam-title"
+              className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono"
+            >
+              Exam Title:
+            </label>
             <input
+              id="quiz-exam-title"
               type="text"
               value={quizForm.title}
               onChange={(e) => setQuizForm((q) => ({ ...q, title: e.target.value }))}
@@ -252,8 +266,11 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
             </h5>
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">Question Text:</label>
+                <label htmlFor="new-question-text" className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">
+                  Question Text:
+                </label>
                 <input
+                  id="new-question-text"
                   type="text"
                   value={newQuestion.questionText}
                   onChange={(e) => setNewQuestion((q) => ({ ...q, questionText: e.target.value }))}
@@ -264,10 +281,14 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {newQuestion.options.map((option, oIdx) => (
                   <div key={oIdx}>
-                    <label className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono">
+                    <label
+                      htmlFor={`new-question-option-${oIdx}`}
+                      className="block text-[11px] font-bold text-text-3 mb-1.5 font-mono"
+                    >
                       Option {String.fromCharCode(65 + oIdx)}:
                     </label>
                     <input
+                      id={`new-question-option-${oIdx}`}
                       type="text"
                       value={option}
                       onChange={(e) => {

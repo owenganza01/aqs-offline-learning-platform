@@ -25,7 +25,7 @@ const LMS_SWATCH_TINTS: { bg: string; fg: string }[] = [
   { bg: '#E8EFF7', fg: '#3D5A80' },
   { bg: '#E8F4EC', fg: '#1D6B45' },
   { bg: '#F3ECDC', fg: '#7B4F0A' },
-  { bg: '#EBE7F4', fg: '#5A4A7A' },
+  { bg: '#E8EFF7', fg: '#222E40' },
 ];
 
 const courseInitials = (title: string): string =>
@@ -171,14 +171,18 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
               className="bg-white border border-stroke p-6 rounded-xl shadow-sm font-sans"
             >
               <h4 className="font-semibold text-text text-sm mb-4 border-b border-stroke pb-2">
-                {editingCourse ? '✏️ Modify Course' : '✨ Create New Course'}
+                {editingCourse ? 'Modify Course' : 'Create New Course'}
               </h4>
               <form onSubmit={handleSaveCourse} className="space-y-4">
                 <div>
-                  <label className="field-label block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+                  <label
+                    htmlFor="course-create-title"
+                    className="field-label block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono"
+                  >
                     Course Title:
                   </label>
                   <input
+                    id="course-create-title"
                     type="text"
                     required
                     value={courseForm.title}
@@ -188,10 +192,14 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+                  <label
+                    htmlFor="course-create-description"
+                    className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono"
+                  >
                     Short Description / Summary:
                   </label>
                   <textarea
+                    id="course-create-description"
                     required
                     value={courseForm.description}
                     onChange={(e) => setCourseForm((c) => ({ ...c, description: e.target.value }))}
@@ -228,93 +236,97 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
             </p>
           </div>
         ) : (
-          <div className="bg-white border border-stroke rounded-xl overflow-hidden shadow-sm">
-            <div
-              className="grid border-b border-stroke px-4 py-2.5 text-[11px] uppercase tracking-wider text-text-3 font-semibold"
-              style={{ gridTemplateColumns: COL_GRID }}
-            >
-              <span>Course</span>
-              <span>Enrolled</span>
-              <span>Avg. score</span>
-              <span>Lessons</span>
-              <span>Status</span>
-              <span className="text-right">Actions</span>
-            </div>
+          <div className="overflow-x-auto">
+            <div className="bg-white border border-stroke rounded-xl overflow-hidden shadow-sm min-w-[720px]">
+              <div
+                className="grid border-b border-stroke px-4 py-2.5 text-[11px] uppercase tracking-wider text-text-3 font-semibold"
+                style={{ gridTemplateColumns: COL_GRID }}
+              >
+                <span>Course</span>
+                <span>Enrolled</span>
+                <span>Avg. score</span>
+                <span>Lessons</span>
+                <span>Status</span>
+                <span className="text-right">Actions</span>
+              </div>
 
-            {courses.map((course, idx) => {
-              const unitsCount = course.lessons?.length || 0;
-              const isPublished = unitsCount > 0;
-              const stat = courseStats[course.id];
-              const enrolled = stat?.activeStudents ?? null;
-              const avgScore = stat?.averageScore ?? null;
-              const tint = LMS_SWATCH_TINTS[idx % LMS_SWATCH_TINTS.length];
-              return (
-                <div
-                  key={course.id}
-                  onClick={() => setSelectedCourse(course)}
-                  className="grid px-4 py-3.5 border-b border-stroke items-center cursor-pointer hover:bg-canvas transition-colors last:border-b-0"
-                  style={{ gridTemplateColumns: COL_GRID }}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className="w-[34px] h-[34px] rounded-md flex items-center justify-center font-mono text-[11px] font-medium flex-shrink-0"
-                      style={{ background: tint.bg, color: tint.fg }}
-                    >
-                      {courseInitials(course.title)}
+              {courses.map((course, idx) => {
+                const unitsCount = course.lessons?.length || 0;
+                const isPublished = unitsCount > 0;
+                const stat = courseStats[course.id];
+                const enrolled = stat?.activeStudents ?? null;
+                const avgScore = stat?.averageScore ?? null;
+                const tint = LMS_SWATCH_TINTS[idx % LMS_SWATCH_TINTS.length];
+                return (
+                  <div
+                    key={course.id}
+                    onClick={() => setSelectedCourse(course)}
+                    className="grid px-4 py-3.5 border-b border-stroke items-center cursor-pointer hover:bg-canvas transition-colors last:border-b-0"
+                    style={{ gridTemplateColumns: COL_GRID }}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-[34px] h-[34px] rounded-md flex items-center justify-center font-mono text-[11px] font-medium flex-shrink-0"
+                        style={{ background: tint.bg, color: tint.fg }}
+                      >
+                        {courseInitials(course.title)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13.5px] font-semibold text-text truncate">{course.title}</div>
+                        <div className="text-[11px] text-text-3">ID #{course.id}</div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[13.5px] font-semibold text-text truncate">{course.title}</div>
-                      <div className="text-[11px] text-text-3">ID #{course.id}</div>
+                    <div className="text-[12px] font-mono text-text-2">{enrolled === null ? '—' : enrolled}</div>
+                    <div className="text-[12px] font-mono text-text-2">
+                      {avgScore === null || avgScore === undefined ? '—' : `${avgScore}%`}
+                    </div>
+                    <div className="text-[12px] font-mono text-text-2">{unitsCount}</div>
+                    <div>
+                      {isPublished ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded bg-[#E8F4EC] text-success">
+                          ● Published
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded bg-[#F0F2F5] text-text-3">
+                          ○ Draft
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingCourse(true);
+                          setCourseForm({
+                            title: course.title,
+                            description: course.description,
+                            thumbnail: course.thumbnail || 'teal',
+                          });
+                          setSelectedCourse(course);
+                          setShowAddCourse(true);
+                        }}
+                        title="Edit details"
+                        aria-label="Edit course details"
+                        className="w-7 h-7 border border-stroke rounded-md flex items-center justify-center text-text-2 hover:bg-canvas active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCourse(course.id);
+                        }}
+                        title="Delete"
+                        aria-label="Delete course"
+                        className="w-7 h-7 border border-stroke rounded-md flex items-center justify-center text-text-2 hover:bg-error-bg hover:text-error active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                  <div className="text-[12px] font-mono text-text-2">{enrolled === null ? '—' : enrolled}</div>
-                  <div className="text-[12px] font-mono text-text-2">
-                    {avgScore === null || avgScore === undefined ? '—' : `${avgScore}%`}
-                  </div>
-                  <div className="text-[12px] font-mono text-text-2">{unitsCount}</div>
-                  <div>
-                    {isPublished ? (
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded bg-[#E8F4EC] text-success">
-                        ● Published
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded bg-[#F0F2F5] text-text-3">
-                        ○ Draft
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCourse(true);
-                        setCourseForm({
-                          title: course.title,
-                          description: course.description,
-                          thumbnail: course.thumbnail || 'teal',
-                        });
-                        setSelectedCourse(course);
-                        setShowAddCourse(true);
-                      }}
-                      title="Edit details"
-                      className="w-7 h-7 border border-stroke rounded-md flex items-center justify-center text-text-2 hover:bg-canvas active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCourse(course.id);
-                      }}
-                      title="Delete"
-                      className="w-7 h-7 border border-stroke rounded-md flex items-center justify-center text-text-2 hover:bg-error-bg hover:text-error active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -329,9 +341,6 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
           <div className="absolute top-0 left-0 right-0 h-1 bg-steel"></div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
             <div>
-              <span className="inline-block bg-steel-lt text-steel text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-steel/20 font-mono tracking-wider uppercase mb-1">
-                Course Administration
-              </span>
               <h3 className="text-xl font-display font-bold text-text tracking-tight">{selectedCourse.title}</h3>
               <p className="text-text-3 text-xs leading-relaxed mt-1">{selectedCourse.description}</p>
             </div>
@@ -369,13 +378,17 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                 exit={{ opacity: 0, height: 0 }}
                 className="border-t border-stroke pt-4"
               >
-                <h4 className="font-semibold text-text text-sm mb-4">✏️ Modify Course</h4>
+                <h4 className="font-semibold text-text text-sm mb-4">Modify Course</h4>
                 <form onSubmit={handleSaveCourse} className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+                    <label
+                      htmlFor="course-settings-title"
+                      className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono"
+                    >
                       Course Title:
                     </label>
                     <input
+                      id="course-settings-title"
                       type="text"
                       required
                       value={courseForm.title}
@@ -384,10 +397,14 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+                    <label
+                      htmlFor="course-settings-description"
+                      className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono"
+                    >
                       Short Description / Summary:
                     </label>
                     <textarea
+                      id="course-settings-description"
                       required
                       value={courseForm.description}
                       onChange={(e) => setCourseForm((c) => ({ ...c, description: e.target.value }))}

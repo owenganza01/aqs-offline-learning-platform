@@ -113,7 +113,7 @@ export const CohortManager: React.FC<CohortManagerProps> = ({ token }) => {
     <div className="space-y-8">
       <div className="flex items-center gap-3">
         <Users className="w-5 h-5 text-steel" />
-        <h2 className="text-lg font-display font-bold tracking-tight text-text">My Cohorts</h2>
+        <h2 className="text-lg font-display font-bold tracking-tight text-text">Cohorts</h2>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -204,8 +204,11 @@ export const CohortManager: React.FC<CohortManagerProps> = ({ token }) => {
 
             <form onSubmit={handleCreate} className="space-y-3">
               <div>
-                <label className="text-[10px] font-bold text-text-3 uppercase tracking-wider">Cohort Name</label>
+                <label htmlFor="new-cohort-name" className="text-[10px] font-bold text-text-3 uppercase tracking-wider">
+                  Cohort Name
+                </label>
                 <input
+                  id="new-cohort-name"
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}

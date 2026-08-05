@@ -312,7 +312,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
                                   className={`flex items-center gap-[9px] px-4 py-[9px] cursor-pointer border-l-[3px] transition-colors ${isActive ? 'bg-steel-lt border-l-steel' : 'border-l-transparent hover:bg-canvas'}`}
                                 >
                                   <span
-                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasLessonContent(lesson) ? 'bg-[#1d6b45]' : 'bg-[#dde2ea]'}`}
+                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasLessonContent(lesson) ? 'bg-success' : 'bg-stroke'}`}
                                   />
                                   <div className="min-w-0 flex-1">
                                     <div className="text-[12.5px] text-text font-medium truncate leading-snug">
@@ -328,6 +328,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
                                       }}
                                       disabled={index === 0}
                                       title="Move up"
+                                      aria-label="Move lesson up"
                                       className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
                                     >
                                       <ArrowUp className="w-3.5 h-3.5 text-text-2" />
@@ -339,6 +340,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
                                       }}
                                       disabled={index === (selectedCourse.lessons || []).length - 1}
                                       title="Move down"
+                                      aria-label="Move lesson down"
                                       className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
                                     >
                                       <ArrowDown className="w-3.5 h-3.5 text-text-2" />
@@ -349,6 +351,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
                                         openLessonEditor(lesson);
                                       }}
                                       title="Edit"
+                                      aria-label="Edit lesson"
                                       className="w-6 h-6 bg-steel-lt border border-steel/30 hover:bg-steel/20 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center ml-[2px]"
                                     >
                                       <Edit3 className="w-3.5 h-3.5 text-steel" />
@@ -359,6 +362,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
                                         handleDeleteLesson(lesson.id);
                                       }}
                                       title="Delete"
+                                      aria-label="Delete lesson"
                                       className="w-6 h-6 bg-error-bg border border-error/20 hover:bg-error/15 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center"
                                     >
                                       <Trash2 className="w-3.5 h-3.5 text-error" />

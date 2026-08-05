@@ -180,10 +180,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
 
       <form id="lesson-editor-form" onSubmit={handleSaveLesson} className="space-y-[20px]">
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono">
+          <label
+            htmlFor="lesson-title"
+            className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono"
+          >
             Lesson Title:
           </label>
           <input
+            id="lesson-title"
             type="text"
             required
             value={lessonForm.title}
@@ -193,10 +197,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           />
         </div>
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono">
+          <label
+            htmlFor="lesson-video-url"
+            className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono"
+          >
             YouTube Video (Optional):
           </label>
           <input
+            id="lesson-video-url"
             type="text"
             value={lessonForm.videoUrl}
             onChange={(e) => setLessonForm((l) => ({ ...l, videoUrl: e.target.value }))}
@@ -212,11 +220,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           </p>
         </div>
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono">
+          <label
+            htmlFor="lesson-video-file-ref"
+            className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono"
+          >
             Upload Video File (Optional — plays offline):
           </label>
           <div className="space-y-2">
             <input
+              id="lesson-video-file-ref"
               type="text"
               value={lessonForm.videoUrl.startsWith('doc:') ? lessonForm.videoUrl : ''}
               onChange={(e) => setLessonForm((l) => ({ ...l, videoUrl: e.target.value }))}
@@ -255,11 +267,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           </div>
         </div>
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono">
+          <label
+            htmlFor="lesson-slides-url"
+            className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono"
+          >
             PowerPoint / Slides Link or Upload Document (Optional):
           </label>
           <div className="flex flex-col md:flex-row gap-2">
             <input
+              id="lesson-slides-url"
               type="text"
               value={lessonForm.slidesUrl}
               onChange={(e) => setLessonForm((l) => ({ ...l, slidesUrl: e.target.value }))}
@@ -295,10 +311,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           </div>
         </div>
         <div>
-          <label className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono">
+          <label
+            htmlFor="lesson-content"
+            className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono"
+          >
             Detailed Course Readings Summary (Content Text/Markdown):
           </label>
           <textarea
+            id="lesson-content"
             required
             value={lessonForm.content}
             onChange={(e) => setLessonForm((l) => ({ ...l, content: e.target.value }))}
