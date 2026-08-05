@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Course, Lesson } from '../../types.ts';
 import { apiFetch } from '../../lib/api.ts';
 import { toYouTubeEmbed } from '../../lib/utils.ts';
-import { Plus, Trash2, ArrowUp, ArrowDown, Edit3, RefreshCw, Download, FileText, Video } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Edit3, RefreshCw, Download, FileText, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface LessonManagerProps {
@@ -258,7 +258,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                 <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
                   Upload Video File (Optional — plays offline):
                 </label>
-                <div className="flex flex-col md:flex-row gap-2">
+                <div className="space-y-2">
                   <input
                     type="text"
                     value={lessonForm.videoUrl.startsWith('doc:') ? lessonForm.videoUrl : ''}
@@ -267,7 +267,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     className="w-full p-2.5 border-[1.5px] border-stroke rounded-lg text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
                     readOnly
                   />
-                  <div className="relative shrink-0">
+                  <div className="relative">
                     <input
                       type="file"
                       id="video-file-upload"
@@ -278,25 +278,26 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
                     />
                     <label
                       htmlFor="video-file-upload"
-                      className={`h-10 px-4 border-[1.5px] border-stroke bg-white hover:bg-canvas rounded-lg text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 select-none ${uploadingVideo ? 'opacity-50 pointer-events-none' : ''}`}
+                      className={`block w-full border-[1.5px] border-dashed border-stroke rounded-lg p-7 text-center cursor-pointer transition-colors select-none ${
+                        uploadingVideo ? 'opacity-50 pointer-events-none' : 'hover:border-steel hover:bg-steel-lt'
+                      }`}
                     >
-                      {uploadingVideo ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin text-text-3" />
-                          <span>Uploading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Video className="w-4 h-4 text-text-3" />
-                          <span>Upload MP4/WebM</span>
-                        </>
-                      )}
+                      <span className="w-10 h-10 rounded-full bg-canvas flex items-center justify-center mx-auto mb-2.5">
+                        {uploadingVideo ? (
+                          <RefreshCw className="w-[18px] h-[18px] animate-spin text-text-3" />
+                        ) : (
+                          <Upload className="w-[18px] h-[18px] text-text-3" />
+                        )}
+                      </span>
+                      <span className="block text-[13px] font-semibold text-text mb-[3px]">
+                        {uploadingVideo ? 'Uploading…' : 'Upload lesson video'}
+                      </span>
+                      <span className="block text-xs text-text-3">
+                        MP4, MOV up to 10 GB · Videos 10–15 min recommended
+                      </span>
                     </label>
                   </div>
                 </div>
-                <p className="text-[11px] text-text-3 mt-1 font-mono">
-                  Supported: MP4, WebM, OGV, MOV (max 100 MB). Served offline after first play.
-                </p>
               </div>
               <div>
                 <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">

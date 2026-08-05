@@ -2,7 +2,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Course } from '../types.ts';
 import { apiFetch } from '../lib/api.ts';
-import { Layout, Activity, Users, GraduationCap, RefreshCw, ArrowLeft, BookOpen, Award, Settings } from 'lucide-react';
+import { Plus, ChartLine, SquareUser, Users, RefreshCw, ArrowLeft, BookOpen, Award, Settings } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 const CourseFactory = lazy(() => import('./admin/CourseFactory.tsx').then((m) => ({ default: m.CourseFactory })));
@@ -61,70 +61,77 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-6" id="admin-lms-container">
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Left Sidebar Navigation */}
-        <div className="w-full lg:w-64 shrink-0" id="lms-sidebar">
-          <div className="bg-slate text-white rounded-3xl p-6 shadow-md border border-slate-2 space-y-6 lg:sticky lg:top-6">
-            <div className="space-y-1.5 pb-4 border-b border-slate-3">
-              <span className="bg-steel/25 text-steel-lt text-[10px] font-bold px-2.5 py-1 rounded-full border border-steel/30 uppercase tracking-widest font-mono">
-                Control Center
-              </span>
-              <h3 className="text-base font-black tracking-tight text-white mt-2">Admin Portal</h3>
-              <p className="text-steel-lt/60 text-[11px] leading-relaxed">QuantSyllabus Admin Workspace & Analytics</p>
-            </div>
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-0">
+        {/* Left Rail Navigation */}
+        <div className="w-full lg:w-[200px] shrink-0" id="lms-sidebar">
+          <div className="bg-slate text-white flex lg:flex-col gap-0.5 overflow-x-auto lg:overflow-y-auto scrollbar-none px-2.5 py-2 lg:py-3.5 lg:border-r lg:border-white/[0.06] lg:h-full lg:sticky lg:top-6">
+            <p className="hidden lg:block text-[10px] uppercase tracking-[0.09em] text-white/25 px-2 pt-3 pb-[5px] select-none">
+              Manage
+            </p>
+            <button
+              onClick={() => {
+                setActiveTab('courses');
+                setSelectedCourse(null);
+              }}
+              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'courses' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
+            >
+              <BookOpen
+                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'courses' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
+              />
+              <span>Courses</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('analytics');
+                setSelectedCourse(null);
+              }}
+              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'analytics' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
+            >
+              <ChartLine
+                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'analytics' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
+              />
+              <span>Analytics</span>
+            </button>
+            {(userRole === 'admin' || userRole === 'instructor') && (
+              <button
+                onClick={() => {
+                  setActiveTab('cohorts');
+                  setSelectedCourse(null);
+                }}
+                className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'cohorts' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
+              >
+                <Users
+                  className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'cohorts' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
+                />
+                <span>Cohorts</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setActiveTab('users');
+                setSelectedCourse(null);
+              }}
+              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'users' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
+            >
+              <SquareUser
+                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'users' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
+              />
+              <span>Manage users</span>
+            </button>
 
-            <div className="space-y-1 flex flex-row lg:flex-col gap-2 lg:gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-none">
-              <button
-                onClick={() => {
-                  setActiveTab('courses');
-                  setSelectedCourse(null);
-                }}
-                className={`flex-1 lg:flex-initial h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center lg:justify-start gap-3 cursor-pointer shrink-0 ${activeTab === 'courses' ? 'bg-steel text-white shadow-md font-black scale-100' : 'text-steel-lt/60 hover:text-white hover:bg-slate-3/60'}`}
-              >
-                <Layout className="w-4 h-4 text-steel-lt/80" />
-                <span>Course factory</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('analytics');
-                  setSelectedCourse(null);
-                }}
-                className={`flex-1 lg:flex-initial h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center lg:justify-start gap-3 cursor-pointer shrink-0 ${activeTab === 'analytics' ? 'bg-steel text-white shadow-md font-black scale-100' : 'text-steel-lt/60 hover:text-white hover:bg-slate-3/60'}`}
-              >
-                <Activity className="w-4 h-4 text-steel-lt/80" />
-                <span>Analytics</span>
-              </button>
-              {(userRole === 'admin' || userRole === 'instructor') && (
-                <button
-                  onClick={() => {
-                    setActiveTab('cohorts');
-                    setSelectedCourse(null);
-                  }}
-                  className={`flex-1 lg:flex-initial h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center lg:justify-start gap-3 cursor-pointer shrink-0 ${activeTab === 'cohorts' ? 'bg-steel text-white shadow-md font-black scale-100' : 'text-steel-lt/60 hover:text-white hover:bg-slate-3/60'}`}
-                >
-                  <GraduationCap className="w-4 h-4 text-steel-lt/80" />
-                  <span>My Cohorts</span>
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  setActiveTab('users');
-                  setSelectedCourse(null);
-                }}
-                className={`flex-1 lg:flex-initial h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center lg:justify-start gap-3 cursor-pointer shrink-0 ${activeTab === 'users' ? 'bg-steel text-white shadow-md font-black scale-100' : 'text-steel-lt/60 hover:text-white hover:bg-slate-3/60'}`}
-              >
-                <Users className="w-4 h-4 text-steel-lt/80" />
-                <span>Manage Users</span>
-              </button>
-            </div>
-
-            <div className="hidden lg:block bg-slate-3/40 rounded-2xl p-4 border border-slate-3 text-[11px] text-steel-lt/70 leading-relaxed space-y-1.5 font-sans">
-              <p className="font-bold text-steel-lt">Target Student Base:</p>
-              <p>
-                Aimed at students with low digital literacy. Keep syllabus topics, descriptions, and exam questions
-                human-centric, short, and very direct.
-              </p>
-            </div>
+            <p className="hidden lg:block text-[10px] uppercase tracking-[0.09em] text-white/25 px-2 pt-3 pb-[5px] select-none">
+              Create
+            </p>
+            <button
+              onClick={() => {
+                setActiveTab('courses');
+                setSelectedCourse(null);
+              }}
+              className="group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 text-navtext hover:bg-slate-3 hover:text-white"
+            >
+              <Plus className="w-[15px] h-[15px] shrink-0 opacity-60 group-hover:opacity-100" />
+              <span>New course</span>
+            </button>
           </div>
         </div>
 
