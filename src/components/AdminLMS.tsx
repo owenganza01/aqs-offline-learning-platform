@@ -32,10 +32,20 @@ interface AdminLMSProps {
   onRefreshCourses: () => void;
   currentUserId?: number;
   userRole?: string;
+  activeTab: 'courses' | 'analytics' | 'cohorts' | 'users';
+  onActiveTabChange: (tab: 'courses' | 'analytics' | 'cohorts' | 'users') => void;
 }
 
-export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCourses, currentUserId, userRole }) => {
-  const [activeTab, setActiveTab] = useState<'courses' | 'analytics' | 'cohorts' | 'users'>('courses');
+export const AdminLMS: React.FC<AdminLMSProps> = ({
+  token,
+  courses,
+  onRefreshCourses,
+  currentUserId,
+  userRole,
+  activeTab,
+  onActiveTabChange,
+}) => {
+  const setActiveTab = onActiveTabChange;
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [courseSubTab, setCourseSubTab] = useState('lessons');
   const [lessonEditor, setLessonEditor] = useState<{ open: boolean; lesson: Lesson | null }>({
@@ -141,11 +151,11 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
   }, [selectedCourse?.id]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-6" id="admin-lms-container">
-      <div className="flex flex-col lg:flex-row gap-4 lg:gap-0">
+    <div className="w-full min-h-[calc(100vh-57px)] flex flex-col" id="admin-lms-container">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-0 flex-1 lg:items-stretch">
         {/* Left Rail Navigation */}
         <div className="w-full lg:w-[200px] shrink-0" id="lms-sidebar">
-          <div className="bg-slate text-white flex lg:flex-col gap-0.5 overflow-x-auto lg:overflow-y-auto scrollbar-none px-2.5 py-2 lg:py-3.5 lg:border-r lg:border-white/[0.06] lg:h-full lg:sticky lg:top-6">
+          <div className="bg-slate text-white flex lg:flex-col gap-0.5 overflow-x-auto lg:overflow-y-auto scrollbar-none px-2.5 py-2 lg:py-3.5 lg:border-r lg:border-white/[0.06] lg:h-full">
             <p className="hidden lg:block text-[10px] uppercase tracking-[0.09em] text-white/25 px-2 pt-3 pb-[5px] select-none">
               Manage
             </p>
@@ -203,21 +213,11 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({ token, courses, onRefreshCou
             <p className="hidden lg:block text-[10px] uppercase tracking-[0.09em] text-white/25 px-2 pt-3 pb-[5px] select-none">
               Create
             </p>
-            <button
-              onClick={() => {
-                setActiveTab('courses');
-                setSelectedCourse(null);
-              }}
-              className="group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 text-navtext hover:bg-slate-3 hover:text-white"
-            >
-              <Plus className="w-[15px] h-[15px] shrink-0 opacity-60 group-hover:opacity-100" />
-              <span>New course</span>
-            </button>
           </div>
         </div>
 
         {/* Right Content Panels */}
-        <div className="flex-grow min-w-0" id="lms-main-content">
+        <div className="flex-grow min-w-0 bg-canvas p-6 md:p-7" id="lms-main-content">
           <Suspense
             fallback={
               <div className="flex items-center justify-center p-12 text-steel">

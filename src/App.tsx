@@ -63,7 +63,6 @@ function SyncBadge({ syncInProgress, pendingSyncCount }: SyncBadgeProps) {
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
-  { key: 'my-courses', label: 'My courses', icon: CirclePlay },
   { key: 'progress', label: 'Progress', icon: CircleCheck },
   { key: 'discover', label: 'Discover', icon: Search },
 ] as const;
@@ -99,7 +98,10 @@ export default function App() {
 
   // Learner left-nav destination state (dashboard + sub-tab, or Progress view)
   const [learnerNav, setLearnerNav] = useState<'dashboard' | 'progress'>('dashboard');
-  const [dashboardTab, setDashboardTab] = useState<'my-courses' | 'browse' | null>(null);
+  const [dashboardTab, setDashboardTab] = useState<'browse' | null>(null);
+
+  // Lifted AdminLMS tab state
+  const [adminActiveTab, setAdminActiveTab] = useState<'courses' | 'analytics' | 'cohorts' | 'users'>('courses');
 
   // Sync badge state (lifted from BannerOffline + pending queue poll)
   const [syncInProgress, setSyncInProgress] = useState(false);
@@ -119,7 +121,13 @@ export default function App() {
     setCurrentPath(path);
   };
 
-  const isLmsPath = currentPath === '/lms' || currentPath.startsWith('/lms');
+  const isLmsPath =
+    currentPath === '/lms' ||
+    currentPath.startsWith('/lms') ||
+    currentPath === '/cms' ||
+    currentPath.startsWith('/cms') ||
+    currentPath === '/admin' ||
+    currentPath.startsWith('/admin');
 
   // Synchronize database user profile and pull remote statistics
   const syncUserProfile = async (_idToken: string) => {
@@ -334,13 +342,7 @@ export default function App() {
 
   // Left-nav active destination (dashboard sub-tab drives Dashboard/My courses/Discover highlight)
   const activeNavItem: LearnerNavKey =
-    learnerNav === 'progress'
-      ? 'progress'
-      : dashboardTab === 'browse'
-        ? 'discover'
-        : dashboardTab === 'my-courses'
-          ? 'my-courses'
-          : 'dashboard';
+    learnerNav === 'progress' ? 'progress' : dashboardTab === 'browse' ? 'discover' : 'dashboard';
 
   const handleNavClick = (key: LearnerNavKey) => {
     if (key === 'progress') {
@@ -348,12 +350,12 @@ export default function App() {
       return;
     }
     setLearnerNav('dashboard');
-    setDashboardTab(key === 'my-courses' ? 'my-courses' : key === 'discover' ? 'browse' : null);
+    setDashboardTab(key === 'discover' ? 'browse' : null);
   };
 
   return (
     <div
-      className={`min-h-screen ${isLmsPath ? 'theme-lms' : 'theme-learner'} bg-appbg text-ink selection:bg-ochre selection:text-white flex flex-col font-sans`}
+      className={`min-h-screen ${isLmsPath ? 'theme-lms' : 'theme-learner'} ${isLmsPath ? 'bg-lms' : 'bg-appbg'} text-ink selection:bg-ochre selection:text-white flex flex-col font-sans`}
     >
       {/* Dynamic Navigation Top Header */}
       <header
@@ -374,42 +376,90 @@ export default function App() {
             <h1 className="text-[17px] font-display font-semibold tracking-tight leading-none text-white truncate">
               AQS Learning
             </h1>
-            <p
-              className={`text-[10px] font-bold font-mono tracking-wider mt-1 uppercase truncate ${
-                isLmsPath ? 'text-white/60' : 'text-navtext opacity-60'
-              }`}
-            >
-              {isLmsPath ? 'Instructor Portal' : 'Africa Quantitative Sciences'}
-            </p>
+            {isLmsPath && (
+              <p className="text-[10px] font-bold font-mono tracking-wider mt-1 uppercase truncate text-white/60">
+                Instructor Portal
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Auth details & grading switcher tools */}
+        {/* Auth details & navigation header center tools */}
         {firebaseUser && dbUser && (
-          <div className="flex items-center gap-3 sm:gap-4">
-            {/* Decoupled Route Navigation Tabs */}
-            {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (
-              <div className="hidden sm:flex items-center">
+          <div className="flex items-center gap-3 sm:gap-6">
+            {/* Portal switcher for admin/instructor users */}
+            {(dbUser.role === 'admin' || dbUser.role === 'instructor') && (
+              <div
+                className={`hidden lg:flex items-center gap-1 rounded-lg p-0.5 border ${
+                  isLmsPath ? 'border-white/[0.12] bg-lms-3/50' : 'border-white/[0.12] bg-navy-3/50'
+                }`}
+              >
                 <button
-                  onClick={() => {
-                    navigateTo('/study');
-                  }}
-                  className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
-                    !isLmsPath ? 'bg-navy-2 text-navactive' : 'text-white/70 hover:bg-lms-3 hover:text-white'
+                  type="button"
+                  onClick={() => navigateTo('/study')}
+                  className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-colors cursor-pointer ${
+                    !isLmsPath ? 'bg-ochre text-white' : 'text-white/70 hover:text-white'
                   }`}
                 >
-                  STUDENT APP
+                  Student
                 </button>
                 <button
+                  type="button"
                   onClick={() => navigateTo('/lms')}
-                  className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
-                    isLmsPath ? 'bg-lms-2 text-white' : 'text-navtext hover:bg-navy-3 hover:text-navactive'
+                  className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-colors cursor-pointer ${
+                    isLmsPath ? 'bg-steel text-white' : 'text-white/70 hover:text-white'
                   }`}
                 >
-                  ADMIN PORTAL
+                  Admin
                 </button>
               </div>
             )}
+
+            {/* Contextual Navigation Tabs */}
+            <div className="hidden sm:flex items-center gap-1">
+              {isLmsPath ? (
+                <>
+                  <button
+                    onClick={() => setAdminActiveTab('courses')}
+                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
+                      adminActiveTab === 'courses'
+                        ? 'bg-lms-2 text-white font-semibold'
+                        : 'text-white/70 hover:bg-lms-3 hover:text-white'
+                    }`}
+                  >
+                    Courses
+                  </button>
+                  <button
+                    onClick={() => setAdminActiveTab('analytics')}
+                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
+                      adminActiveTab === 'analytics'
+                        ? 'bg-lms-2 text-white font-semibold'
+                        : 'text-white/70 hover:bg-lms-3 hover:text-white'
+                    }`}
+                  >
+                    Analytics
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setActiveCourseId(null)}
+                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
+                      activeCourseId === null
+                        ? 'bg-navy-2 text-navactive font-semibold'
+                        : 'text-navtext hover:bg-navy-3 hover:text-navactive'
+                    }`}
+                  >
+                    Dashboard
+                  </button>
+                  {activeCourseId !== null && (
+                    <span className="px-3.5 py-1.5 text-[13px] font-medium text-white/90 bg-navy-2 rounded-md">
+                      Lesson
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
 
             <div className="flex items-center gap-2.5">
               {/* Sync status badge (learner only) */}
@@ -422,17 +472,8 @@ export default function App() {
                     isLmsPath ? 'text-white/80 hover:text-white' : 'text-navtext hover:text-navactive'
                   }`}
                 >
-                  {dbUser.name || dbUser.email}
+                  {(dbUser.name || dbUser.email).trim().split(/\s+/)[0]}
                 </p>
-                <div className="flex items-center gap-1.5 justify-end mt-1">
-                  <span
-                    className={`text-[9px] font-semibold font-mono uppercase tracking-widest ${
-                      isLmsPath ? 'text-white/50' : 'text-navtext opacity-50'
-                    }`}
-                  >
-                    ROLE: {dbUser.role}
-                  </span>
-                </div>
               </div>
 
               {/* Circular Avatar Badge in Header */}
@@ -455,24 +496,13 @@ export default function App() {
                   </div>
                 )}
               </div>
-
-              <button
-                onClick={handleLogout}
-                title="Sign Out of Account"
-                aria-label="Sign out"
-                className={`h-11 w-11 border border-white/10 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
-                  isLmsPath ? 'bg-lms-2 hover:bg-lms-3 text-white/80' : 'bg-navy-2 hover:bg-navy-3 text-navtext'
-                }`}
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
             </div>
           </div>
         )}
       </header>
 
       {/* Main Content Space */}
-      <main className="flex-grow py-8 flex flex-col justify-center">
+      <main className="flex-grow flex flex-col justify-center">
         {authLoading ? (
           <div className="flex flex-col items-center justify-center p-12 min-h-[60vh] text-ink">
             <RefreshCw className="w-12 h-12 animate-spin text-accent mb-4" />
@@ -481,7 +511,7 @@ export default function App() {
           </div>
         ) : !firebaseUser ? (
           /* Visual Landing and Google Signup Module */
-          <div className="w-full max-w-lg mx-auto px-6" id="welcome-login-screen">
+          <div className="w-full max-w-lg mx-auto px-6 py-8" id="welcome-login-screen">
             <div className="bg-paper-2 border border-rule p-8 rounded-3xl shadow-lg text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-accent"></div>
 
@@ -656,6 +686,8 @@ export default function App() {
                     onRefreshCourses={loadAppData}
                     currentUserId={dbUser?.id}
                     userRole={dbUser?.role}
+                    activeTab={adminActiveTab}
+                    onActiveTabChange={setAdminActiveTab}
                   />
                 </Suspense>
               ) : (
@@ -684,7 +716,7 @@ export default function App() {
                   {activeCourseId === null && (
                     <aside
                       id="leftnav"
-                      className="hidden lg:flex flex-col gap-0.5 w-[220px] shrink-0 bg-navy border-r border-white/[0.07] px-3 py-5 self-start"
+                      className="hidden md:flex flex-col gap-0.5 w-[220px] shrink-0 bg-navy border-r border-white/[0.07] px-3 py-5"
                     >
                       <p className="text-[10px] uppercase tracking-[0.08em] text-white/30 px-2.5 pb-1.5 pt-3.5 select-none">
                         Learning
@@ -822,6 +854,7 @@ export default function App() {
             token={token}
             onClose={() => setShowProfileEdit(false)}
             onProfileUpdated={() => token && syncUserProfile(token)}
+            onLogout={handleLogout}
           />
         )}
       </AnimatePresence>
