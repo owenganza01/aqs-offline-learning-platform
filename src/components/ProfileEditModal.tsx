@@ -4,7 +4,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase.ts';
 import { User } from '../types.ts';
 import { apiFetch } from '../lib/api.ts';
-import { X, UploadCloud, Loader2, Check } from 'lucide-react';
+import { X, UploadCloud, Loader2, Check, LogOut } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ProfileEditModalProps {
@@ -12,9 +12,16 @@ interface ProfileEditModalProps {
   token: string | null;
   onClose: () => void;
   onProfileUpdated: () => void;
+  onLogout?: () => void;
 }
 
-export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token, onClose, onProfileUpdated }) => {
+export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
+  user,
+  token,
+  onClose,
+  onProfileUpdated,
+  onLogout,
+}) => {
   const [nameInput, setNameInput] = useState(user?.name || '');
   const [uploading, setUploading] = useState(false);
   const [savingName, setSavingName] = useState(false);
@@ -272,6 +279,22 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ user, token,
               CLOSE
             </button>
           </div>
+
+          {onLogout && (
+            <div className="border-t border-rule mt-6 pt-4 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onLogout();
+                }}
+                className="inline-flex items-center gap-2 text-xs font-bold text-error hover:underline cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 text-error" />
+                <span>Sign Out of Account</span>
+              </button>
+            </div>
+          )}
         </form>
       </motion.div>
     </div>
