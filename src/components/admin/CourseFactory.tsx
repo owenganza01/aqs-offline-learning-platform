@@ -36,7 +36,47 @@ const courseInitials = (title: string): string =>
     .map((w) => w[0].toUpperCase())
     .join('');
 
-const COL_GRID = '1fr 96px 96px 80px 112px 104px';
+const getCourseCategory = (course: Course): string => {
+  if ((course as any).category) {
+    return (course as any).category;
+  }
+  const text = `${course.title} ${course.description}`.toLowerCase();
+  if (
+    text.includes('quant') ||
+    text.includes('math') ||
+    text.includes('stat') ||
+    text.includes('calculus') ||
+    text.includes('probab') ||
+    text.includes('algebra') ||
+    text.includes('model') ||
+    text.includes('science')
+  ) {
+    return 'Quantitative Sciences';
+  }
+  if (
+    text.includes('agri') ||
+    text.includes('crop') ||
+    text.includes('soil') ||
+    text.includes('farm') ||
+    text.includes('estim') ||
+    text.includes('yield')
+  ) {
+    return 'Agricultural Estimation';
+  }
+  if (
+    text.includes('scale') ||
+    text.includes('system') ||
+    text.includes('dynamic') ||
+    text.includes('tech') ||
+    text.includes('digit') ||
+    text.includes('programm')
+  ) {
+    return 'Systems & Technology';
+  }
+  return 'General Education';
+};
+
+const COL_GRID = '1fr 96px 96px 80px 112px';
 
 export const CourseFactory: React.FC<CourseFactoryProps> = ({
   token,
@@ -247,7 +287,6 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                 <span>Avg. score</span>
                 <span>Lessons</span>
                 <span>Status</span>
-                <span className="text-right">Actions</span>
               </div>
 
               {courses.map((course, idx) => {
@@ -273,7 +312,7 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                       </div>
                       <div className="min-w-0">
                         <div className="text-[13.5px] font-semibold text-text truncate">{course.title}</div>
-                        <div className="text-[11px] text-text-3">ID #{course.id}</div>
+                        <div className="text-[11px] text-text-3">{getCourseCategory(course)}</div>
                       </div>
                     </div>
                     <div className="text-[12px] font-mono text-text-2">{enrolled === null ? '—' : enrolled}</div>
@@ -291,37 +330,6 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                           ○ Draft
                         </span>
                       )}
-                    </div>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingCourse(true);
-                          setCourseForm({
-                            title: course.title,
-                            description: course.description,
-                            thumbnail: course.thumbnail || 'teal',
-                          });
-                          setSelectedCourse(course);
-                          setShowAddCourse(true);
-                        }}
-                        title="Edit details"
-                        aria-label="Edit course details"
-                        className="w-7 h-7 border border-stroke rounded-md flex items-center justify-center text-text-2 hover:bg-canvas active:scale-95 transition-all cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteCourse(course.id);
-                        }}
-                        title="Delete"
-                        aria-label="Delete course"
-                        className="w-7 h-7 border border-stroke rounded-md flex items-center justify-center text-text-2 hover:bg-error-bg hover:text-error active:scale-95 transition-all cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   </div>
                 );
