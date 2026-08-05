@@ -3,18 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { Course } from '../../types.ts';
 import { apiFetch } from '../../lib/api.ts';
 import { RefreshCw, BarChart2, Download, Sparkles, Activity, Users, Layout } from 'lucide-react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  CartesianGrid,
-  AreaChart,
-  Area,
-} from 'recharts';
 import { motion } from 'motion/react';
 
 interface AnalyticsDashboardProps {
@@ -250,83 +238,99 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
         <div className="bg-white border border-stroke p-5 rounded-lg">
           <h4 className="text-sm font-display font-bold text-text mb-1 flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-steel" />
-            <span>Course Engagement Distribution</span>
+            <span>Quiz scores by course</span>
           </h4>
-          <p className="text-xs text-text-3 mb-6 font-medium">
-            Comparison of engaged student users against quiz graduation counts.
-          </p>
-          <div className="h-80 w-full" id="engagement-recharts-container">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={analytics.courseStats} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" />
-                <XAxis dataKey="title" stroke="#8a9aad" fontSize={9} tickLine={false} />
-                <YAxis stroke="#8a9aad" fontSize={9} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: '8px',
-                    border: '1px solid #dde2ea',
-                    boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
-                    fontSize: '11px',
-                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="activeStudents" fill="#3d5a80" name="Active Learners" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="passedQuizzes" fill="#1d6b45" name="Passed Exams" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <p className="text-xs text-text-3 mb-6 font-medium">Top performing courses by average quiz score.</p>
+
+          <div className="space-y-4">
+            {(analytics.courseStats || [])
+              .slice()
+              .sort((a: any, b: any) => (b.averageScore || 0) - (a.averageScore || 0))
+              .slice(0, 6)
+              .map((s: any) => (
+                <div key={s.id} className="space-y-1">
+                  <div className="flex items-center justify-between text-[13px] font-medium text-text">
+                    <span className="truncate pr-2">{s.title}</span>
+                    <span className="text-text-3 font-mono">
+                      {s.averageScore !== null ? `${s.averageScore}%` : '—'}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-[#eef1f6] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-steel rounded-full"
+                      style={{ width: `${Math.max(0, s.averageScore || 0)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
 
-        <div className="bg-white border border-stroke p-5 rounded-lg">
+        <div className="bg-white border border-stroke p-5 rounded-lg flex flex-col items-center justify-center">
           <h4 className="text-sm font-display font-bold text-text mb-1 flex items-center gap-2">
             <Activity className="w-4 h-4 text-steel" />
-            <span>Course Completion Rates (%)</span>
+            <span>Learner status</span>
           </h4>
-          <p className="text-xs text-text-3 mb-6 font-medium">
-            Visualizing curriculum completion percentages across active courses.
-          </p>
-          <div className="h-80 w-full" id="completion-rates-recharts-container">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={analytics.courseStats} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="colorCompletion" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3d5a80" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#3d5a80" stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" />
-                <XAxis dataKey="title" stroke="#8a9aad" fontSize={9} tickLine={false} />
-                <YAxis
-                  stroke="#8a9aad"
-                  fontSize={9}
-                  tickLine={false}
-                  domain={[0, 100]}
-                  tickFormatter={(val) => `${val}%`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: '8px',
-                    border: '1px solid #dde2ea',
-                    boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
-                    fontSize: '11px',
-                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                  }}
-                  formatter={(value) => [`${value}%`, 'Completion Rate']}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Area
-                  type="monotone"
-                  dataKey="completionRate"
-                  stroke="#3d5a80"
-                  fillOpacity={1}
-                  fill="url(#colorCompletion)"
-                  name="Completion Rate"
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <p className="text-xs text-text-3 mb-6 font-medium">Overview of enrolled learners and progress states.</p>
+
+          {/* Simple donut using conic-gradient */}
+          {(() => {
+            const total = analytics.totalLearnersCount || 0;
+            const totalCompletions = (analytics.courseStats || []).reduce(
+              (acc: number, s: any) => acc + (s.completions || 0),
+              0,
+            );
+            const totalActive = (analytics.courseStats || []).reduce(
+              (acc: number, s: any) => acc + (s.activeStudents || 0),
+              0,
+            );
+            const completed = Math.min(total, totalCompletions);
+            const inProgress = Math.max(0, totalActive - completed);
+            const notStarted = Math.max(0, total - totalActive);
+            const completedPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+            const inProgressPct = total > 0 ? Math.round((inProgress / total) * 100) : 0;
+            const notStartedPct = Math.max(0, 100 - completedPct - inProgressPct);
+
+            const gradient = `conic-gradient(#1d6b45 0 ${completedPct}%, #3d5a80 ${completedPct}% ${completedPct + inProgressPct}%, #eef1f6 ${completedPct + inProgressPct}% 100%)`;
+
+            return (
+              <div className="w-full flex items-center gap-6">
+                <div style={{ width: 120 }} className="flex items-center justify-center">
+                  <div
+                    style={{ width: 110, height: 110, borderRadius: '50%', background: gradient }}
+                    className="relative flex items-center justify-center"
+                  >
+                    <div
+                      style={{ width: 66, height: 66, borderRadius: '50%', background: 'white' }}
+                      className="flex items-center justify-center"
+                    >
+                      <div className="text-sm font-semibold">{total}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <ul className="space-y-3 text-sm">
+                    <li className="flex items-center gap-3">
+                      <span className="w-3 h-3 rounded-full" style={{ background: '#1d6b45' }}></span>
+                      <span className="flex-1">{completed} completed</span>
+                      <span className="font-mono text-text-3">{completedPct}%</span>
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="w-3 h-3 rounded-full" style={{ background: '#3d5a80' }}></span>
+                      <span className="flex-1">{inProgress} in progress</span>
+                      <span className="font-mono text-text-3">{inProgressPct}%</span>
+                    </li>
+                    <li className="flex items-center gap-3">
+                      <span className="w-3 h-3 rounded-full" style={{ background: '#eef1f6' }}></span>
+                      <span className="flex-1">{notStarted} not started</span>
+                      <span className="font-mono text-text-3">{notStartedPct}%</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

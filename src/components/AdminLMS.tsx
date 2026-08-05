@@ -209,10 +209,6 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
               />
               <span>Manage users</span>
             </button>
-
-            <p className="hidden lg:block text-[10px] uppercase tracking-[0.09em] text-white/25 px-2 pt-3 pb-[5px] select-none">
-              Create
-            </p>
           </div>
         </div>
 
