@@ -14,6 +14,7 @@ interface LearnerDashboardProps {
   user: User | null;
   token: string | null;
   onProfileUpdated: () => void;
+  initialTab?: 'my-courses' | 'browse';
 }
 
 const CAP_TINTS = ['bg-[#E8F0EE]', 'bg-[#EEE8E0]', 'bg-[#E0E8EE]', 'bg-[#EFE4EC]', 'bg-[#E9EEE0]'];
@@ -46,6 +47,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   onSelectCourse,
   user,
   token,
+  initialTab,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -53,7 +55,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   const [dayStreak, setDayStreak] = useState(0);
 
   // Tab/navigation state for the minimal student app
-  const [activeTab, setActiveTab] = useState<'my-courses' | 'browse'>('my-courses');
+  const [activeTab, setActiveTab] = useState<'my-courses' | 'browse'>(initialTab ?? 'my-courses');
   const hasInitialized = useRef(false);
 
   useEffect(() => {
@@ -185,14 +187,18 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   // Limit My Courses to exactly 5 display entries as requested
   const displayEnrolledCourses = enrolledCourses.slice(0, 5);
 
-  // Auto-switch tabs for new students: if 0 enrolled, default to 'browse', otherwise default to 'my-courses'
+  // Auto-switch tabs for new students: if 0 enrolled, default to 'browse', otherwise default to 'my-courses'.
+  // When an explicit initialTab is provided (left-nav destination), honor it instead of auto-switching.
   useEffect(() => {
     if (courses.length > 0 && !hasInitialized.current) {
       hasInitialized.current = true;
 
+      if (initialTab) return;
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveTab(enrolledCourseIds.length === 0 ? 'browse' : 'my-courses');
     }
-  }, [enrolledCourseIds, courses]);
+  }, [enrolledCourseIds, courses, initialTab]);
 
   // Categories helper
   const dynamicCategories = Array.from(new Set(courses.map(getCourseCategory))) as string[];

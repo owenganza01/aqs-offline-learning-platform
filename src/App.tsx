@@ -6,27 +6,69 @@ import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } fr
 import { Course, QuizAttempt, User } from './types.ts';
 import { PouchDBService } from './lib/pouchdb-service.ts';
 import { LearnerDashboard } from './components/LearnerDashboard.tsx';
+import { LearnerProgress } from './components/LearnerProgress.tsx';
 import { LearnerCoursePlayer } from './components/LearnerCoursePlayer.tsx';
 const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ default: m.AdminLMS })));
 import { BannerOffline } from './components/BannerOffline.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
 import { apiFetch, setApiToken } from './lib/api.ts';
 import { useOnlineStatus } from './hooks/useOnlineStatus.ts';
-import { BookOpen, LogIn, LogOut, RefreshCw, Sparkles, ShieldAlert, CheckCircle } from 'lucide-react';
+import {
+  BookOpen,
+  LogIn,
+  LogOut,
+  RefreshCw,
+  Sparkles,
+  ShieldAlert,
+  CheckCircle,
+  CirclePlay,
+  CircleCheck,
+  LayoutGrid,
+  Search,
+} from 'lucide-react';
 
-function SyncBadge() {
+interface SyncBadgeProps {
+  syncInProgress: boolean;
+  pendingSyncCount: number;
+}
+
+function SyncBadge({ syncInProgress, pendingSyncCount }: SyncBadgeProps) {
   const isOnline = useOnlineStatus();
+
+  const state: 'offline' | 'syncing' | 'synced' = !isOnline
+    ? 'offline'
+    : syncInProgress || pendingSyncCount > 0
+      ? 'syncing'
+      : 'synced';
+
+  const dotColor = state === 'offline' ? 'var(--ochre)' : state === 'syncing' ? '#5B8DD9' : 'var(--success)';
+  const label =
+    state === 'offline'
+      ? 'Offline — saved locally'
+      : state === 'syncing'
+        ? `Syncing ${pendingSyncCount > 0 ? `${pendingSyncCount} ` : ''}items…`
+        : 'Synced just now';
+
   return (
     <button
       type="button"
       title="Sync status"
-      className="hidden md:flex items-center gap-2 border border-white/10 bg-navy-2/60 rounded-md px-3 py-1.5 text-navtext text-[11px] font-mono cursor-default select-none"
+      className="hidden md:flex items-center gap-1.5 border border-white/10 rounded px-2.5 py-1 text-navtext text-[11px] font-mono cursor-default select-none"
     >
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: isOnline ? 'var(--success)' : 'var(--ochre)' }} />
-      <span>{isOnline ? 'Online — progress syncing' : 'Offline — saved locally'}</span>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
+      <span>{label}</span>
     </button>
   );
 }
+
+const NAV_ITEMS = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { key: 'my-courses', label: 'My courses', icon: CirclePlay },
+  { key: 'progress', label: 'Progress', icon: CircleCheck },
+  { key: 'discover', label: 'Discover', icon: Search },
+] as const;
+
+type LearnerNavKey = (typeof NAV_ITEMS)[number]['key'];
 
 export default function App() {
   // Authentication status
@@ -54,6 +96,14 @@ export default function App() {
   // UI state routing
   const [activeCourseId, setActiveCourseId] = useState<number | null>(null);
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
+
+  // Learner left-nav destination state (dashboard + sub-tab, or Progress view)
+  const [learnerNav, setLearnerNav] = useState<'dashboard' | 'progress'>('dashboard');
+  const [dashboardTab, setDashboardTab] = useState<'my-courses' | 'browse' | null>(null);
+
+  // Sync badge state (lifted from BannerOffline + pending queue poll)
+  const [syncInProgress, setSyncInProgress] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
 
   // Simple router popstate listener
   useEffect(() => {
@@ -175,6 +225,59 @@ export default function App() {
 
   // (token-change reload handled by auth listener + child component callbacks)
 
+  // Lightweight pending-sync poll for the topbar badge (learner only).
+  // The interval only runs while the device is online; it is cleared when going
+  // offline or unmounting, and offline resets the count to 0 so offline always
+  // renders as authoritative ("Offline — saved locally") with no stale queue data.
+  useEffect(() => {
+    if (isLmsPath || !firebaseUser) return;
+
+    let cancelled = false;
+    let intervalId: number | undefined;
+
+    const poll = async () => {
+      if (cancelled || !navigator.onLine) return;
+      try {
+        const queue = await PouchDBService.getSyncQueue();
+        if (!cancelled) {
+          setPendingSyncCount(queue.lessonCompletions.length + queue.quizSubmissions.length);
+        }
+      } catch {
+        // Non-critical — badge just keeps its last known value.
+      }
+    };
+
+    const handleOnline = () => {
+      setPendingSyncCount(0);
+      poll();
+      if (intervalId === undefined) {
+        intervalId = window.setInterval(poll, 5000);
+      }
+    };
+    const handleOffline = () => {
+      setPendingSyncCount(0);
+      if (intervalId !== undefined) {
+        clearInterval(intervalId);
+        intervalId = undefined;
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if (navigator.onLine) {
+      poll();
+      intervalId = window.setInterval(poll, 5000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== undefined) clearInterval(intervalId);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [isLmsPath, firebaseUser, syncInProgress]);
+
   // Auth Operations
   const handleLogin = async () => {
     try {
@@ -229,18 +332,37 @@ export default function App() {
     }
   };
 
+  // Left-nav active destination (dashboard sub-tab drives Dashboard/My courses/Discover highlight)
+  const activeNavItem: LearnerNavKey =
+    learnerNav === 'progress'
+      ? 'progress'
+      : dashboardTab === 'browse'
+        ? 'discover'
+        : dashboardTab === 'my-courses'
+          ? 'my-courses'
+          : 'dashboard';
+
+  const handleNavClick = (key: LearnerNavKey) => {
+    if (key === 'progress') {
+      setLearnerNav('progress');
+      return;
+    }
+    setLearnerNav('dashboard');
+    setDashboardTab(key === 'my-courses' ? 'my-courses' : key === 'discover' ? 'browse' : null);
+  };
+
   return (
     <div
       className={`min-h-screen ${isLmsPath ? 'theme-lms' : 'theme-learner'} bg-appbg text-ink selection:bg-ochre selection:text-white flex flex-col font-sans`}
     >
       {/* Dynamic Navigation Top Header */}
       <header
-        className="sticky top-0 z-50 bg-navy text-navtext border-b border-white/10 px-6 py-3.5 flex items-center justify-between shadow-sm select-none"
-        style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
+        className="sticky top-0 z-50 bg-navy text-navtext border-b border-white/[0.08] px-7 py-3 flex items-center justify-between shadow-sm select-none"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="bg-ochre text-white rounded-lg w-9 h-9 flex items-center justify-center shrink-0">
-            <BookOpen className="w-5 h-5" />
+          <div className="bg-ochre text-white rounded w-8 h-8 flex items-center justify-center shrink-0">
+            <BookOpen className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <h1 className="text-[17px] font-display font-semibold tracking-tight leading-none text-navactive truncate">
@@ -262,7 +384,7 @@ export default function App() {
                   onClick={() => {
                     navigateTo('/study');
                   }}
-                  className={`px-3 py-2 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
                     !isLmsPath ? 'bg-navy-2 text-navactive' : 'text-navtext hover:bg-navy-3 hover:text-navactive'
                   }`}
                 >
@@ -270,7 +392,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => navigateTo('/lms')}
-                  className={`px-3 py-2 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
                     isLmsPath ? 'bg-navy-2 text-navactive' : 'text-navtext hover:bg-navy-3 hover:text-navactive'
                   }`}
                 >
@@ -281,7 +403,7 @@ export default function App() {
 
             <div className="flex items-center gap-2.5">
               {/* Sync status badge (learner only) */}
-              {!isLmsPath && <SyncBadge />}
+              {!isLmsPath && <SyncBadge syncInProgress={syncInProgress} pendingSyncCount={pendingSyncCount} />}
 
               <div className="text-right hidden md:block">
                 <p
@@ -300,7 +422,7 @@ export default function App() {
               {/* Circular Avatar Badge in Header */}
               <div
                 onClick={() => setShowProfileEdit(true)}
-                className="w-10 h-10 rounded-full overflow-hidden border border-white/15 bg-navy-3 flex items-center justify-center shrink-0 select-none shadow-sm cursor-pointer hover:ring-2 hover:ring-ochre/40 transition-all"
+                className="w-[30px] h-[30px] rounded-full overflow-hidden border border-white/15 bg-navy-3 flex items-center justify-center shrink-0 select-none shadow-sm cursor-pointer hover:ring-2 hover:ring-ochre/40 transition-all"
               >
                 {dbUser.avatarUrl ? (
                   <img
@@ -310,7 +432,7 @@ export default function App() {
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-full h-full bg-accent text-white font-extrabold text-[13px] flex items-center justify-center">
+                  <div className="w-full h-full bg-accent text-white font-extrabold text-[11px] flex items-center justify-center">
                     {dbUser.name ? dbUser.name.slice(0, 1).toUpperCase() : dbUser.email.slice(0, 1).toUpperCase()}
                   </div>
                 )}
@@ -509,29 +631,81 @@ export default function App() {
             ) : (
               /* WORKSPACE B: STUDENT LEARNER MODULES */
               <div className="w-full">
-                {/* Connection check sync status monitor */}
-                <BannerOffline onSyncComplete={loadAppData} token={token} />
+                <div className="flex gap-6">
+                  {/* Left navigation — visible on dashboard views only (hidden inside course player, hidden on mobile) */}
+                  {activeCourseId === null && (
+                    <aside
+                      id="leftnav"
+                      className="hidden lg:flex flex-col gap-0.5 w-[220px] shrink-0 bg-navy border-r border-white/[0.07] px-3 py-5 self-start"
+                    >
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-white/30 px-2.5 pb-1.5 pt-3.5 select-none">
+                        Learning
+                      </p>
+                      {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+                        const isActive = activeNavItem === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleNavClick(key)}
+                            className={`flex items-center gap-[9px] px-2.5 py-2 rounded-[7px] text-[13px] font-medium transition-colors cursor-pointer select-none ${
+                              isActive ? 'bg-ochre text-white' : 'text-navtext hover:bg-navy-3 hover:text-white'
+                            }`}
+                          >
+                            <Icon className={`w-[15px] h-[15px] shrink-0 ${isActive ? 'opacity-100' : 'opacity-65'}`} />
+                            <span>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </aside>
+                  )}
 
-                {activeCourseId === null ? (
-                  /* Learner discovery home lists available courses bento stats */
-                  <LearnerDashboard
-                    courses={courses}
-                    completedLessonIds={completedLessonIds}
-                    quizAttempts={quizAttempts}
-                    onSelectCourse={setActiveCourseId}
-                    user={dbUser}
-                    token={token}
-                    onProfileUpdated={() => token && syncUserProfile(token)}
-                  />
-                ) : (
-                  /* Focused course drawer / curriculum player */
-                  <LearnerCoursePlayer
-                    courseId={activeCourseId}
-                    token={token}
-                    onBack={() => setActiveCourseId(null)}
-                    onProgressUpdated={loadAppData}
-                  />
-                )}
+                  <div className="flex-1 min-w-0">
+                    {/* Connection check sync status monitor */}
+                    <BannerOffline
+                      onSyncComplete={loadAppData}
+                      onSyncStateChange={(state) => setSyncInProgress(state.syncing)}
+                      token={token}
+                    />
+
+                    {activeCourseId === null ? (
+                      learnerNav === 'progress' ? (
+                        /* Learner Progress view (real existing completion/quiz data via ProgressTree) */
+                        <LearnerProgress
+                          courses={courses}
+                          completedLessonIds={completedLessonIds}
+                          quizAttempts={quizAttempts}
+                          onSelectCourse={setActiveCourseId}
+                          onGoDiscover={() => {
+                            setLearnerNav('dashboard');
+                            setDashboardTab('browse');
+                          }}
+                        />
+                      ) : (
+                        /* Learner discovery home lists available courses bento stats */
+                        <LearnerDashboard
+                          key={dashboardTab ?? 'default'}
+                          initialTab={dashboardTab ?? undefined}
+                          courses={courses}
+                          completedLessonIds={completedLessonIds}
+                          quizAttempts={quizAttempts}
+                          onSelectCourse={setActiveCourseId}
+                          user={dbUser}
+                          token={token}
+                          onProfileUpdated={() => token && syncUserProfile(token)}
+                        />
+                      )
+                    ) : (
+                      /* Focused course drawer / curriculum player */
+                      <LearnerCoursePlayer
+                        courseId={activeCourseId}
+                        token={token}
+                        onBack={() => setActiveCourseId(null)}
+                        onProgressUpdated={loadAppData}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

@@ -8,9 +8,10 @@ import { withBackoff } from '../lib/retry.ts';
 interface BannerOfflineProps {
   onSyncComplete: () => void;
   token: string | null;
+  onSyncStateChange?: (state: { syncing: boolean }) => void;
 }
 
-export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, token }) => {
+export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, token, onSyncStateChange }) => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string>(
@@ -26,6 +27,7 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
     setSyncing(true);
     setSyncStatus('idle');
     setSyncMessage('Synchronizing your offline learning to school servers...');
+    onSyncStateChange?.({ syncing: true });
 
     try {
       // 1. Get queued items from local PouchDB
@@ -87,6 +89,7 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
       setSyncMessage('Failed to sync after multiple attempts. Please check your connection and try again later.');
     } finally {
       setSyncing(false);
+      onSyncStateChange?.({ syncing: false });
     }
   };
 
