@@ -2,9 +2,9 @@
 // Single source of truth for role validation and promotion
 
 import { Response, NextFunction } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import { db } from '../../db/index.ts';
-import { users } from '../../db/schema.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import { db } from '../../db/index.js';
+import { users } from '../../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 
 type Role = 'learner' | 'instructor' | 'admin';

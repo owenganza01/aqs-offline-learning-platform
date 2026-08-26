@@ -3,8 +3,8 @@
 // - Token refresh + 401 handling
 // - Transient error retry via exponential backoff (429, 502, 503, 504, network failures)
 
-import { auth } from './firebase.ts';
-import { withBackoff, MAX_RETRIES } from './retry.ts';
+import { auth } from './firebase.js';
+import { withBackoff, MAX_RETRIES } from './retry.js';
 
 interface ApiResponse<T = any> {
   ok: boolean;

@@ -1,8 +1,8 @@
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq, and, sql, inArray } from 'drizzle-orm';
-import { toYouTubeEmbed } from '../../lib/utils.ts';
-import { documentStorage } from '../providers/document-storage.ts';
+import { toYouTubeEmbed } from '../../lib/utils.js';
+import { documentStorage } from '../providers/document-storage.js';
 
 export async function createLesson(
   courseId: number,

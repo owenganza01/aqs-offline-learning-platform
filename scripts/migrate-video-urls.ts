@@ -2,10 +2,10 @@
 // Standalone migration script: normalize legacy video_url values to embed format.
 // Run manually via: npx tsx scripts/migrate-video-urls.ts
 
-import { db } from '../src/db/index.ts';
-import * as schema from '../src/db/schema.ts';
+import { db } from '../src/db/index.js';
+import * as schema from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
-import { toYouTubeEmbed } from '../src/lib/utils.ts';
+import { toYouTubeEmbed } from '../src/lib/utils.js';
 
 async function run() {
   try {

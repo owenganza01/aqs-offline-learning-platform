@@ -1,10 +1,10 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
+import { AuthRequest } from '../../middleware/auth.js';
 import {
   createCohort as createCohortService,
   listCohorts as listCohortsService,
   regenerateCohortCode as regenerateCohortCodeService,
-} from '../services/cohort-service.ts';
+} from '../services/cohort-service.js';
 
 export async function createCohort(req: AuthRequest, res: Response): Promise<void> {
   try {

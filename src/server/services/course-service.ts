@@ -3,8 +3,8 @@
 //   1. All lessons have completion records for the user
 //   2. A quiz attempt exists with passed = true AND score >= 70
 
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 

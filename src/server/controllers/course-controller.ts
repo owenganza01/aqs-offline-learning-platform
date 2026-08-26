@@ -1,8 +1,8 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import * as courseListService from '../services/course-list-service.ts';
-import * as lessonService from '../services/lesson-service.ts';
-import { completeCourse } from '../services/course-service.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import * as courseListService from '../services/course-list-service.js';
+import * as lessonService from '../services/lesson-service.js';
+import { completeCourse } from '../services/course-service.js';
 
 export async function listCourses(req: AuthRequest, res: Response): Promise<void> {
   try {

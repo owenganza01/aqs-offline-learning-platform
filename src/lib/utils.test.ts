@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toYouTubeEmbed } from './utils.ts';
+import { toYouTubeEmbed } from './utils.js';
 
 describe('toYouTubeEmbed', () => {
   it('returns null for null/undefined/empty', () => {

@@ -1,9 +1,9 @@
 // src/components/ProfileEditModal.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../lib/firebase.ts';
-import { User } from '../types.ts';
-import { apiFetch } from '../lib/api.ts';
+import { storage } from '../lib/firebase.js';
+import { User } from '../types.js';
+import { apiFetch } from '../lib/api.js';
 import { X, UploadCloud, Loader2, Check, LogOut } from 'lucide-react';
 import { motion } from 'motion/react';
 

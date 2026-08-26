@@ -1,6 +1,6 @@
 import { Application, RequestHandler } from 'express';
-import { requireAuth } from '../../middleware/auth.ts';
-import { submitQuiz } from '../controllers/quiz-controller.ts';
+import { requireAuth } from '../../middleware/auth.js';
+import { submitQuiz } from '../controllers/quiz-controller.js';
 
 export interface QuizRouteDeps {
   quizSubmitRateLimit: RequestHandler;

@@ -1,9 +1,9 @@
 // src/components/BannerOffline.tsx
 import React, { useState, useEffect } from 'react';
 import { WifiOff, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
-import { PouchDBService } from '../lib/pouchdb-service.ts';
-import { apiFetch } from '../lib/api.ts';
-import { withBackoff } from '../lib/retry.ts';
+import { PouchDBService } from '../lib/pouchdb-service.js';
+import { apiFetch } from '../lib/api.js';
+import { withBackoff } from '../lib/retry.js';
 
 interface BannerOfflineProps {
   onSyncComplete: () => void;

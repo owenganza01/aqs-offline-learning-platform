@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
+import { AuthRequest } from '../../middleware/auth.js';
 import {
   getMaxLimits,
   processLessonCompletions,
   processQuizSubmissions,
   getUserSyncState,
-} from '../services/sync-service.ts';
+} from '../services/sync-service.js';
 
 export async function syncHandler(req: AuthRequest, res: Response): Promise<void> {
   try {

@@ -1,7 +1,7 @@
 // src/components/admin/AnalyticsDashboard.tsx
 import React, { useState, useEffect } from 'react';
-import { Course } from '../../types.ts';
-import { apiFetch } from '../../lib/api.ts';
+import { Course } from '../../types.js';
+import { apiFetch } from '../../lib/api.js';
 import { RefreshCw, BarChart2, Download, Sparkles, Activity, Users, Layout } from 'lucide-react';
 import { motion } from 'motion/react';
 

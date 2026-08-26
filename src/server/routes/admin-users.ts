@@ -1,7 +1,7 @@
 import { Application, RequestHandler } from 'express';
-import { requireAuth, requireAdmin } from '../../middleware/auth.ts';
-import { validateBody, createInstructorSchema, changeRoleSchema } from '../../middleware/validate.ts';
-import { listUsers, changeUserRole, createInstructor } from '../controllers/admin-user-controller.ts';
+import { requireAuth, requireAdmin } from '../../middleware/auth.js';
+import { validateBody, createInstructorSchema, changeRoleSchema } from '../../middleware/validate.js';
+import { listUsers, changeUserRole, createInstructor } from '../controllers/admin-user-controller.js';
 
 export interface AdminUserRouteDeps {
   authRateLimit: RequestHandler;

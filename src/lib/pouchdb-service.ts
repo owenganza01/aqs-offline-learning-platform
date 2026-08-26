@@ -1,5 +1,5 @@
 // src/lib/pouchdb-service.ts
-import { Course } from '../types.ts';
+import { Course } from '../types.js';
 import { openDB, type IDBPDatabase } from 'idb';
 
 // We implement an ultra-reliable, zero-dependency LocalStorage backend with exactly the same

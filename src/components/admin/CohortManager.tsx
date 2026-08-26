@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch } from '../../lib/api.ts';
+import { apiFetch } from '../../lib/api.js';
 import { Users, Plus, RefreshCw, Copy, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Cohort {

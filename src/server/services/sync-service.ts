@@ -8,7 +8,7 @@ export {
   calculateBackoffMs,
   waitForBackoff,
   withBackoff,
-} from '../../lib/retry.ts';
+} from '../../lib/retry.js';
 
 // Server-side sync item identifier for conflict resolution
 // Uses UUID idempotency keys to deduplicate
@@ -33,10 +33,10 @@ export function resolveSyncConflicts<T extends SyncItem>(items: T[]): T[] {
   return Array.from(seen.values());
 }
 
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { scoreQuiz } from '../../lib/scoring.ts';
+import { scoreQuiz } from '../../lib/scoring.js';
 
 const MAX_SYNC_COMPLETIONS = 500;
 const MAX_SYNC_QUIZZES = 100;

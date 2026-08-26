@@ -1,18 +1,18 @@
 // src/App.tsx
 import { useState, useEffect, useCallback, lazy, Suspense, FormEvent } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { auth, googleAuthProvider } from './lib/firebase.ts';
+import { auth, googleAuthProvider } from './lib/firebase.js';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { Course, QuizAttempt, User } from './types.ts';
-import { PouchDBService } from './lib/pouchdb-service.ts';
+import { Course, QuizAttempt, User } from './types.js';
+import { PouchDBService } from './lib/pouchdb-service.js';
 import { LearnerDashboard } from './components/LearnerDashboard.tsx';
 import { LearnerProgress } from './components/LearnerProgress.tsx';
 import { LearnerCoursePlayer } from './components/LearnerCoursePlayer.tsx';
 const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ default: m.AdminLMS })));
 import { BannerOffline } from './components/BannerOffline.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
-import { apiFetch, setApiToken } from './lib/api.ts';
-import { useOnlineStatus } from './hooks/useOnlineStatus.ts';
+import { apiFetch, setApiToken } from './lib/api.js';
+import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import {
   BookOpen,
   LogIn,

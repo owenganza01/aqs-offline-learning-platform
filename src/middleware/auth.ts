@@ -1,8 +1,8 @@
 // src/middleware/auth.ts
 import { Request, Response, NextFunction } from 'express';
-import { adminAuth } from '../lib/firebase-admin.ts';
-import { db } from '../db/index.ts';
-import { users, lessons, enrollments } from '../db/schema.ts';
+import { adminAuth } from '../lib/firebase-admin.js';
+import { db } from '../db/index.js';
+import { users, lessons, enrollments } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { DecodedIdToken } from 'firebase-admin/auth';
 

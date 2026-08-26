@@ -5,10 +5,10 @@
 // and swap the singleton at the bottom of this file.
 
 import { randomUUID } from 'crypto';
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { R2StorageProvider } from './r2-storage.ts';
+import { R2StorageProvider } from './r2-storage.js';
 
 export interface StoredDocumentMetadata {
   id: string;

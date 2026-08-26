@@ -1,5 +1,5 @@
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 
 export async function saveQuiz(courseId: number, title: string, questions: any[]) {

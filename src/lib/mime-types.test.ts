@@ -5,7 +5,7 @@ import {
   MAX_UPLOAD_SIZE_BYTES,
   ALL_MIME_TYPE_SET,
   VIDEO_MIME_TYPES,
-} from './mime-types.ts';
+} from './mime-types.js';
 
 describe('MIME type constants', () => {
   it('includes core document types', () => {

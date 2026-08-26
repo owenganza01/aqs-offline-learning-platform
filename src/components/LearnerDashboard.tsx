@@ -1,9 +1,9 @@
 // src/components/LearnerDashboard.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Course, QuizAttempt, User } from '../types.ts';
+import { Course, QuizAttempt, User } from '../types.js';
 import { Search, X, Inbox, Plus, BookOpen, Clock, CheckCircle, ArrowRight, Flame } from 'lucide-react';
-import { PouchDBService } from '../lib/pouchdb-service.ts';
-import { apiFetch } from '../lib/api.ts';
+import { PouchDBService } from '../lib/pouchdb-service.js';
+import { apiFetch } from '../lib/api.js';
 
 interface LearnerDashboardProps {
   courses: Course[];

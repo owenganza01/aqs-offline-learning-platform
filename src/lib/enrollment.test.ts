@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { enrollmentSchema } from '../middleware/validate.ts';
+import { enrollmentSchema } from '../middleware/validate.js';
 
 describe('enrollmentSchema validation', () => {
   it('rejects empty body (missing courseId)', () => {

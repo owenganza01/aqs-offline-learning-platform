@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
-import { AuthRequest, checkDocumentAccess } from '../../middleware/auth.ts';
-import { documentStorage } from '../providers/document-storage.ts';
+import { AuthRequest, checkDocumentAccess } from '../../middleware/auth.js';
+import { documentStorage } from '../providers/document-storage.js';
 
 export async function uploadDocument(req: AuthRequest, res: Response): Promise<void> {
   try {

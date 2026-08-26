@@ -6,10 +6,10 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { DocumentStorageProvider, StoredDocumentMetadata } from './document-storage.ts';
+import { DocumentStorageProvider, StoredDocumentMetadata } from './document-storage.js';
 
 const STORAGE_DIR = process.env.FILE_STORAGE_DIR || path.join(process.cwd(), 'uploads');
 

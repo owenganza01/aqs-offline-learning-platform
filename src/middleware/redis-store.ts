@@ -3,7 +3,7 @@
 // Only loaded when REDIS_URL is configured.
 
 import Redis from 'ioredis';
-import { RateLimitStore } from './rate-limit.ts';
+import { RateLimitStore } from './rate-limit.js';
 
 export class RedisStore implements RateLimitStore {
   private client: Redis;

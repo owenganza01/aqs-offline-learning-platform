@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import * as authService from '../services/auth-service.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import * as authService from '../services/auth-service.js';
 
 export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   try {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 
 export async function registerUser(name: string, email: string, inviteCode: string) {

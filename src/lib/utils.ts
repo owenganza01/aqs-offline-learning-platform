@@ -1,5 +1,5 @@
 // src/lib/utils.ts
-import { Course } from '../types.ts';
+import { Course } from '../types.js';
 
 export const getCourseImage = (course: Course): string => {
   const title = (course.title || '').toLowerCase();

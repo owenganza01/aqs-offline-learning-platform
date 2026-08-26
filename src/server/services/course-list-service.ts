@@ -1,5 +1,5 @@
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 
 const DEFAULT_PAGE_SIZE = 50;

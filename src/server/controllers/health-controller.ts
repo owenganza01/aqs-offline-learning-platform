@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db, schema } from '../../db/index.ts';
+import { db, schema } from '../../db/index.js';
 import { sql } from 'drizzle-orm';
 
 export async function getHealth(_req: Request, res: Response): Promise<void> {

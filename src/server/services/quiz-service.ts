@@ -1,7 +1,7 @@
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { scoreQuiz } from '../../lib/scoring.ts';
+import { scoreQuiz } from '../../lib/scoring.js';
 
 export async function submitQuiz(userId: number, quizId: number, answers: any[]) {
   const questionsList = await db

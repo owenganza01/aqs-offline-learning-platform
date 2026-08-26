@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 
 export const DEFAULT_PAGE_SIZE = 50;

@@ -7,10 +7,10 @@ import {
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { DocumentStorageProvider, StoredDocumentMetadata } from './document-storage.ts';
+import { DocumentStorageProvider, StoredDocumentMetadata } from './document-storage.js';
 
 function createR2Client(): S3Client {
   const accountId = process.env.R2_ACCOUNT_ID;

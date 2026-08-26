@@ -1,11 +1,11 @@
 // src/components/LearnerCoursePlayer.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Course, Lesson, Quiz, QuizAttempt } from '../types.ts';
-import { PouchDBService, getDocMimeType } from '../lib/pouchdb-service.ts';
-import { getCourseImage, toYouTubeEmbed } from '../lib/utils.ts';
-import { apiFetch } from '../lib/api.ts';
-import { withBackoff } from '../lib/retry.ts';
-import { useOnlineStatus } from '../hooks/useOnlineStatus.ts';
+import { Course, Lesson, Quiz, QuizAttempt } from '../types.js';
+import { PouchDBService, getDocMimeType } from '../lib/pouchdb-service.js';
+import { getCourseImage, toYouTubeEmbed } from '../lib/utils.js';
+import { apiFetch } from '../lib/api.js';
+import { withBackoff } from '../lib/retry.js';
+import { useOnlineStatus } from '../hooks/useOnlineStatus.js';
 import { ProgressTree } from './ProgressTree.tsx';
 import {
   ArrowLeft,

@@ -1,6 +1,6 @@
 // src/components/ProgressTree.tsx
 import React from 'react';
-import { Lesson } from '../types.ts';
+import { Lesson } from '../types.js';
 import { Compass, Info } from 'lucide-react';
 
 interface ProgressTreeProps {

@@ -1,7 +1,7 @@
 import { Application, RequestHandler } from 'express';
-import { requireAuth } from '../../middleware/auth.ts';
-import { validateBody, syncSchema } from '../../middleware/validate.ts';
-import { syncHandler } from '../controllers/sync-controller.ts';
+import { requireAuth } from '../../middleware/auth.js';
+import { validateBody, syncSchema } from '../../middleware/validate.js';
+import { syncHandler } from '../controllers/sync-controller.js';
 
 export interface SyncRouteDeps {
   syncRateLimit: RequestHandler;

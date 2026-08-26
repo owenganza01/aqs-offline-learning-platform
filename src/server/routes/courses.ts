@@ -1,6 +1,6 @@
 import { Application, RequestHandler } from 'express';
-import { requireAuth } from '../../middleware/auth.ts';
-import { listCourses, getCourseById, completeCourseHandler, completeLesson } from '../controllers/course-controller.ts';
+import { requireAuth } from '../../middleware/auth.js';
+import { listCourses, getCourseById, completeCourseHandler, completeLesson } from '../controllers/course-controller.js';
 
 export interface CourseRouteDeps {
   browseLimiter: RequestHandler;

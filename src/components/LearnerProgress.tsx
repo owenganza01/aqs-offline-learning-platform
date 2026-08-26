@@ -1,7 +1,7 @@
 // src/components/LearnerProgress.tsx
 import React, { useState, useEffect } from 'react';
-import { Course, QuizAttempt } from '../types.ts';
-import { PouchDBService } from '../lib/pouchdb-service.ts';
+import { Course, QuizAttempt } from '../types.js';
+import { PouchDBService } from '../lib/pouchdb-service.js';
 import { ProgressTree } from './ProgressTree.tsx';
 import { ArrowRight, Inbox, TrendingUp } from 'lucide-react';
 

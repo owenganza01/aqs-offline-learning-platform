@@ -1,6 +1,6 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import * as quizAdminService from '../services/quiz-admin-service.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import * as quizAdminService from '../services/quiz-admin-service.js';
 
 export async function saveQuiz(req: AuthRequest, res: Response): Promise<void> {
   try {

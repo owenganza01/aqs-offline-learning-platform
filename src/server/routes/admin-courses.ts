@@ -1,5 +1,5 @@
 import { Application } from 'express';
-import { requireAuth, requireInstructorOrAdmin, requireAdmin } from '../../middleware/auth.ts';
+import { requireAuth, requireInstructorOrAdmin, requireAdmin } from '../../middleware/auth.js';
 import {
   validateBody,
   courseSchema,
@@ -7,7 +7,7 @@ import {
   reorderSchema,
   quizSchema,
   quizQuestionSchema,
-} from '../../middleware/validate.ts';
+} from '../../middleware/validate.js';
 import {
   createCourse,
   updateCourse,
@@ -16,9 +16,9 @@ import {
   updateLesson,
   reorderLessons,
   deleteLesson,
-} from '../controllers/admin-course-controller.ts';
-import { saveQuiz, addQuizQuestion } from '../controllers/admin-quiz-controller.ts';
-import { getAnalytics } from '../controllers/admin-analytics-controller.ts';
+} from '../controllers/admin-course-controller.js';
+import { saveQuiz, addQuizQuestion } from '../controllers/admin-quiz-controller.js';
+import { getAnalytics } from '../controllers/admin-analytics-controller.js';
 
 export function registerAdminCourseRoutes(app: Application): void {
   app.post('/api/admin/courses', requireAuth, requireInstructorOrAdmin, validateBody(courseSchema), createCourse);

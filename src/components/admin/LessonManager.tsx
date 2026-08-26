@@ -1,8 +1,8 @@
 // src/components/admin/LessonManager.tsx
 import React, { useState } from 'react';
-import { Course, Lesson } from '../../types.ts';
-import { apiFetch } from '../../lib/api.ts';
-import { toYouTubeEmbed } from '../../lib/utils.ts';
+import { Course, Lesson } from '../../types.js';
+import { apiFetch } from '../../lib/api.js';
+import { toYouTubeEmbed } from '../../lib/utils.js';
 import { RefreshCw, Download, Upload } from 'lucide-react';
 
 interface LessonManagerProps {

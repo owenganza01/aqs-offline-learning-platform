@@ -1,7 +1,7 @@
 // src/components/admin/UserManagement.tsx
 import React, { useState, useEffect } from 'react';
-import { User } from '../../types.ts';
-import { apiFetch } from '../../lib/api.ts';
+import { User } from '../../types.js';
+import { apiFetch } from '../../lib/api.js';
 import { Users, UserPlus, Shield, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 
 interface UserManagementProps {

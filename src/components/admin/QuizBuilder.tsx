@@ -1,7 +1,7 @@
 // src/components/admin/QuizBuilder.tsx
 import React, { useState } from 'react';
-import { Course } from '../../types.ts';
-import { apiFetch } from '../../lib/api.ts';
+import { Course } from '../../types.js';
+import { apiFetch } from '../../lib/api.js';
 import { CheckSquare, Award, Plus, Trash2, Check } from 'lucide-react';
 
 interface QuizBuilderProps {

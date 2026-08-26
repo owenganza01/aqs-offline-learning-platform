@@ -1,13 +1,13 @@
 import { Application, RequestHandler } from 'express';
 import multer from 'multer';
-import { requireAuth, requireInstructorOrAdmin, requireAuthOrQueryToken } from '../../middleware/auth.ts';
-import { ALL_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../../lib/mime-types.ts';
+import { requireAuth, requireInstructorOrAdmin, requireAuthOrQueryToken } from '../../middleware/auth.js';
+import { ALL_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../../lib/mime-types.js';
 import {
   uploadDocument,
   getDocumentMetadata,
   downloadDocument,
   deleteDocument,
-} from '../controllers/document-controller.ts';
+} from '../controllers/document-controller.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),

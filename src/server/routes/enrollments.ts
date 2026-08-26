@@ -1,7 +1,7 @@
 import { Application, RequestHandler } from 'express';
-import { requireAuth } from '../../middleware/auth.ts';
-import { validateBody, enrollmentSchema } from '../../middleware/validate.ts';
-import { listEnrollments, enrollCourse } from '../controllers/enrollment-controller.ts';
+import { requireAuth } from '../../middleware/auth.js';
+import { validateBody, enrollmentSchema } from '../../middleware/validate.js';
+import { listEnrollments, enrollCourse } from '../controllers/enrollment-controller.js';
 
 export interface EnrollmentRouteDeps {
   enrollmentRateLimit: RequestHandler;

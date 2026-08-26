@@ -1,7 +1,7 @@
 import { Application, RequestHandler } from 'express';
-import { requireAuth } from '../../middleware/auth.ts';
-import { validateBody, registerSchema, updateProfileSchema } from '../../middleware/validate.ts';
-import { getMe, register, updateProfile } from '../controllers/auth-controller.ts';
+import { requireAuth } from '../../middleware/auth.js';
+import { validateBody, registerSchema, updateProfileSchema } from '../../middleware/validate.js';
+import { getMe, register, updateProfile } from '../controllers/auth-controller.js';
 
 export interface AuthRouteDeps {
   registerRateLimit: RequestHandler;

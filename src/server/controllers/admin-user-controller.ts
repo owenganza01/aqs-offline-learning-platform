@@ -1,12 +1,12 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import { canPromoteToRole } from '../services/authorization-service.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import { canPromoteToRole } from '../services/authorization-service.js';
 import {
   listUsers as listUsersService,
   changeUserRole as changeUserRoleService,
   createInstructorAccount,
   parsePagination,
-} from '../services/user-service.ts';
+} from '../services/user-service.js';
 
 export async function listUsers(req: AuthRequest, res: Response): Promise<void> {
   try {

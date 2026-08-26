@@ -6,8 +6,8 @@ import cors from 'cors';
 import path from 'path';
 import timeout from 'connect-timeout';
 import { createServer as createViteServer } from 'vite';
-import { MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.ts';
-import { rateLimit } from '../middleware/rate-limit.ts';
+import { MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.js';
+import { rateLimit } from '../middleware/rate-limit.js';
 import {
   registerHealthRoutes,
   registerAuthRoutes,
@@ -19,7 +19,7 @@ import {
   registerEnrollmentRoutes,
   registerCohortRoutes,
   registerDocumentRoutes,
-} from './routes/index.ts';
+} from './routes/index.js';
 
 const allowedOrigins = [
   'http://localhost:3000',

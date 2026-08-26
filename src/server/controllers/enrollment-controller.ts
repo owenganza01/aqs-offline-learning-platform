@@ -1,6 +1,6 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import { getUserEnrollments, enrollUserInCourse } from '../services/enrollment-service.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import { getUserEnrollments, enrollUserInCourse } from '../services/enrollment-service.js';
 
 export async function listEnrollments(req: AuthRequest, res: Response): Promise<void> {
   try {

@@ -1,7 +1,7 @@
 // src/components/AdminLMS.tsx
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { Course, Lesson } from '../types.ts';
-import { apiFetch } from '../lib/api.ts';
+import { Course, Lesson } from '../types.js';
+import { apiFetch } from '../lib/api.js';
 import {
   Plus,
   ChartLine,

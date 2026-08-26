@@ -1,6 +1,6 @@
 // src/server/server.ts
-import { createApp } from './app.ts';
-import { shutdownDb } from '../db/index.ts';
+import { createApp } from './app.js';
+import { shutdownDb } from '../db/index.js';
 
 export async function startServer() {
   const app = await createApp();

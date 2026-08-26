@@ -1,7 +1,7 @@
 // src/components/admin/CourseFactory.tsx
 import React, { useState, useEffect } from 'react';
-import { Course } from '../../types.ts';
-import { apiFetch } from '../../lib/api.ts';
+import { Course } from '../../types.js';
+import { apiFetch } from '../../lib/api.js';
 import { BookOpen, Plus, Trash2, Edit3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 

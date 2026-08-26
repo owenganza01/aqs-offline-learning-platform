@@ -1,6 +1,6 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import * as analyticsService from '../services/analytics-service.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import * as analyticsService from '../services/analytics-service.js';
 
 export async function getAnalytics(req: AuthRequest, res: Response): Promise<void> {
   try {

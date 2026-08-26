@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { AuthRequest } from '../../middleware/auth.ts';
-import * as courseAdminService from '../services/course-admin-service.ts';
-import * as lessonAdminService from '../services/lesson-admin-service.ts';
+import { AuthRequest } from '../../middleware/auth.js';
+import * as courseAdminService from '../services/course-admin-service.js';
+import * as lessonAdminService from '../services/lesson-admin-service.js';
 
 export async function createCourse(req: AuthRequest, res: Response): Promise<void> {
   try {

@@ -1,5 +1,5 @@
-import { db } from '../../db/index.ts';
-import * as schema from '../../db/schema.ts';
+import { db } from '../../db/index.js';
+import * as schema from '../../db/schema.js';
 
 export async function getAnalytics() {
   const allUsers = await db.select().from(schema.users);

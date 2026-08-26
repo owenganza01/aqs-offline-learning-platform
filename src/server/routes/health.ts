@@ -1,5 +1,5 @@
 import { Application } from 'express';
-import { getHealth, getDbTest } from '../controllers/health-controller.ts';
+import { getHealth, getDbTest } from '../controllers/health-controller.js';
 
 export function registerHealthRoutes(app: Application): void {
   app.get('/api/health', getHealth);

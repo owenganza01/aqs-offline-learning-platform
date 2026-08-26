@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { migrateStore, getDocMimeType, resetForTesting } from './pouchdb-service.ts';
+import { migrateStore, getDocMimeType, resetForTesting } from './pouchdb-service.js';
 import { openDB } from 'idb';
 
 // ─── Minimal localStorage polyfill for vitest node environment ───────
