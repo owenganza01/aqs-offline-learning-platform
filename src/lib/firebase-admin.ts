@@ -1,5 +1,5 @@
 // src/lib/firebase-admin.ts
-import { initializeApp, getApps } from 'firebase-admin/app';
+import { initializeApp, getApps, cert, type AppOptions } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { createConnection } from 'net';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -29,9 +29,24 @@ if (process.env.NODE_ENV !== 'production' && !process.env.FIREBASE_AUTH_EMULATOR
 }
 
 if (!getApps().length) {
-  initializeApp({
+  const options: AppOptions = {
     projectId: firebaseConfig.projectId,
-  });
+  };
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    try {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      options.credential = cert(serviceAccount);
+      if (serviceAccount.project_id) {
+        options.projectId = serviceAccount.project_id;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`[firebase] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${message}`, { cause: err });
+    }
+  }
+
+  initializeApp(options);
 }
 
 export const adminAuth = getAuth();

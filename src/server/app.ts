@@ -6,10 +6,6 @@ import cors from 'cors';
 import path from 'path';
 import timeout from 'connect-timeout';
 import { createServer as createViteServer } from 'vite';
-import { db } from '../db/index.ts';
-import * as schema from '../db/schema.ts';
-import { eq } from 'drizzle-orm';
-import { toYouTubeEmbed } from '../lib/utils.ts';
 import { MAX_UPLOAD_SIZE_BYTES } from '../lib/mime-types.ts';
 import { rateLimit } from '../middleware/rate-limit.ts';
 import {
@@ -25,6 +21,14 @@ import {
   registerDocumentRoutes,
 } from './routes/index.ts';
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'https://aqs-learning-platform.vercel.app',
+  'https://aqs-offline-learning-platform.vercel.app',
+];
+
 export async function createApp() {
   const app = express();
 
@@ -34,10 +38,24 @@ export async function createApp() {
 
   app.use(
     cors({
-      origin:
-        process.env.NODE_ENV === 'production'
-          ? ['https://aqs-learning-platform.vercel.app']
-          : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, curl, same-origin)
+        if (!origin) {
+          return callback(null, true);
+        }
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        // Match Vercel preview and production subdomains (*.vercel.app)
+        const vercelPattern = /^https:\/\/[a-zA-Z0-9-_]+\.vercel\.app$/;
+        if (vercelPattern.test(origin)) {
+          return callback(null, true);
+        }
+        if (process.env.APP_URL && origin === process.env.APP_URL) {
+          return callback(null, true);
+        }
+        return callback(null, false);
+      },
       credentials: true,
     }),
   );
@@ -91,25 +109,6 @@ export async function createApp() {
   });
 
   app.use(express.static(path.join(process.cwd(), 'public')));
-
-  // One-time startup migration: normalize legacy video_url values to embed format
-  (async () => {
-    try {
-      const allLessons = await db.select().from(schema.lessons);
-      let normalized = 0;
-      for (const lesson of allLessons) {
-        if (!lesson.videoUrl) continue;
-        const fixed = toYouTubeEmbed(lesson.videoUrl);
-        if (fixed && fixed !== lesson.videoUrl) {
-          await db.update(schema.lessons).set({ videoUrl: fixed }).where(eq(schema.lessons.id, lesson.id));
-          normalized++;
-        }
-      }
-      if (normalized > 0) console.log(`[migration] Normalized ${normalized} legacy video URL(s) to embed format.`);
-    } catch {
-      // Non-fatal: table may not exist yet
-    }
-  })();
 
   // Rate limiters
   const authRateLimit = rateLimit({
