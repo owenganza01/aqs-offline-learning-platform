@@ -1,5 +1,5 @@
 import type { Express } from 'express';
-import { createApp } from '../src/server/app.ts';
+import { createApp } from '../src/server/app.js';
 
 let appPromise: Promise<Express> | null = null;
 
