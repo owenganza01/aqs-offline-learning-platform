@@ -7,7 +7,8 @@ export async function startServer() {
   const PORT = 3000;
 
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`\n  ➜  Local:   http://localhost:${PORT}/`);
+    console.log(`  ➜  Network: http://127.0.0.1:${PORT}/\n`);
   });
 
   const shutdown = async (signal: string) => {
