@@ -11,6 +11,7 @@ import { LearnerCoursePlayer } from './components/LearnerCoursePlayer.tsx';
 const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ default: m.AdminLMS })));
 import { BannerOffline } from './components/BannerOffline.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
+import { LandingPage } from './components/LandingPage.tsx';
 import { apiFetch, setApiToken } from './lib/api.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import {
@@ -353,6 +354,46 @@ export default function App() {
     setDashboardTab(key === 'discover' ? 'browse' : null);
   };
 
+  // Auth loading verification screen
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-appbg theme-learner text-ink flex flex-col items-center justify-center p-12 selection:bg-ochre selection:text-white">
+        <RefreshCw className="w-12 h-12 animate-spin text-accent mb-4" />
+        <h2 className="text-xl font-display font-bold tracking-tight text-ink">Verifying account...</h2>
+        <p className="text-ink-3 font-mono text-xs mt-1">Connecting to authentication keys</p>
+      </div>
+    );
+  }
+
+  // Public Landing Page (Unauthenticated root experience)
+  if (!firebaseUser) {
+    return (
+      <div className="theme-learner min-h-screen">
+        <LandingPage
+          onLogin={handleLogin}
+          authLoading={authLoading}
+          onRegister={handleRegister}
+          regName={regName}
+          setRegName={setRegName}
+          regEmail={regEmail}
+          setRegEmail={setRegEmail}
+          regCode={regCode}
+          setRegCode={setRegCode}
+          regError={regError}
+          regSuccess={regSuccess}
+          regLoading={regLoading}
+          onClearRegForm={() => {
+            setRegName('');
+            setRegEmail('');
+            setRegCode('');
+            setRegError('');
+            setRegSuccess('');
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`min-h-screen ${isLmsPath ? 'theme-lms' : 'theme-learner'} ${isLmsPath ? 'bg-lms' : 'bg-appbg'} text-ink selection:bg-ochre selection:text-white flex flex-col font-sans`}
@@ -503,164 +544,7 @@ export default function App() {
 
       {/* Main Content Space */}
       <main className="flex-grow flex flex-col justify-center">
-        {authLoading ? (
-          <div className="flex flex-col items-center justify-center p-12 min-h-[60vh] text-ink">
-            <RefreshCw className="w-12 h-12 animate-spin text-accent mb-4" />
-            <h2 className="text-xl font-display font-bold tracking-tight text-ink">Verifying account...</h2>
-            <p className="text-ink-3 font-mono text-xs mt-1">Connecting to authentication keys</p>
-          </div>
-        ) : !firebaseUser ? (
-          /* Visual Landing and Google Signup Module */
-          <div className="w-full max-w-lg mx-auto px-6 py-8" id="welcome-login-screen">
-            <div className="bg-paper-2 border border-rule p-8 rounded-3xl shadow-lg text-center relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-accent"></div>
-
-              <div className="bg-paper border border-rule aspect-square w-20 h-20 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-sm">
-                <BookOpen className="w-10 h-10 text-accent" />
-              </div>
-
-              <h2 className="text-3xl font-display font-bold text-ink tracking-tight">AQS Digital Classroom</h2>
-              <p className="text-ink-2 font-medium text-sm leading-relaxed mt-3 px-2">
-                Welcome to Africa Quantitative Sciences. Our digital classroom lets rural students study complete
-                analytics courseware offline, track progress under poor network, and verify quiz evaluations seamlessly.
-              </p>
-
-              <div className="my-6 border-b border-rule"></div>
-
-              {!showRegisterForm ? (
-                <>
-                  {/* Explicit 56px Google login button */}
-                  <button
-                    onClick={handleLogin}
-                    className="w-full h-14 bg-accent hover:opacity-90 text-white font-bold text-lg px-6 rounded-xl shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-                    style={{ minHeight: '56px' }}
-                  >
-                    <LogIn className="w-6 h-6 shrink-0" />
-                    <span>SIGN IN WITH GOOGLE</span>
-                  </button>
-
-                  <div className="mt-4 border-t border-rule pt-4">
-                    <button
-                      onClick={() => {
-                        setShowRegisterForm(true);
-                        setRegError('');
-                        setRegSuccess('');
-                      }}
-                      className="w-full h-12 bg-paper border-2 border-accent text-accent font-bold text-sm px-6 rounded-xl hover:bg-ochre-dim/40 transition-all cursor-pointer"
-                    >
-                      JOIN WITH A CLASS CODE
-                    </button>
-                  </div>
-                </>
-              ) : regSuccess ? (
-                <div className="space-y-4">
-                  <div className="bg-success/10 border border-success/30 rounded-xl p-5 text-sm text-ink text-left">
-                    <p className="font-bold mb-1">Account created!</p>
-                    <p>Now sign in with Google using this same email to activate your account.</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowRegisterForm(false);
-                      setRegSuccess('');
-                    }}
-                    className="w-full h-14 bg-accent hover:opacity-90 text-white font-bold text-lg px-6 rounded-xl shadow-md active:scale-[0.98] transition-all cursor-pointer"
-                  >
-                    SIGN IN WITH GOOGLE
-                  </button>
-                </div>
-              ) : (
-                <div className="text-left space-y-4">
-                  {regError && (
-                    <div className="bg-error-bg border border-error/20 rounded-xl p-4 text-sm text-error">
-                      {regError}
-                    </div>
-                  )}
-                  <form onSubmit={handleRegister} className="space-y-4">
-                    <div>
-                      <label
-                        htmlFor="reg-name"
-                        className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono"
-                      >
-                        Full Name
-                      </label>
-                      <input
-                        id="reg-name"
-                        type="text"
-                        value={regName}
-                        onChange={(e) => setRegName(e.target.value)}
-                        placeholder="Full name"
-                        className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
-                        required
-                        autoFocus
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="reg-email"
-                        className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono"
-                      >
-                        Email Address
-                      </label>
-                      <input
-                        id="reg-email"
-                        type="email"
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="Email address"
-                        className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="reg-code"
-                        className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono"
-                      >
-                        Class Code
-                      </label>
-                      <input
-                        id="reg-code"
-                        type="text"
-                        value={regCode}
-                        onChange={(e) => setRegCode(e.target.value)}
-                        placeholder="Class code (e.g. A1B2C3D4)"
-                        className="w-full h-12 px-4 rounded-xl border border-rule bg-paper text-base text-ink placeholder:text-ink-3 font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
-                        required
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={regLoading || !regName.trim() || !regEmail.trim() || !regCode.trim()}
-                      className="w-full h-12 bg-accent hover:opacity-90 disabled:bg-ink-3/40 disabled:text-white/60 text-white font-bold text-sm px-6 rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed"
-                    >
-                      {regLoading ? 'Joining...' : 'JOIN CLASS'}
-                    </button>
-                  </form>
-                  <button
-                    onClick={() => {
-                      setShowRegisterForm(false);
-                      setRegError('');
-                      setRegSuccess('');
-                    }}
-                    className="w-full text-sm text-ink-3 underline cursor-pointer"
-                  >
-                    Back to sign in
-                  </button>
-                </div>
-              )}
-
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-ink-2 font-mono uppercase bg-paper border border-rule p-3 rounded-xl">
-                <span className="flex items-center gap-1.5 text-success">
-                  <CheckCircle className="w-4 h-4" /> Offline Compatible
-                </span>
-                <span className="text-ink-3/50">|</span>
-                <span className="flex items-center gap-1.5 text-accent">
-                  <Sparkles className="w-4 h-4" /> Sync Progress
-                </span>
-              </div>
-            </div>
-          </div>
-        ) : appLoading ? (
+        {appLoading && courses.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 min-h-[60vh] text-ink">
             <RefreshCw className="w-12 h-12 animate-spin text-accent mb-4" />
             <h2 className="text-xl font-display font-bold tracking-tight text-ink">Compiling Study Schedule...</h2>

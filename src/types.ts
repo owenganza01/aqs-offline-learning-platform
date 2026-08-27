@@ -20,6 +20,15 @@ export interface Course {
   quiz?: Quiz | null;
 }
 
+export interface PublicCourse {
+  id: number;
+  title: string;
+  description: string;
+  thumbnail: string | null;
+  lessonCount: number;
+  hasQuiz: boolean;
+}
+
 export interface Lesson {
   id: number;
   courseId: number;

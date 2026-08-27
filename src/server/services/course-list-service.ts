@@ -124,3 +124,53 @@ export async function getCourseDetail(courseId: number, userId: number) {
 
   return { course, lessons: courseLessons, quiz, completedLessonIds: completionsIds, quizAttempts: quizAttemptsList };
 }
+
+export async function listPublicCourses() {
+  const allCourses = await db
+    .select({
+      id: schema.courses.id,
+      title: schema.courses.title,
+      description: schema.courses.description,
+      thumbnail: schema.courses.thumbnail,
+    })
+    .from(schema.courses)
+    .orderBy(schema.courses.id);
+
+  if (allCourses.length === 0) {
+    return [];
+  }
+
+  const courseIds = allCourses.map((c) => c.id);
+
+  const lessonCounts = await db
+    .select({
+      courseId: schema.lessons.courseId,
+      count: sql<number>`count(*)`,
+    })
+    .from(schema.lessons)
+    .where(inArray(schema.lessons.courseId, courseIds))
+    .groupBy(schema.lessons.courseId);
+
+  const lessonCountMap = new Map<number, number>();
+  for (const row of lessonCounts) {
+    lessonCountMap.set(row.courseId, Number(row.count));
+  }
+
+  const quizzes = await db
+    .select({
+      courseId: schema.quizzes.courseId,
+    })
+    .from(schema.quizzes)
+    .where(inArray(schema.quizzes.courseId, courseIds));
+
+  const quizSet = new Set(quizzes.map((q) => q.courseId));
+
+  return allCourses.map((c) => ({
+    id: c.id,
+    title: c.title,
+    description: c.description,
+    thumbnail: c.thumbnail,
+    lessonCount: lessonCountMap.get(c.id) || 0,
+    hasQuiz: quizSet.has(c.id),
+  }));
+}

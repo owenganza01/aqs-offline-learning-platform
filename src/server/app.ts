@@ -151,6 +151,11 @@ export async function createApp() {
     max: 60,
     message: 'Too many requests, please try again later',
   });
+  const publicCoursesLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    message: 'Too many requests, please try again later',
+  });
   const completionLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 20,
@@ -166,7 +171,7 @@ export async function createApp() {
   registerHealthRoutes(app);
   registerAuthRoutes(app, { registerRateLimit, profileRateLimit });
   registerAdminUserRoutes(app, { authRateLimit, adminLimiter });
-  registerCourseRoutes(app, { browseLimiter, completionLimiter });
+  registerCourseRoutes(app, { browseLimiter, completionLimiter, publicCoursesLimiter });
   registerQuizRoutes(app, { quizSubmitRateLimit });
   registerSyncRoutes(app, { syncRateLimit });
   registerAdminCourseRoutes(app);

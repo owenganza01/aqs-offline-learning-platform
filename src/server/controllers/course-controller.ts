@@ -1,8 +1,18 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.js';
 import * as courseListService from '../services/course-list-service.js';
 import * as lessonService from '../services/lesson-service.js';
 import { completeCourse } from '../services/course-service.js';
+
+export async function listPublicCourses(_req: Request, res: Response): Promise<void> {
+  try {
+    const courses = await courseListService.listPublicCourses();
+    res.json(courses);
+  } catch (error: any) {
+    console.error('Error fetching public courses:', error);
+    res.status(500).json({ error: 'Failed to retrieve course catalogue.' });
+  }
+}
 
 export async function listCourses(req: AuthRequest, res: Response): Promise<void> {
   try {
