@@ -9,18 +9,6 @@ export const users = pgTable('users', {
   name: text('name'),
   role: text('role').default('learner').notNull(), // 'learner' | 'instructor' | 'admin'
   avatarUrl: text('avatar_url'),
-  cohortId: integer('cohort_id').references(() => cohorts.id),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-
-// 2. Cohorts table (instructor-owned class groups with invite codes)
-export const cohorts = pgTable('cohorts', {
-  id: serial('id').primaryKey(),
-  instructorId: integer('instructor_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  name: text('name').notNull(),
-  inviteCode: text('invite_code').notNull().unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -158,24 +146,58 @@ export const enrollments = pgTable(
   (table) => [unique('enrollments_user_course_key').on(table.userId, table.courseId)],
 );
 
+// 11. Certificate configurations (per-course certificate settings)
+export const certificateConfigs = pgTable('certificate_configs', {
+  id: serial('id').primaryKey(),
+  courseId: integer('course_id')
+    .references(() => courses.id, { onDelete: 'cascade' })
+    .notNull()
+    .unique(),
+  enabled: boolean('enabled').notNull().default(false),
+  title: text('title').notNull().default('Certificate of Completion'),
+  issuer: text('issuer').notNull().default('AQS Learning Platform'),
+  requireCourseCompletion: boolean('require_course_completion').notNull().default(true),
+  requireAssessment: boolean('require_assessment').notNull().default(true),
+  minAssessmentScore: integer('min_assessment_score'),
+  templateDocumentId: text('template_document_id'),
+  templateFileName: text('template_file_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// 12. Issued certificates (historical records — survive config/course deletion)
+export const issuedCertificates = pgTable(
+  'issued_certificates',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    certificateConfigId: integer('certificate_config_id').references(() => certificateConfigs.id, {
+      onDelete: 'set null',
+    }),
+    courseId: integer('course_id').references(() => courses.id, { onDelete: 'set null' }),
+    verificationCode: text('verification_code').notNull().unique(),
+    learnerNameSnapshot: text('learner_name_snapshot').notNull(),
+    courseTitleSnapshot: text('course_title_snapshot').notNull(),
+    certificateTitleSnapshot: text('certificate_title_snapshot').notNull(),
+    issuerSnapshot: text('issuer_snapshot').notNull(),
+    requirementsSnapshot: jsonb('requirements_snapshot').notNull(),
+    issuedAt: timestamp('issued_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('issued_certificates_user_id_idx').on(table.userId),
+    index('issued_certificates_verification_code_idx').on(table.verificationCode),
+    unique('issued_certificates_user_course_config_key').on(table.userId, table.courseId, table.certificateConfigId),
+  ],
+);
+
 // Define Relationships
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   lessonCompletions: many(lessonCompletions),
   quizAttempts: many(quizAttempts),
   enrollments: many(enrollments),
-  cohort: one(cohorts, {
-    fields: [users.cohortId],
-    references: [cohorts.id],
-  }),
-}));
-
-export const cohortsRelations = relations(cohorts, ({ one, many }) => ({
-  instructor: one(users, {
-    fields: [cohorts.instructorId],
-    references: [users.id],
-  }),
-  members: many(users),
 }));
 
 export const coursesRelations = relations(courses, ({ many, one }) => ({
@@ -265,5 +287,27 @@ export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
   course: one(courses, {
     fields: [enrollments.courseId],
     references: [courses.id],
+  }),
+}));
+
+export const certificateConfigsRelations = relations(certificateConfigs, ({ one }) => ({
+  course: one(courses, {
+    fields: [certificateConfigs.courseId],
+    references: [courses.id],
+  }),
+}));
+
+export const issuedCertificatesRelations = relations(issuedCertificates, ({ one }) => ({
+  user: one(users, {
+    fields: [issuedCertificates.userId],
+    references: [users.id],
+  }),
+  course: one(courses, {
+    fields: [issuedCertificates.courseId],
+    references: [courses.id],
+  }),
+  certificateConfig: one(certificateConfigs, {
+    fields: [issuedCertificates.certificateConfigId],
+    references: [certificateConfigs.id],
   }),
 }));

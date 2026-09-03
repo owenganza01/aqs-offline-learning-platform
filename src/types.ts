@@ -7,7 +7,6 @@ export interface User {
   name: string | null;
   role: 'learner' | 'instructor' | 'admin';
   avatarUrl?: string | null;
-  cohortId?: number | null;
   createdAt?: string;
 }
 

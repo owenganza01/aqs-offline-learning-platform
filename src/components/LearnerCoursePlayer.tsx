@@ -25,6 +25,7 @@ import {
   GraduationCap,
   Clock,
   X,
+  Download,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -47,9 +48,20 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<number[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
+  const [certStatus, setCertStatus] = useState<{
+    enabled: boolean;
+    eligible: boolean;
+    issued: boolean;
+    certificate?: {
+      verificationCode: string;
+      issuedAt: string;
+    };
+    reasons?: string[];
+  } | null>(null);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [downloadingCert, setDownloadingCert] = useState<boolean>(false);
 
   // Course Player Navigation state
   const [activeLessonIndex, setActiveLessonIndex] = useState<number>(-1);
@@ -134,6 +146,45 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCourseData();
   }, [courseId, token]);
+
+  // Load certificate status when course is loaded
+  useEffect(() => {
+    if (!token || !courseId) return;
+    apiFetch(`/api/courses/${courseId}/certificate-status`)
+      .then(({ ok, data }) => {
+        if (ok && data) {
+          setCertStatus(data);
+        }
+      })
+      .catch(() => {
+        setCertStatus(null);
+      });
+  }, [courseId, token]);
+
+  const handleDownloadCertificate = async () => {
+    if (!certStatus?.certificate?.verificationCode) return;
+    setDownloadingCert(true);
+    try {
+      const code = certStatus.certificate.verificationCode;
+      const res = await fetch(`/api/certificates/download/${code}`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeTitle = course?.title ? course.title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30) : 'Course';
+      a.download = `Certificate_${safeTitle}_${code}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Error downloading certificate:', err);
+      alert('Unable to download certificate at this time. Please try again.');
+    } finally {
+      setDownloadingCert(false);
+    }
+  };
 
   useEffect(() => {
     if (!course || completionData || completionInFlight.current) return;
@@ -420,6 +471,79 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                           <span className="block text-xs font-mono mt-0.5 text-ink-3">
                             Completed {new Date(completionData.completedAt).toLocaleDateString()}
                           </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Certificate Status */}
+                {certStatus?.enabled && (
+                  <div
+                    className={`rounded-2xl p-5 flex items-start gap-4 ${
+                      certStatus.issued
+                        ? 'bg-ochre/10 border border-ochre/30'
+                        : certStatus.eligible
+                          ? 'bg-success/10 border border-success/30'
+                          : 'bg-ink/5 border border-rule'
+                    }`}
+                  >
+                    <div
+                      className={`p-2.5 rounded-xl shrink-0 ${
+                        certStatus.issued
+                          ? 'bg-ochre text-white'
+                          : certStatus.eligible
+                            ? 'bg-success text-white'
+                            : 'bg-ink/10 text-ink-3'
+                      }`}
+                    >
+                      <Award className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3
+                        className={`text-base font-display font-bold tracking-tight ${
+                          certStatus.issued ? 'text-ochre' : certStatus.eligible ? 'text-success' : 'text-ink-3'
+                        }`}
+                      >
+                        {certStatus.issued
+                          ? 'Certificate Issued!'
+                          : certStatus.eligible
+                            ? 'Certificate Eligible'
+                            : 'Certificate Not Yet Available'}
+                      </h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        {certStatus.issued && certStatus.certificate ? (
+                          <>
+                            Your certificate has been issued.
+                            <span className="block text-xs font-mono mt-0.5 text-ink-3">
+                              Verification: {certStatus.certificate.verificationCode}
+                            </span>
+                            <span className="block text-xs font-mono text-ink-3">
+                              Issued {new Date(certStatus.certificate.issuedAt).toLocaleDateString()}
+                            </span>
+                            <span className="inline-block mt-3">
+                              <button
+                                type="button"
+                                onClick={handleDownloadCertificate}
+                                disabled={downloadingCert}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-ochre hover:bg-ochre/90 text-white font-semibold text-xs rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                              >
+                                <Download className="w-4 h-4" />
+                                <span>{downloadingCert ? 'Preparing PDF...' : 'Download Certificate (PDF)'}</span>
+                              </button>
+                            </span>
+                          </>
+                        ) : certStatus.eligible ? (
+                          'You meet the requirements for a certificate.'
+                        ) : (
+                          <>
+                            Complete all lessons and pass the quiz to earn your certificate.
+                            {certStatus.reasons && certStatus.reasons.length > 0 && (
+                              <span className="block text-xs font-mono mt-0.5 text-ink-3">
+                                {certStatus.reasons.join('; ')}
+                              </span>
+                            )}
+                          </>
                         )}
                       </p>
                     </div>

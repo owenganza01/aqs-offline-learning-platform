@@ -1,6 +1,6 @@
 // src/App.tsx
 import { useState, useEffect, useCallback, lazy, Suspense, FormEvent } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { auth, googleAuthProvider } from './lib/firebase.js';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { Course, QuizAttempt, User } from './types.js';
@@ -16,7 +16,6 @@ import { apiFetch, setApiToken } from './lib/api.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import {
   BookOpen,
-  LogIn,
   LogOut,
   RefreshCw,
   Sparkles,
@@ -82,7 +81,6 @@ export default function App() {
   const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
-  const [regCode, setRegCode] = useState('');
   const [regError, setRegError] = useState('');
   const [regSuccess, setRegSuccess] = useState('');
   const [regLoading, setRegLoading] = useState(false);
@@ -102,7 +100,7 @@ export default function App() {
   const [dashboardTab, setDashboardTab] = useState<'browse' | null>(null);
 
   // Lifted AdminLMS tab state
-  const [adminActiveTab, setAdminActiveTab] = useState<'courses' | 'analytics' | 'cohorts' | 'users'>('courses');
+  const [adminActiveTab, setAdminActiveTab] = useState<'courses' | 'analytics' | 'users'>('courses');
 
   // Sync badge state (lifted from BannerOffline + pending queue poll)
   const [syncInProgress, setSyncInProgress] = useState(false);
@@ -323,14 +321,12 @@ export default function App() {
         body: JSON.stringify({
           name: regName.trim(),
           email: regEmail.trim().toLowerCase(),
-          inviteCode: regCode.trim().toUpperCase(),
         }),
       });
       if (ok) {
         setRegSuccess('Account created! Now sign in with Google using this same email to activate your account.');
         setRegName('');
         setRegEmail('');
-        setRegCode('');
       } else {
         setRegError(data?.error || 'Registration failed — please try again.');
       }
@@ -377,15 +373,12 @@ export default function App() {
           setRegName={setRegName}
           regEmail={regEmail}
           setRegEmail={setRegEmail}
-          regCode={regCode}
-          setRegCode={setRegCode}
           regError={regError}
           regSuccess={regSuccess}
           regLoading={regLoading}
           onClearRegForm={() => {
             setRegName('');
             setRegEmail('');
-            setRegCode('');
             setRegError('');
             setRegSuccess('');
           }}
@@ -396,29 +389,32 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen ${isLmsPath ? 'theme-lms' : 'theme-learner'} ${isLmsPath ? 'bg-lms' : 'bg-appbg'} text-ink selection:bg-ochre selection:text-white flex flex-col font-sans`}
+      className={`min-h-screen ${isLmsPath ? 'theme-lms' : 'theme-learner'} ${isLmsPath ? 'bg-lms' : 'bg-appbg'} text-ink selection:bg-ochre selection:text-white flex flex-col font-sans transition-colors duration-200`}
     >
       {/* Dynamic Navigation Top Header */}
       <header
-        className={`sticky top-0 z-50 border-b px-7 py-3 flex items-center justify-between shadow-sm select-none ${
+        className={`sticky top-0 z-50 border-b px-7 py-2.5 min-h-[58px] flex items-center justify-between shadow-sm select-none transition-colors duration-200 ${
           isLmsPath ? 'bg-lms text-white border-white/[0.06]' : 'bg-navy text-navtext border-white/[0.08]'
         }`}
-        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div
+          onClick={() => !isLmsPath && setActiveCourseId(null)}
+          className={`flex items-center gap-3 min-w-0 ${!isLmsPath ? 'cursor-pointer select-none' : ''}`}
+        >
           <div
-            className={`text-white rounded w-8 h-8 flex items-center justify-center shrink-0 ${
+            className={`text-white rounded w-8 h-8 flex items-center justify-center shrink-0 transition-colors duration-200 ${
               isLmsPath ? 'bg-steel' : 'bg-ochre'
             }`}
           >
             <BookOpen className="w-4 h-4" />
           </div>
-          <div className="min-w-0">
-            <h1 className="text-[17px] font-display font-semibold tracking-tight leading-none text-white truncate">
+          <div className="min-w-0 flex flex-col justify-center">
+            <h1 className="text-[17px] font-display font-semibold tracking-tight text-white whitespace-nowrap leading-snug pb-0.5">
               AQS Learning
             </h1>
             {isLmsPath && (
-              <p className="text-[10px] font-bold font-mono tracking-wider mt-1 uppercase truncate text-white/60">
+              <p className="text-[10px] font-bold font-mono tracking-wider -mt-0.5 uppercase truncate text-white/60">
                 Instructor Portal
               </p>
             )}
@@ -427,19 +423,22 @@ export default function App() {
 
         {/* Auth details & navigation header center tools */}
         {firebaseUser && dbUser && (
-          <div className="flex items-center gap-3 sm:gap-6">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Sync status badge (learner only) — positioned to the left so it never shifts the Student/Admin toggle */}
+            {!isLmsPath && <SyncBadge syncInProgress={syncInProgress} pendingSyncCount={pendingSyncCount} />}
+
             {/* Portal switcher for admin/instructor users */}
             {(dbUser.role === 'admin' || dbUser.role === 'instructor') && (
               <div
-                className={`hidden lg:flex items-center gap-1 rounded-lg p-0.5 border ${
+                className={`hidden lg:flex items-center gap-1 rounded-lg p-0.5 border transition-colors duration-200 ${
                   isLmsPath ? 'border-white/[0.12] bg-lms-3/50' : 'border-white/[0.12] bg-navy-3/50'
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => navigateTo('/study')}
-                  className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-colors cursor-pointer ${
-                    !isLmsPath ? 'bg-ochre text-white' : 'text-white/70 hover:text-white'
+                  className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all duration-200 cursor-pointer ${
+                    !isLmsPath ? 'bg-ochre text-white shadow-sm' : 'text-white/70 hover:text-white'
                   }`}
                 >
                   Student
@@ -447,8 +446,8 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => navigateTo('/lms')}
-                  className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-colors cursor-pointer ${
-                    isLmsPath ? 'bg-steel text-white' : 'text-white/70 hover:text-white'
+                  className={`px-3 py-1.5 text-[12px] font-semibold rounded-md transition-all duration-200 cursor-pointer ${
+                    isLmsPath ? 'bg-steel text-white shadow-sm' : 'text-white/70 hover:text-white'
                   }`}
                 >
                   Admin
@@ -456,56 +455,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Contextual Navigation Tabs */}
-            <div className="hidden sm:flex items-center gap-1">
-              {isLmsPath ? (
-                <>
-                  <button
-                    onClick={() => setAdminActiveTab('courses')}
-                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
-                      adminActiveTab === 'courses'
-                        ? 'bg-lms-2 text-white font-semibold'
-                        : 'text-white/70 hover:bg-lms-3 hover:text-white'
-                    }`}
-                  >
-                    Courses
-                  </button>
-                  <button
-                    onClick={() => setAdminActiveTab('analytics')}
-                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
-                      adminActiveTab === 'analytics'
-                        ? 'bg-lms-2 text-white font-semibold'
-                        : 'text-white/70 hover:bg-lms-3 hover:text-white'
-                    }`}
-                  >
-                    Analytics
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setActiveCourseId(null)}
-                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded-md transition-all cursor-pointer ${
-                      activeCourseId === null
-                        ? 'bg-navy-2 text-navactive font-semibold'
-                        : 'text-navtext hover:bg-navy-3 hover:text-navactive'
-                    }`}
-                  >
-                    Dashboard
-                  </button>
-                  {activeCourseId !== null && (
-                    <span className="px-3.5 py-1.5 text-[13px] font-medium text-white/90 bg-navy-2 rounded-md">
-                      Lesson
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-
             <div className="flex items-center gap-2.5">
-              {/* Sync status badge (learner only) */}
-              {!isLmsPath && <SyncBadge syncInProgress={syncInProgress} pendingSyncCount={pendingSyncCount} />}
-
               <div className="text-right hidden md:block">
                 <p
                   onClick={() => setShowProfileEdit(true)}
@@ -543,7 +493,7 @@ export default function App() {
       </header>
 
       {/* Main Content Space */}
-      <main className="flex-grow flex flex-col justify-center">
+      <main className="flex-grow flex flex-col justify-start">
         {appLoading && courses.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 min-h-[60vh] text-ink">
             <RefreshCw className="w-12 h-12 animate-spin text-accent mb-4" />
@@ -554,153 +504,173 @@ export default function App() {
           /* AUTHENTICATED CLASS WORKSPACES */
           <div className="w-full">
             {/* Render LMS if the path is /lms, otherwise default to Student Learner PWA */}
-            {isLmsPath ? (
-              dbUser?.role === 'admin' || dbUser?.role === 'instructor' ? (
-                /* WORKSPACE A: ADMIN LMS */
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center p-12 text-slate-500">
-                      <RefreshCw className="w-6 h-6 animate-spin mr-2" /> Loading Admin Portal...
-                    </div>
-                  }
+            <AnimatePresence mode="wait" initial={false}>
+              {isLmsPath ? (
+                <motion.div
+                  key="admin-workspace"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="w-full"
                 >
-                  <AdminLMS
-                    token={token}
-                    courses={courses}
-                    onRefreshCourses={loadAppData}
-                    currentUserId={dbUser?.id}
-                    userRole={dbUser?.role}
-                    activeTab={adminActiveTab}
-                    onActiveTabChange={setAdminActiveTab}
-                  />
-                </Suspense>
-              ) : (
-                /* LMS Access Guard fallback */
-                <div className="w-full max-w-lg mx-auto px-6 text-center py-12" id="lms-access-denied-view">
-                  <div className="bg-paper-2 border border-rule p-8 rounded-3xl shadow-lg">
-                    <ShieldAlert className="w-16 h-16 text-error mx-auto mb-4" />
-                    <h2 className="text-2xl font-display font-bold text-ink">LMS Access Denied</h2>
-                    <p className="text-ink-2 text-sm mt-2 font-medium">
-                      Your current user account ({dbUser?.email}) does not possess Admin access.
-                    </p>
-                    <button
-                      onClick={() => navigateTo('/study')}
-                      className="mt-6 h-12 w-full bg-accent hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                  {dbUser?.role === 'admin' || dbUser?.role === 'instructor' ? (
+                    /* WORKSPACE A: ADMIN LMS */
+                    <Suspense
+                      fallback={
+                        <div className="flex items-center justify-center p-12 text-slate-500">
+                          <RefreshCw className="w-6 h-6 animate-spin mr-2" /> Loading Admin Portal...
+                        </div>
+                      }
                     >
-                      Go back to Student PWA
-                    </button>
-                  </div>
-                </div>
-              )
-            ) : (
-              /* WORKSPACE B: STUDENT LEARNER MODULES */
-              <div className={`w-full ${activeCourseId === null ? 'pb-24 lg:pb-0' : ''}`}>
-                <div className="flex gap-6">
-                  {/* Left navigation — visible on dashboard views only (hidden inside course player, hidden on mobile) */}
-                  {activeCourseId === null && (
-                    <aside
-                      id="leftnav"
-                      className="hidden md:flex flex-col gap-0.5 w-[220px] shrink-0 bg-navy border-r border-white/[0.07] px-3 py-5"
-                    >
-                      <p className="text-[10px] uppercase tracking-[0.08em] text-white/30 px-2.5 pb-1.5 pt-3.5 select-none">
-                        Learning
-                      </p>
-                      {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-                        const isActive = activeNavItem === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => handleNavClick(key)}
-                            className={`flex items-center gap-[9px] px-2.5 py-2 rounded-[7px] text-[13px] font-medium transition-colors cursor-pointer select-none ${
-                              isActive ? 'bg-ochre text-white' : 'text-navtext hover:bg-navy-3 hover:text-white'
-                            }`}
-                          >
-                            <Icon className={`w-[15px] h-[15px] shrink-0 ${isActive ? 'opacity-100' : 'opacity-65'}`} />
-                            <span>{label}</span>
-                          </button>
-                        );
-                      })}
-                    </aside>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    {/* Connection check sync status monitor */}
-                    <BannerOffline
-                      onSyncComplete={loadAppData}
-                      onSyncStateChange={(state) => setSyncInProgress(state.syncing)}
-                      token={token}
-                    />
-
-                    {activeCourseId === null ? (
-                      learnerNav === 'progress' ? (
-                        /* Learner Progress view (real existing completion/quiz data via ProgressTree) */
-                        <LearnerProgress
-                          courses={courses}
-                          completedLessonIds={completedLessonIds}
-                          quizAttempts={quizAttempts}
-                          onSelectCourse={setActiveCourseId}
-                          onGoDiscover={() => {
-                            setLearnerNav('dashboard');
-                            setDashboardTab('browse');
-                          }}
-                        />
-                      ) : (
-                        /* Learner discovery home lists available courses bento stats */
-                        <LearnerDashboard
-                          key={dashboardTab ?? 'default'}
-                          initialTab={dashboardTab ?? undefined}
-                          courses={courses}
-                          completedLessonIds={completedLessonIds}
-                          quizAttempts={quizAttempts}
-                          onSelectCourse={setActiveCourseId}
-                          user={dbUser}
-                          token={token}
-                          onProfileUpdated={() => token && syncUserProfile(token)}
-                        />
-                      )
-                    ) : (
-                      /* Focused course drawer / curriculum player */
-                      <LearnerCoursePlayer
-                        courseId={activeCourseId}
+                      <AdminLMS
                         token={token}
-                        onBack={() => setActiveCourseId(null)}
-                        onProgressUpdated={loadAppData}
+                        courses={courses}
+                        onRefreshCourses={loadAppData}
+                        currentUserId={dbUser?.id}
+                        userRole={dbUser?.role}
+                        activeTab={adminActiveTab}
+                        onActiveTabChange={setAdminActiveTab}
                       />
-                    )}
-                  </div>
-                </div>
-
-                {/* Mobile learner bottom navigation (hidden on lg+; hidden inside the course player) */}
-                {activeCourseId === null && (
-                  <nav
-                    aria-label="Learner navigation"
-                    className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-navy border-t border-white/10"
-                    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-                  >
-                    <div className="flex items-stretch justify-around px-1">
-                      {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-                        const isActive = activeNavItem === key;
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => handleNavClick(key)}
-                            aria-current={isActive ? 'page' : undefined}
-                            className={`flex flex-col items-center justify-center gap-1 py-2.5 px-3 min-w-0 flex-1 cursor-pointer select-none transition-colors ${
-                              isActive ? 'text-ochre' : 'text-navtext hover:text-white'
-                            }`}
-                          >
-                            <Icon className="w-5 h-5 shrink-0" />
-                            <span className="text-[10px] font-bold leading-none truncate">{label}</span>
-                          </button>
-                        );
-                      })}
+                    </Suspense>
+                  ) : (
+                    /* LMS Access Guard fallback */
+                    <div className="w-full max-w-lg mx-auto px-6 text-center py-12" id="lms-access-denied-view">
+                      <div className="bg-paper-2 border border-rule p-8 rounded-3xl shadow-lg">
+                        <ShieldAlert className="w-16 h-16 text-error mx-auto mb-4" />
+                        <h2 className="text-2xl font-display font-bold text-ink">LMS Access Denied</h2>
+                        <p className="text-ink-2 text-sm mt-2 font-medium">
+                          Your current user account ({dbUser?.email}) does not possess Admin access.
+                        </p>
+                        <button
+                          onClick={() => navigateTo('/study')}
+                          className="mt-6 h-12 w-full bg-accent hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                        >
+                          Go back to Student PWA
+                        </button>
+                      </div>
                     </div>
-                  </nav>
-                )}
-              </div>
-            )}
+                  )}
+                </motion.div>
+              ) : (
+                /* WORKSPACE B: STUDENT LEARNER MODULES */
+                <motion.div
+                  key="student-workspace"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className={`w-full ${activeCourseId === null ? 'pb-24 lg:pb-0' : ''}`}
+                >
+                  <div className="flex gap-6">
+                    {/* Left navigation — visible on dashboard views only (hidden inside course player, hidden on mobile) */}
+                    {activeCourseId === null && (
+                      <aside
+                        id="leftnav"
+                        className="hidden md:flex flex-col gap-0.5 w-[220px] shrink-0 bg-navy border-r border-white/[0.07] px-3 py-5"
+                      >
+                        <p className="text-[10px] uppercase tracking-[0.08em] text-white/30 px-2.5 pb-1.5 pt-3.5 select-none">
+                          Learning
+                        </p>
+                        {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+                          const isActive = activeNavItem === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => handleNavClick(key)}
+                              className={`flex items-center gap-[9px] px-2.5 py-2 rounded-[7px] text-[13px] font-medium transition-colors cursor-pointer select-none ${
+                                isActive ? 'bg-ochre text-white' : 'text-navtext hover:bg-navy-3 hover:text-white'
+                              }`}
+                            >
+                              <Icon
+                                className={`w-[15px] h-[15px] shrink-0 ${isActive ? 'opacity-100' : 'opacity-65'}`}
+                              />
+                              <span>{label}</span>
+                            </button>
+                          );
+                        })}
+                      </aside>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                      {/* Connection check sync status monitor */}
+                      <BannerOffline
+                        onSyncComplete={loadAppData}
+                        onSyncStateChange={(state) => setSyncInProgress(state.syncing)}
+                        token={token}
+                      />
+
+                      {activeCourseId === null ? (
+                        learnerNav === 'progress' ? (
+                          /* Learner Progress view (real existing completion/quiz data via ProgressTree) */
+                          <LearnerProgress
+                            courses={courses}
+                            completedLessonIds={completedLessonIds}
+                            quizAttempts={quizAttempts}
+                            onSelectCourse={setActiveCourseId}
+                            onGoDiscover={() => {
+                              setLearnerNav('dashboard');
+                              setDashboardTab('browse');
+                            }}
+                          />
+                        ) : (
+                          /* Learner discovery home lists available courses bento stats */
+                          <LearnerDashboard
+                            key={dashboardTab ?? 'default'}
+                            initialTab={dashboardTab ?? undefined}
+                            courses={courses}
+                            completedLessonIds={completedLessonIds}
+                            quizAttempts={quizAttempts}
+                            onSelectCourse={setActiveCourseId}
+                            user={dbUser}
+                            token={token}
+                            onProfileUpdated={() => token && syncUserProfile(token)}
+                          />
+                        )
+                      ) : (
+                        /* Focused course drawer / curriculum player */
+                        <LearnerCoursePlayer
+                          courseId={activeCourseId}
+                          token={token}
+                          onBack={() => setActiveCourseId(null)}
+                          onProgressUpdated={loadAppData}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mobile learner bottom navigation (hidden on lg+; hidden inside the course player) */}
+                  {activeCourseId === null && (
+                    <nav
+                      aria-label="Learner navigation"
+                      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-navy border-t border-white/10"
+                      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+                    >
+                      <div className="flex items-stretch justify-around px-1">
+                        {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+                          const isActive = activeNavItem === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => handleNavClick(key)}
+                              aria-current={isActive ? 'page' : undefined}
+                              className={`flex flex-col items-center justify-center gap-1 py-2.5 px-3 min-w-0 flex-1 cursor-pointer select-none transition-colors ${
+                                isActive ? 'text-ochre' : 'text-navtext hover:text-white'
+                              }`}
+                            >
+                              <Icon className="w-5 h-5 shrink-0" />
+                              <span className="text-[10px] font-bold leading-none truncate">{label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </nav>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Float Mobile Route switcher helper */}
             {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (

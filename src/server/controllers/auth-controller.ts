@@ -16,8 +16,8 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    const { name, email, inviteCode } = req.body;
-    const user = await authService.registerUser(name, email, inviteCode);
+    const { name, email } = req.body;
+    const user = await authService.registerUser(name, email);
     res.status(201).json({ success: true, user });
   } catch (error: any) {
     if (error.statusCode) {

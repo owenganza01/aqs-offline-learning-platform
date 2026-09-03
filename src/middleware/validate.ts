@@ -21,14 +21,13 @@ export const validateBody = (schema: z.ZodType) => {
 
 // === Validation schemas for new endpoints ===
 
-// Student registration with cohort invite code
+// Student registration (open access — no invite code required)
 export const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z
     .string()
     .email('Valid email is required')
     .transform((s) => s.trim().toLowerCase()),
-  inviteCode: z.string().min(1, 'Invite code is required'),
 });
 
 // Admin creates instructor account
@@ -38,11 +37,6 @@ export const createInstructorSchema = z.object({
     .string()
     .email('Valid email is required')
     .transform((s) => s.trim().toLowerCase()),
-});
-
-// Create a cohort
-export const createCohortSchema = z.object({
-  name: z.string().min(1, 'Cohort name is required').max(100),
 });
 
 // Update user profile (name and/or avatar URL)

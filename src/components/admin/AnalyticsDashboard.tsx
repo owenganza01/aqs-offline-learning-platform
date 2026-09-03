@@ -8,9 +8,10 @@ import { motion } from 'motion/react';
 interface AnalyticsDashboardProps {
   token: string | null;
   courses: Course[];
+  userRole?: string;
 }
 
-export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, courses }) => {
+export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, courses, userRole }) => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(false);
 
@@ -18,7 +19,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
     if (!token) return;
     setAnalyticsLoading(true);
     try {
-      const { ok, data } = await apiFetch('/api/admin/analytics');
+      const endpoint = userRole === 'instructor' ? '/api/instructor/analytics' : '/api/admin/analytics';
+      const { ok, data } = await apiFetch(endpoint);
       if (ok) {
         setAnalytics(data);
       }

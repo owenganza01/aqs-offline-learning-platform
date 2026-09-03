@@ -6,7 +6,6 @@ import {
   Plus,
   ChartLine,
   SquareUser,
-  Users,
   RefreshCw,
   ArrowLeft,
   BookOpen,
@@ -24,7 +23,6 @@ const AnalyticsDashboard = lazy(() =>
   import('./admin/AnalyticsDashboard.tsx').then((m) => ({ default: m.AnalyticsDashboard })),
 );
 const UserManagement = lazy(() => import('./admin/UserManagement.tsx').then((m) => ({ default: m.UserManagement })));
-const CohortManager = lazy(() => import('./admin/CohortManager.tsx').then((m) => ({ default: m.CohortManager })));
 
 interface AdminLMSProps {
   token: string | null;
@@ -32,8 +30,8 @@ interface AdminLMSProps {
   onRefreshCourses: () => void;
   currentUserId?: number;
   userRole?: string;
-  activeTab: 'courses' | 'analytics' | 'cohorts' | 'users';
-  onActiveTabChange: (tab: 'courses' | 'analytics' | 'cohorts' | 'users') => void;
+  activeTab: 'courses' | 'analytics' | 'users';
+  onActiveTabChange: (tab: 'courses' | 'analytics' | 'users') => void;
 }
 
 export const AdminLMS: React.FC<AdminLMSProps> = ({
@@ -183,20 +181,6 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
               />
               <span>Analytics</span>
             </button>
-            {(userRole === 'admin' || userRole === 'instructor') && (
-              <button
-                onClick={() => {
-                  setActiveTab('cohorts');
-                  setSelectedCourse(null);
-                }}
-                className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'cohorts' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
-              >
-                <Users
-                  className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'cohorts' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
-                />
-                <span>Cohorts</span>
-              </button>
-            )}
             <button
               onClick={() => {
                 setActiveTab('users');
@@ -232,6 +216,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                   loadCourseFullDetails={loadCourseFullDetails}
                   courseSubTab={courseSubTab}
                   setCourseSubTab={setCourseSubTab}
+                  userRole={userRole}
                 />
               ) : (
                 <>
@@ -451,6 +436,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                                 loadCourseFullDetails={loadCourseFullDetails}
                                 courseSubTab={courseSubTab}
                                 setCourseSubTab={setCourseSubTab}
+                                userRole={userRole}
                               />
                             )}
                           </motion.div>
@@ -461,9 +447,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                 </>
               )
             ) : activeTab === 'analytics' ? (
-              <AnalyticsDashboard token={token} courses={courses} />
-            ) : activeTab === 'cohorts' ? (
-              <CohortManager token={token} />
+              <AnalyticsDashboard token={token} courses={courses} userRole={userRole} />
             ) : activeTab === 'users' ? (
               <UserManagement token={token} currentUserId={currentUserId} />
             ) : null}

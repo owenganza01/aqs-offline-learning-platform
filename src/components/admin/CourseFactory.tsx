@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Course } from '../../types.js';
 import { apiFetch } from '../../lib/api.js';
-import { BookOpen, Plus, Trash2, Edit3 } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit3, Award, FileText, Upload, Check, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface CourseFactoryProps {
@@ -14,6 +14,7 @@ interface CourseFactoryProps {
   loadCourseFullDetails: (id: number) => Promise<void>;
   courseSubTab: string;
   setCourseSubTab: (tab: string) => void;
+  userRole?: string;
 }
 
 interface CourseStat {
@@ -86,16 +87,28 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
   onRefreshCourses,
   loadCourseFullDetails,
   courseSubTab,
+  userRole,
 }) => {
   const [showAddCourse, setShowAddCourse] = useState<boolean>(false);
   const [editingCourse, setEditingCourse] = useState<boolean>(false);
   const [courseForm, setCourseForm] = useState({ title: '', description: '', thumbnail: 'teal' });
   const [courseStats, setCourseStats] = useState<Record<number, CourseStat>>({});
+  const [certConfig, setCertConfig] = useState<{
+    enabled: boolean;
+    title: string;
+    issuer: string;
+    requireCourseCompletion: boolean;
+    requireAssessment: boolean;
+    minAssessmentScore: number | null;
+  } | null>(null);
+  const [certLoading, setCertLoading] = useState<boolean>(false);
+  const [certSaving, setCertSaving] = useState<boolean>(false);
 
   useEffect(() => {
     let cancelled = false;
     if (!token) return;
-    apiFetch<{ courseStats?: (CourseStat & { id: number })[] }>('/api/admin/analytics')
+    const endpoint = userRole === 'instructor' ? '/api/instructor/analytics' : '/api/admin/analytics';
+    apiFetch<{ courseStats?: (CourseStat & { id: number })[] }>(endpoint)
       .then(({ ok, data }) => {
         if (ok && data?.courseStats && !cancelled) {
           const map: Record<number, CourseStat> = {};
@@ -111,7 +124,131 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [token, courses]);
+  }, [token, courses, userRole]);
+
+  // Load certificate config when course is selected
+  useEffect(() => {
+    if (!token || !selectedCourse) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCertConfig(null);
+      return;
+    }
+    setCertLoading(true);
+    apiFetch(`/api/courses/${selectedCourse.id}/certificate-config`)
+      .then(({ ok, data }) => {
+        if (ok && data) {
+          setCertConfig(data);
+        }
+      })
+      .catch(() => {
+        setCertConfig(null);
+      })
+      .finally(() => setCertLoading(false));
+  }, [token, selectedCourse]);
+
+  const handleSaveCertConfig = async () => {
+    if (!token || !selectedCourse || !certConfig) return;
+    setCertSaving(true);
+    try {
+      const { ok } = await apiFetch(`/api/courses/${selectedCourse.id}/certificate-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(certConfig),
+      });
+      if (ok) {
+        // Saved successfully
+      }
+    } catch {
+      // Non-critical
+    } finally {
+      setCertSaving(false);
+    }
+  };
+
+  const [uploadingTemplate, setUploadingTemplate] = useState(false);
+  const [templateMsg, setTemplateMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleTemplateFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedCourse || !token) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setTemplateMsg({ type: 'error', text: 'Please select a valid PDF file.' });
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setTemplateMsg({ type: 'error', text: 'PDF file size must be under 10MB.' });
+      return;
+    }
+
+    setUploadingTemplate(true);
+    setTemplateMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`/api/courses/${selectedCourse.id}/certificate-template`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setCertConfig((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                templateFileName: file.name,
+                templateDocumentId: data.documentId,
+              }
+            : null,
+        );
+        setTemplateMsg({ type: 'success', text: 'Certificate PDF template uploaded successfully!' });
+      } else {
+        setTemplateMsg({ type: 'error', text: data.error || 'Failed to upload template.' });
+      }
+    } catch {
+      setTemplateMsg({ type: 'error', text: 'Network error uploading template.' });
+    } finally {
+      setUploadingTemplate(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveTemplate = async () => {
+    if (!selectedCourse || !token) return;
+    if (!confirm('Are you sure you want to remove the custom certificate template?')) return;
+
+    setUploadingTemplate(true);
+    setTemplateMsg(null);
+    try {
+      const { ok, data } = await apiFetch(`/api/courses/${selectedCourse.id}/certificate-template`, {
+        method: 'DELETE',
+      });
+      if (ok) {
+        setCertConfig((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                templateFileName: null,
+                templateDocumentId: null,
+              }
+            : null,
+        );
+        setTemplateMsg({ type: 'success', text: 'Template removed. Platform default certificate will be used.' });
+      } else {
+        setTemplateMsg({ type: 'error', text: data?.error || 'Failed to remove template.' });
+      }
+    } catch {
+      setTemplateMsg({ type: 'error', text: 'Network error removing template.' });
+    } finally {
+      setUploadingTemplate(false);
+    }
+  };
 
   const handleSaveCourse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -437,6 +574,202 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                 </form>
               </motion.div>
             </AnimatePresence>
+          )}
+        </div>
+      )}
+
+      {/* Certificate Configuration */}
+      {courseSubTab === 'settings' && selectedCourse && (
+        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-ochre"></div>
+          <div className="flex items-center gap-2 mb-4">
+            <Award className="w-5 h-5 text-ochre" />
+            <h3 className="text-lg font-display font-bold text-text tracking-tight">Certificate Configuration</h3>
+          </div>
+
+          {certLoading ? (
+            <p className="text-text-3 text-sm">Loading certificate settings...</p>
+          ) : certConfig ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={certConfig.enabled}
+                    onChange={(e) => setCertConfig({ ...certConfig, enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-steel/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-30 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-steel"></div>
+                </label>
+                <span className="text-sm font-medium text-text">Enable Certificate</span>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+                  Certificate Title
+                </label>
+                <input
+                  type="text"
+                  value={certConfig.title}
+                  onChange={(e) => setCertConfig({ ...certConfig, title: e.target.value })}
+                  className="w-full p-3 border-[1.5px] border-stroke rounded-lg text-sm text-text outline-none focus:border-steel focus:ring-2 focus:ring-steel/10 transition-all font-medium bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">Issuer</label>
+                <input
+                  type="text"
+                  value={certConfig.issuer}
+                  onChange={(e) => setCertConfig({ ...certConfig, issuer: e.target.value })}
+                  className="w-full p-3 border-[1.5px] border-stroke rounded-lg text-sm text-text outline-none focus:border-steel focus:ring-2 focus:ring-steel/10 transition-all font-medium bg-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={certConfig.requireCourseCompletion}
+                    onChange={(e) => setCertConfig({ ...certConfig, requireCourseCompletion: e.target.checked })}
+                    id="req-completion"
+                    className="w-4 h-4 text-steel bg-gray-100 border-gray-300 rounded focus:ring-steel focus:ring-2"
+                  />
+                  <label htmlFor="req-completion" className="text-sm text-text">
+                    Require course completion
+                  </label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={certConfig.requireAssessment}
+                    onChange={(e) => setCertConfig({ ...certConfig, requireAssessment: e.target.checked })}
+                    id="req-assessment"
+                    className="w-4 h-4 text-steel bg-gray-100 border-gray-300 rounded focus:ring-steel focus:ring-2"
+                  />
+                  <label htmlFor="req-assessment" className="text-sm text-text">
+                    Require assessment
+                  </label>
+                </div>
+              </div>
+
+              {certConfig.requireAssessment && (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+                    Minimum Assessment Score (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={certConfig.minAssessmentScore ?? ''}
+                    onChange={(e) =>
+                      setCertConfig({
+                        ...certConfig,
+                        minAssessmentScore: e.target.value === '' ? null : parseInt(e.target.value),
+                      })
+                    }
+                    placeholder="Default: 70"
+                    className="w-full p-3 border-[1.5px] border-stroke rounded-lg text-sm text-text outline-none focus:border-steel focus:ring-2 focus:ring-steel/10 transition-all font-medium bg-white"
+                  />
+                  <p className="text-[11px] text-text-3 mt-1">Leave empty to use default threshold (70%)</p>
+                </div>
+              )}
+
+              {/* PDF Template Upload Section */}
+              <div className="pt-3 border-t border-stroke">
+                <label className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono">
+                  Custom Certificate Template (PDF)
+                </label>
+                <p className="text-xs text-text-3 mb-3">
+                  Upload an existing PDF copy or template from your machine. The learner's name, course title,
+                  verification code, and issue date will be stamped automatically when issued.
+                </p>
+
+                {templateMsg && (
+                  <div
+                    className={`p-3 rounded-lg text-xs font-medium mb-3 flex items-center gap-2 ${
+                      templateMsg.type === 'success'
+                        ? 'bg-success/10 text-success border border-success/30'
+                        : 'bg-error/10 text-error border border-error/30'
+                    }`}
+                  >
+                    {templateMsg.type === 'success' ? (
+                      <Check className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    )}
+                    <span>{templateMsg.text}</span>
+                  </div>
+                )}
+
+                {certConfig.templateFileName ? (
+                  <div className="flex items-center justify-between p-3.5 bg-paper-2 border border-stroke rounded-xl">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-steel/10 text-steel flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-text truncate">{certConfig.templateFileName}</p>
+                        <p className="text-[11px] text-text-3 font-mono">Custom PDF template active</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-stroke hover:bg-white text-text cursor-pointer transition-all">
+                        {uploadingTemplate ? 'Replacing...' : 'Replace'}
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          onChange={handleTemplateFileSelect}
+                          disabled={uploadingTemplate}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRemoveTemplate}
+                        disabled={uploadingTemplate}
+                        title="Remove Template"
+                        className="p-1.5 text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="border-2 border-dashed border-stroke hover:border-steel/50 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition-all bg-paper-2 hover:bg-white group">
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        onChange={handleTemplateFileSelect}
+                        disabled={uploadingTemplate}
+                        className="hidden"
+                      />
+                      <Upload className="w-6 h-6 text-text-3 group-hover:text-steel mb-2 transition-colors" />
+                      <span className="text-xs font-semibold text-text group-hover:text-steel transition-colors">
+                        {uploadingTemplate ? 'Uploading PDF...' : 'Click or drop a PDF certificate copy here'}
+                      </span>
+                      <span className="text-[10px] text-text-3 mt-0.5">Supports PDF up to 10MB</span>
+                    </label>
+                    <p className="text-[11px] text-text-3 mt-1.5 italic">
+                      No custom template uploaded — the platform will generate an elegant styled certificate
+                      automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleSaveCertConfig}
+                disabled={certSaving}
+                className="h-10 bg-ochre hover:bg-ochre/90 text-white font-semibold text-xs px-6 rounded-lg transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                {certSaving ? 'Saving...' : 'Save Certificate Settings'}
+              </button>
+            </div>
+          ) : (
+            <p className="text-text-3 text-sm">Unable to load certificate configuration.</p>
           )}
         </div>
       )}

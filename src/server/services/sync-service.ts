@@ -37,6 +37,7 @@ import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { scoreQuiz } from '../../lib/scoring.js';
+import { issueCertificate } from './certificate-service.js';
 
 const MAX_SYNC_COMPLETIONS = 500;
 const MAX_SYNC_QUIZZES = 100;
@@ -112,6 +113,16 @@ export async function processQuizSubmissions(
         passed,
         attempt: attemptResult[0],
       });
+
+      // Check for certificate eligibility after sync quiz submission
+      try {
+        const quiz = await db.select().from(schema.quizzes).where(eq(schema.quizzes.id, quizId)).limit(1);
+        if (quiz.length > 0) {
+          await issueCertificate(userId, quiz[0].courseId);
+        }
+      } catch (err) {
+        console.error('Certificate check after sync quiz submission failed:', err);
+      }
     }
   }
 
