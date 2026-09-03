@@ -291,8 +291,21 @@ export default function App() {
       setAuthLoading(true);
       await signInWithPopup(auth, googleAuthProvider);
     } catch (error: any) {
-      console.error('Google popup login failed. Point to signInWithRedirect:', error);
-      alert('Login error. Please ensure popups are allowed and retry.');
+      const code = error?.code || 'unknown';
+      const msg = error?.message || String(error);
+      console.error(`Google login failed [${code}]:`, msg);
+
+      if (code === 'auth/popup-blocked') {
+        alert('Popup was blocked by your browser. Please allow popups for this site and try again.');
+      } else if (code === 'auth/popup-closed-by-user') {
+        // User closed the popup — no alert needed
+      } else if (code === 'auth/cancelled-popup-request') {
+        // Multiple popup requests — no alert needed
+      } else if (code === 'auth/unauthorized-domain') {
+        alert(`This domain is not authorized for Firebase login. Error: ${code}`);
+      } else {
+        alert(`Login failed (${code}). Please try again.`);
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -502,7 +515,7 @@ export default function App() {
           </div>
         ) : (
           /* AUTHENTICATED CLASS WORKSPACES */
-          <div className="w-full">
+          <div className="w-full flex-grow">
             {/* Render LMS if the path is /lms, otherwise default to Student Learner PWA */}
             <AnimatePresence mode="wait" initial={false}>
               {isLmsPath ? (
