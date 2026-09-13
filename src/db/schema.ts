@@ -8,6 +8,11 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name'),
   role: text('role').default('learner').notNull(), // 'learner' | 'instructor' | 'admin'
+  onboardingStatus: text('onboarding_status').default('active').notNull(), // 'onboarding' | 'pending_approval' | 'active' | 'rejected'
+  bio: text('bio'),
+  organization: text('organization'),
+  rejectionReason: text('rejection_reason'),
+  submittedAt: timestamp('submitted_at'),
   avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -19,6 +24,7 @@ export const courses = pgTable('courses', {
   description: text('description').notNull(),
   thumbnail: text('thumbnail'), // Data URL, image URL, or gradient code
   createdBy: integer('created_by').references(() => users.id),
+  createdByName: text('created_by_name'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -122,9 +128,8 @@ export const documents = pgTable(
     mimeType: text('mime_type').notNull(),
     fileSize: integer('file_size').notNull(),
     uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
-    uploadedBy: integer('uploaded_by')
-      .references(() => users.id)
-      .notNull(),
+    uploadedBy: integer('uploaded_by').references(() => users.id),
+    uploadedByName: text('uploaded_by_name'),
     fileData: text('file_data').notNull(), // Base64-encoded binary content
   },
   (table) => [index('documents_lesson_id_idx').on(table.lessonId)],

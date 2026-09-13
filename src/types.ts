@@ -1,11 +1,18 @@
 // src/types.ts
 
+export type OnboardingStatus = 'onboarding' | 'pending_approval' | 'active' | 'rejected';
+
 export interface User {
   id: number;
   uid: string;
   email: string;
   name: string | null;
   role: 'learner' | 'instructor' | 'admin';
+  onboardingStatus?: OnboardingStatus;
+  bio?: string | null;
+  organization?: string | null;
+  rejectionReason?: string | null;
+  submittedAt?: string | null;
   avatarUrl?: string | null;
   createdAt?: string;
 }

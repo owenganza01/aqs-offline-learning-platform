@@ -20,6 +20,7 @@ import {
   registerDocumentRoutes,
   registerInstructorAnalyticsRoutes,
   registerCertificateRoutes,
+  registerInstructorRoutes,
 } from './routes/index.js';
 
 const allowedOrigins = [
@@ -167,6 +168,11 @@ export async function createApp() {
     max: 30,
     message: 'Too many requests, please try again later',
   });
+  const onboardRateLimit = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: 'Too many requests, please try again later',
+  });
   const instructorAnalyticsLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 30,
@@ -194,6 +200,7 @@ export async function createApp() {
   registerEnrollmentRoutes(app, { enrollmentRateLimit });
   registerDocumentRoutes(app, { uploadRateLimit });
   registerInstructorAnalyticsRoutes(app, { instructorLimiter: instructorAnalyticsLimiter });
+  registerInstructorRoutes(app, { onboardRateLimit });
   registerCertificateRoutes(app, {
     certificateRateLimit: certificateLimiter,
     publicVerifyRateLimit: publicVerifyLimiter,

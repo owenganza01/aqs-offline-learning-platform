@@ -329,6 +329,7 @@ export async function uploadCertificateTemplate(
   fileBuffer: Buffer,
   fileName: string,
   userId: number,
+  userName?: string,
 ): Promise<{ documentId: string; fileName: string }> {
   // Store the PDF in documentStorage
   const doc = await documentStorage.upload(fileBuffer, {
@@ -338,6 +339,7 @@ export async function uploadCertificateTemplate(
     mimeType: 'application/pdf',
     fileSize: fileBuffer.length,
     uploadedBy: userId,
+    uploadedByName: userName,
   });
 
   // Link to certificateConfigs

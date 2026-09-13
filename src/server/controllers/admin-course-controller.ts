@@ -10,7 +10,13 @@ export async function createCourse(req: AuthRequest, res: Response): Promise<voi
       res.status(400).json({ error: 'Title and description are required.' });
       return;
     }
-    const course = await courseAdminService.createCourse(title, description, thumbnail, req.dbUser!.id);
+    const course = await courseAdminService.createCourse(
+      title,
+      description,
+      thumbnail,
+      req.dbUser!.id,
+      req.dbUser!.name || req.dbUser!.email,
+    );
     res.status(201).json(course);
   } catch (error: unknown) {
     console.error('CMS Course creation error:', error);

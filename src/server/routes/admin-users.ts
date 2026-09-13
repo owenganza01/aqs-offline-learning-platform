@@ -1,7 +1,18 @@
 import { Application, RequestHandler } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.js';
-import { validateBody, createInstructorSchema, changeRoleSchema } from '../../middleware/validate.js';
-import { listUsers, changeUserRole, createInstructor } from '../controllers/admin-user-controller.js';
+import {
+  validateBody,
+  createInstructorSchema,
+  changeRoleSchema,
+  instructorDeclineSchema,
+} from '../../middleware/validate.js';
+import {
+  listUsers,
+  changeUserRole,
+  createInstructor,
+  approveInstructorUser,
+  declineInstructorUser,
+} from '../controllers/admin-user-controller.js';
 
 export interface AdminUserRouteDeps {
   authRateLimit: RequestHandler;
@@ -27,5 +38,16 @@ export function registerAdminUserRoutes(app: Application, deps: AdminUserRouteDe
     deps.authRateLimit,
     validateBody(changeRoleSchema),
     changeUserRole,
+  );
+
+  app.put('/api/admin/users/:userId/approve', requireAuth, requireAdmin, deps.authRateLimit, approveInstructorUser);
+
+  app.put(
+    '/api/admin/users/:userId/decline',
+    requireAuth,
+    requireAdmin,
+    deps.authRateLimit,
+    validateBody(instructorDeclineSchema),
+    declineInstructorUser,
   );
 }

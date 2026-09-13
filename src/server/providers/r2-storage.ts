@@ -81,6 +81,7 @@ export class R2StorageProvider implements DocumentStorageProvider {
       mimeType: metadata.mimeType,
       fileSize: metadata.fileSize,
       uploadedBy: metadata.uploadedBy,
+      uploadedByName: metadata.uploadedByName || null,
       fileData: '',
     });
 
@@ -108,6 +109,7 @@ export class R2StorageProvider implements DocumentStorageProvider {
           fileSize: row.fileSize,
           uploadedAt: row.uploadedAt,
           uploadedBy: row.uploadedBy,
+          uploadedByName: row.uploadedByName || 'Deleted user',
         },
       };
     } catch (err) {
@@ -132,6 +134,7 @@ export class R2StorageProvider implements DocumentStorageProvider {
             fileSize: row.fileSize,
             uploadedAt: row.uploadedAt,
             uploadedBy: row.uploadedBy,
+            uploadedByName: row.uploadedByName || 'Deleted user',
           },
         };
       }
@@ -237,6 +240,7 @@ export class R2StorageProvider implements DocumentStorageProvider {
         fileSize: schema.documents.fileSize,
         uploadedAt: schema.documents.uploadedAt,
         uploadedBy: schema.documents.uploadedBy,
+        uploadedByName: schema.documents.uploadedByName,
       })
       .from(schema.documents)
       .where(eq(schema.documents.id, documentId));
@@ -253,6 +257,7 @@ export class R2StorageProvider implements DocumentStorageProvider {
       fileSize: row.fileSize,
       uploadedAt: row.uploadedAt,
       uploadedBy: row.uploadedBy,
+      uploadedByName: row.uploadedByName || 'Deleted user',
     };
   }
 }

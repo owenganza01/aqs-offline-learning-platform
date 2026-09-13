@@ -12,6 +12,7 @@ const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ d
 import { BannerOffline } from './components/BannerOffline.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
 import { LandingPage } from './components/LandingPage.tsx';
+import { InstructorOnboardingFlow } from './components/InstructorOnboardingFlow.tsx';
 import { apiFetch, setApiToken } from './lib/api.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import {
@@ -75,7 +76,12 @@ export default function App() {
   const [dbUser, setDbUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [showProfileEdit, setShowProfileEdit] = useState<boolean>(false);
+
+  // Session-only override: "Continue as a Learner" lets a not-yet-approved
+  // instructor use the learner dashboard without changing their server state.
+  const [learnerSessionOverride, setLearnerSessionOverride] = useState<boolean>(false);
 
   // Registration form state
   const [showRegisterForm, setShowRegisterForm] = useState(false);
@@ -129,14 +135,28 @@ export default function App() {
     currentPath.startsWith('/admin');
 
   // Synchronize database user profile and pull remote statistics
-  const syncUserProfile = async (_idToken: string) => {
+  const syncUserProfile = async (_idToken?: string) => {
     try {
-      const { ok, data } = await apiFetch('/api/auth/me');
+      // Consume the entry-point intent (instructor portal vs. default learner) once.
+      const intent = sessionStorage.getItem('aqs_auth_intent');
+      if (intent) sessionStorage.removeItem('aqs_auth_intent');
+      const query = intent ? `?intent=${encodeURIComponent(intent)}` : '';
+      const { ok, status, data } = await apiFetch(`/api/auth/me${query}`);
       if (ok) {
+        setAuthError(null);
         setDbUser(data.dbUser);
+      } else if (status === 409) {
+        // Email already claimed by a different account — surface the message on
+        // the landing page and sign the user out so they can contact an admin.
+        setAuthError(
+          data?.error || 'This email is already linked to an account. Please contact your administrator for help.',
+        );
+        await signOut(auth);
+      } else {
+        console.warn('Failed to synchronize user profile:', status, data);
       }
     } catch (error) {
-      console.warn('Network error synchronizing credentials; defaulting to local schema role representation.', error);
+      console.warn('Network error synchronizing credentials.', error);
     }
   };
 
@@ -207,6 +227,8 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAuthLoading(true);
+      // Reset session-only overrides whenever the auth identity changes.
+      setLearnerSessionOverride(false);
       if (user) {
         setFirebaseUser(user);
         const idToken = await user.getIdToken();
@@ -314,6 +336,14 @@ export default function App() {
   const handleLogout = async () => {
     try {
       setAuthLoading(true);
+      setLearnerSessionOverride(false);
+      setAuthError(null);
+      // Clear user-scoped local data so a reused email / different account does
+      // not inherit the previous user's cached progress or role state.
+      localStorage.removeItem('aqs_enrolled_courses');
+      localStorage.removeItem('aqs_local_progress');
+      localStorage.removeItem('aqs_sync_queue');
+      sessionStorage.removeItem('aqs_auth_intent');
       await signOut(auth);
     } catch (error) {
       console.error('Logout error:', error);
@@ -381,6 +411,8 @@ export default function App() {
         <LandingPage
           onLogin={handleLogin}
           authLoading={authLoading}
+          authError={authError}
+          onClearAuthError={() => setAuthError(null)}
           onRegister={handleRegister}
           regName={regName}
           setRegName={setRegName}
@@ -396,6 +428,62 @@ export default function App() {
             setRegSuccess('');
           }}
         />
+      </div>
+    );
+  }
+
+  // Approved instructors and admins may enter the Instructor Portal.
+  const canAccessLms =
+    dbUser?.role === 'admin' || (dbUser?.role === 'instructor' && (dbUser.onboardingStatus ?? 'active') === 'active');
+
+  // An instructor who has not yet been approved (or is pending/rejected) must go
+  // through onboarding before accessing the Instructor Portal. "Continue as a
+  // Learner" lifts this gate for the current session only.
+  const instructorOnboardingIncomplete =
+    !!firebaseUser &&
+    dbUser?.role === 'instructor' &&
+    (dbUser.onboardingStatus ?? 'active') !== 'active' &&
+    !learnerSessionOverride;
+
+  // Instructor onboarding flow (profile form, pending, or rejected screens).
+  if (instructorOnboardingIncomplete) {
+    return (
+      <div className="min-h-screen theme-lms bg-lms text-ink flex flex-col font-sans selection:bg-ochre selection:text-white">
+        <header
+          className="sticky top-0 z-50 border-b px-7 py-2.5 min-h-[58px] flex items-center justify-between shadow-sm select-none transition-colors duration-200 bg-lms text-white border-white/[0.06]"
+          style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="text-white rounded w-8 h-8 flex items-center justify-center shrink-0 bg-steel">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex flex-col justify-center">
+              <h1 className="text-[17px] font-display font-semibold tracking-tight text-white whitespace-nowrap leading-snug pb-0.5">
+                AQS Learning
+              </h1>
+              <p className="text-[10px] font-bold font-mono tracking-wider -mt-0.5 uppercase truncate text-white/60">
+                Instructor Portal
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-white/80 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        </header>
+
+        <main className="flex-grow flex flex-col justify-start bg-appbg">
+          <InstructorOnboardingFlow
+            user={dbUser}
+            token={token}
+            onContinueAsLearner={() => setLearnerSessionOverride(true)}
+            onProfileUpdated={() => token && syncUserProfile(token)}
+          />
+        </main>
       </div>
     );
   }
@@ -441,7 +529,7 @@ export default function App() {
             {!isLmsPath && <SyncBadge syncInProgress={syncInProgress} pendingSyncCount={pendingSyncCount} />}
 
             {/* Portal switcher for admin/instructor users */}
-            {(dbUser.role === 'admin' || dbUser.role === 'instructor') && (
+            {canAccessLms && (
               <div
                 className={`hidden lg:flex items-center gap-1 rounded-lg p-0.5 border transition-colors duration-200 ${
                   isLmsPath ? 'border-white/[0.12] bg-lms-3/50' : 'border-white/[0.12] bg-navy-3/50'
@@ -527,7 +615,7 @@ export default function App() {
                   transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="w-full"
                 >
-                  {dbUser?.role === 'admin' || dbUser?.role === 'instructor' ? (
+                  {canAccessLms && dbUser ? (
                     /* WORKSPACE A: ADMIN LMS */
                     <Suspense
                       fallback={
@@ -686,7 +774,7 @@ export default function App() {
             </AnimatePresence>
 
             {/* Float Mobile Route switcher helper */}
-            {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (
+            {canAccessLms && (
               <div
                 className="block sm:hidden fixed bottom-6 right-6 z-50"
                 style={{

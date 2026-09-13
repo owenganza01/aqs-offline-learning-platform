@@ -6,6 +6,9 @@ import {
   changeUserRole as changeUserRoleService,
   createInstructorAccount,
   parsePagination,
+  approveInstructor,
+  declineInstructor,
+  StateGuardError,
 } from '../services/user-service.js';
 
 export async function listUsers(req: AuthRequest, res: Response): Promise<void> {
@@ -68,5 +71,44 @@ export async function createInstructor(req: AuthRequest, res: Response): Promise
     }
     console.error('Create instructor error:', error);
     res.status(500).json({ error: 'Failed to create instructor account.' });
+  }
+}
+
+export async function approveInstructorUser(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const targetUserId = parseInt(req.params.userId);
+    if (isNaN(targetUserId)) {
+      res.status(400).json({ error: 'Invalid user ID.' });
+      return;
+    }
+    const updated = await approveInstructor(targetUserId);
+    res.json({ success: true, dbUser: updated });
+  } catch (error: unknown) {
+    if (error instanceof StateGuardError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Approve instructor error:', error);
+    res.status(500).json({ error: 'Failed to approve instructor.' });
+  }
+}
+
+export async function declineInstructorUser(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const targetUserId = parseInt(req.params.userId);
+    if (isNaN(targetUserId)) {
+      res.status(400).json({ error: 'Invalid user ID.' });
+      return;
+    }
+    const { rejectionReason } = req.body;
+    const updated = await declineInstructor(targetUserId, rejectionReason);
+    res.json({ success: true, dbUser: updated });
+  } catch (error: unknown) {
+    if (error instanceof StateGuardError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Decline instructor error:', error);
+    res.status(500).json({ error: 'Failed to decline instructor.' });
   }
 }

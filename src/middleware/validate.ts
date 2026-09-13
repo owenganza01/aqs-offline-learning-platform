@@ -138,3 +138,15 @@ export const changeRoleSchema = z.object({
     message: 'Role must be learner, instructor, or admin',
   }),
 });
+
+// Instructor submits their onboarding profile for review
+export const instructorOnboardSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100).optional(),
+  bio: z.string().min(1, 'Bio is required').max(2000, 'Bio is too long'),
+  organization: z.string().max(200, 'Organization name is too long').optional(),
+});
+
+// Admin declines an instructor application (reason required)
+export const instructorDeclineSchema = z.object({
+  rejectionReason: z.string().min(1, 'A reason is required to decline an application').max(1000, 'Reason is too long'),
+});

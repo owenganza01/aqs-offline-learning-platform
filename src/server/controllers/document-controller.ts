@@ -24,6 +24,7 @@ export async function uploadDocument(req: AuthRequest, res: Response): Promise<v
       mimeType: req.file.mimetype,
       fileSize: req.file.size,
       uploadedBy: req.dbUser!.id,
+      uploadedByName: req.dbUser!.name || req.dbUser!.email,
     });
 
     res.status(201).json({
