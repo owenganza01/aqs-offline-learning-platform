@@ -180,7 +180,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
     }
   };
 
-  const pendingApplicants = users.filter((u) => u.onboardingStatus === 'pending_approval');
+  const activeUsers = users.filter((u) => u.onboardingStatus === 'active');
+
+  // Instructors in the application pipeline (not yet an active user):
+  // onboarding (profile not submitted), pending_approval (awaiting review),
+  // or rejected. Shown in the Instructor Applications queue only, never in
+  // the active Users list.
+  const instructorApplicants = users
+    .filter((u) => u.role === 'instructor' && u.onboardingStatus && u.onboardingStatus !== 'active')
+    .sort((a, b) => {
+      const order: Record<string, number> = { pending_approval: 0, onboarding: 1, rejected: 2 };
+      return (order[a.onboardingStatus!] ?? 3) - (order[b.onboardingStatus!] ?? 3);
+    });
 
   return (
     <div className="space-y-8">
@@ -195,7 +206,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-steel" />
             <span className="text-sm font-semibold text-text">
-              Instructor Applications ({pendingApplicants.length})
+              Instructor Applications ({instructorApplicants.length})
             </span>
           </div>
           <button onClick={loadUsers} className="text-text-3 hover:text-text cursor-pointer" title="Refresh">
@@ -205,20 +216,24 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
 
         {loading ? (
           <div className="p-8 text-center text-text-3 text-sm">Loading applicants...</div>
-        ) : pendingApplicants.length === 0 ? (
+        ) : instructorApplicants.length === 0 ? (
           <div className="p-8 text-center text-text-3 text-sm">
-            No instructor applications awaiting review right now.
+            No instructor applications in the pipeline right now.
           </div>
         ) : (
           <div className="divide-y divide-stroke">
-            {pendingApplicants.map((user) => (
+            {instructorApplicants.map((user) => (
               <div key={user.id} className="px-6 py-4 flex items-start gap-4 hover:bg-canvas transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-text truncate">{user.name || 'Unnamed'}</span>
-                    <span className="text-[9px] font-bold bg-[#FDF3E0] text-warning px-1.5 py-0.5 rounded-full uppercase">
-                      Pending Approval
-                    </span>
+                    {user.onboardingStatus && STATUS_META[user.onboardingStatus] && (
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase border ${STATUS_META[user.onboardingStatus].className}`}
+                      >
+                        {STATUS_META[user.onboardingStatus].label}
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs text-text-3 truncate block mt-0.5">{user.email}</span>
                   {user.bio && <p className="text-xs text-text-2 leading-relaxed mt-1.5 line-clamp-2">{user.bio}</p>}
@@ -232,28 +247,32 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    disabled={actingOn === user.id}
-                    onClick={() => handleApprove(user)}
-                    className="inline-flex items-center gap-1.5 h-9 px-3 bg-success hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {actingOn === user.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-3.5 h-3.5" />
-                    )}
-                    <span>Approve</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={actingOn === user.id}
-                    onClick={() => openDecline(user)}
-                    className="inline-flex items-center gap-1.5 h-9 px-3 bg-error-bg hover:bg-error/20 text-error text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span>Decline</span>
-                  </button>
+                  {user.onboardingStatus === 'pending_approval' && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={actingOn === user.id}
+                        onClick={() => handleApprove(user)}
+                        className="inline-flex items-center gap-1.5 h-9 px-3 bg-success hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {actingOn === user.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        )}
+                        <span>Approve</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actingOn === user.id}
+                        onClick={() => openDecline(user)}
+                        className="inline-flex items-center gap-1.5 h-9 px-3 bg-error-bg hover:bg-error/20 text-error text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Decline</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -267,7 +286,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
           <div className="bg-white border border-stroke rounded-xl overflow-hidden shadow-sm">
             <div className="px-6 py-4 border-b border-stroke flex items-center justify-between">
               <span className="text-sm font-semibold text-text">
-                {users.length} user{users.length !== 1 ? 's' : ''}
+                {activeUsers.length} active user{activeUsers.length !== 1 ? 's' : ''}
               </span>
               <button onClick={loadUsers} className="text-text-3 hover:text-text cursor-pointer" title="Refresh">
                 <RefreshCw className="w-4 h-4" />
@@ -277,7 +296,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
               <div className="p-8 text-center text-text-3 text-sm">Loading users...</div>
             ) : (
               <div className="divide-y divide-stroke">
-                {users.map((user) => {
+                {activeUsers.map((user) => {
                   const statusMeta =
                     user.role === 'instructor' && user.onboardingStatus
                       ? STATUS_META[user.onboardingStatus]
