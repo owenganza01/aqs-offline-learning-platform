@@ -8,6 +8,7 @@ import { PouchDBService } from './lib/pouchdb-service.js';
 import { LearnerDashboard } from './components/LearnerDashboard.tsx';
 import { LearnerProgress } from './components/LearnerProgress.tsx';
 import { LearnerCoursePlayer } from './components/LearnerCoursePlayer.tsx';
+import { MessagesView } from './components/MessagesView.tsx';
 const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ default: m.AdminLMS })));
 import { BannerOffline } from './components/BannerOffline.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
@@ -26,6 +27,7 @@ import {
   CircleCheck,
   LayoutGrid,
   Search,
+  MessageCircle,
 } from 'lucide-react';
 
 interface SyncBadgeProps {
@@ -66,6 +68,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { key: 'progress', label: 'Progress', icon: CircleCheck },
   { key: 'discover', label: 'Discover', icon: Search },
+  { key: 'messages', label: 'Messages', icon: MessageCircle },
 ] as const;
 
 type LearnerNavKey = (typeof NAV_ITEMS)[number]['key'];
@@ -101,9 +104,14 @@ export default function App() {
   const [activeCourseId, setActiveCourseId] = useState<number | null>(null);
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
 
-  // Learner left-nav destination state (dashboard + sub-tab, or Progress view)
-  const [learnerNav, setLearnerNav] = useState<'dashboard' | 'progress'>('dashboard');
+  // Learner left-nav destination state (dashboard + sub-tab, Progress view, or Messages)
+  const [learnerNav, setLearnerNav] = useState<'dashboard' | 'progress' | 'messages'>('dashboard');
   const [dashboardTab, setDashboardTab] = useState<'browse' | null>(null);
+
+  // Deep-link intent from a course player: open the Messages view on (or creating)
+  // a conversation with that course's instructor.
+  const [messagesIntent, setMessagesIntent] = useState<{ courseId: number; instructorId: number } | null>(null);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   // Lifted AdminLMS tab state
   const [adminActiveTab, setAdminActiveTab] = useState<'courses' | 'analytics' | 'users'>('courses');
@@ -245,6 +253,8 @@ export default function App() {
         setCourses([]);
         setCompletedLessonIds([]);
         setQuizAttempts([]);
+        setMessagesIntent(null);
+        setUnreadMessageCount(0);
       }
       setAuthLoading(false);
     });
@@ -273,6 +283,16 @@ export default function App() {
         }
       } catch {
         // Non-critical — badge just keeps its last known value.
+      }
+
+      // Unread message badge (learner Messages nav) — rides the same poll tick.
+      try {
+        const unread = await apiFetch<{ unreadTotal: number }>('/api/messages/unread-total');
+        if (!cancelled && unread.ok) {
+          setUnreadMessageCount(unread.data.unreadTotal);
+        }
+      } catch {
+        // Non-critical — badge keeps its last known value.
       }
     };
 
@@ -382,15 +402,31 @@ export default function App() {
 
   // Left-nav active destination (dashboard sub-tab drives Dashboard/My courses/Discover highlight)
   const activeNavItem: LearnerNavKey =
-    learnerNav === 'progress' ? 'progress' : dashboardTab === 'browse' ? 'discover' : 'dashboard';
+    learnerNav === 'progress'
+      ? 'progress'
+      : learnerNav === 'messages'
+        ? 'messages'
+        : dashboardTab === 'browse'
+          ? 'discover'
+          : 'dashboard';
 
   const handleNavClick = (key: LearnerNavKey) => {
     if (key === 'progress') {
       setLearnerNav('progress');
       return;
     }
+    if (key === 'messages') {
+      setLearnerNav('messages');
+      setMessagesIntent(null);
+      return;
+    }
     setLearnerNav('dashboard');
     setDashboardTab(key === 'discover' ? 'browse' : null);
+  };
+
+  const handleOpenMessagesIntent = (courseId: number, instructorId: number) => {
+    setMessagesIntent({ courseId, instructorId });
+    setLearnerNav('messages');
   };
 
   // Auth loading verification screen
@@ -687,7 +723,14 @@ export default function App() {
                               <Icon
                                 className={`w-[15px] h-[15px] shrink-0 ${isActive ? 'opacity-100' : 'opacity-65'}`}
                               />
-                              <span>{label}</span>
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                {label}
+                                {key === 'messages' && unreadMessageCount > 0 && (
+                                  <span className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-ochre text-white text-[10px] font-bold leading-none">
+                                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                                  </span>
+                                )}
+                              </span>
                             </button>
                           );
                         })}
@@ -703,7 +746,16 @@ export default function App() {
                       />
 
                       {activeCourseId === null ? (
-                        learnerNav === 'progress' ? (
+                        learnerNav === 'messages' ? (
+                          /* Learner Messages view (threads with instructors) */
+                          <MessagesView
+                            courses={courses}
+                            currentUserId={dbUser?.id ?? 0}
+                            currentUserRole={dbUser?.role ?? 'learner'}
+                            messagesIntent={messagesIntent}
+                            onClearMessagesIntent={() => setMessagesIntent(null)}
+                          />
+                        ) : learnerNav === 'progress' ? (
                           /* Learner Progress view (real existing completion/quiz data via ProgressTree) */
                           <LearnerProgress
                             courses={courses}
@@ -736,6 +788,11 @@ export default function App() {
                           token={token}
                           onBack={() => setActiveCourseId(null)}
                           onProgressUpdated={loadAppData}
+                          onNavigateToMessages={
+                            dbUser?.role === 'learner'
+                              ? (courseId, instructorId) => handleOpenMessagesIntent(courseId, instructorId)
+                              : undefined
+                          }
                         />
                       )}
                     </div>
@@ -761,7 +818,14 @@ export default function App() {
                                 isActive ? 'text-ochre' : 'text-navtext hover:text-white'
                               }`}
                             >
-                              <Icon className="w-5 h-5 shrink-0" />
+                              <div className="relative">
+                                <Icon className="w-5 h-5 shrink-0" />
+                                {key === 'messages' && unreadMessageCount > 0 && (
+                                  <span className="absolute -top-1.5 -right-2 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-ochre text-white text-[10px] font-bold leading-none">
+                                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] font-bold leading-none truncate">{label}</span>
                             </button>
                           );

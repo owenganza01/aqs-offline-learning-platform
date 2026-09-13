@@ -10,3 +10,4 @@ export { registerDocumentRoutes } from './documents.js';
 export { registerInstructorAnalyticsRoutes, type InstructorAnalyticsRouteDeps } from './instructor-analytics.js';
 export { registerCertificateRoutes, type CertificateRouteDeps } from './certificates.js';
 export { registerInstructorRoutes, type InstructorRoutesDeps } from './instructor.js';
+export { registerMessageRoutes, type MessageRouteDeps } from './messages.js';

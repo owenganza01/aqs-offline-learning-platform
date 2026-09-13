@@ -162,3 +162,17 @@ export const closureInitiateSchema = z.object({
 export const courseTransferSchema = z.object({
   targetUserId: z.number().int('Target user ID must be an integer'),
 });
+
+// Send a message: either into an existing conversation (conversationId) or to
+// a new/existing course-thread resolved atomically via (courseId + instructorId).
+export const sendMessageSchema = z
+  .object({
+    conversationId: z.number().int().positive().optional(),
+    courseId: z.number().int().positive().optional(),
+    instructorId: z.number().int().positive().optional(),
+    content: z.string().min(1, 'Message cannot be empty').max(5000, 'Message is too long'),
+  })
+  .refine((v) => Boolean(v.conversationId) || (Boolean(v.courseId) && Boolean(v.instructorId)), {
+    message: 'Provide conversationId, or courseId + instructorId',
+    path: ['conversationId'],
+  });

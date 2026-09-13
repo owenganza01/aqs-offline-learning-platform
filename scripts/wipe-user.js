@@ -190,7 +190,9 @@ async function main() {
     console.log('   - Personal quiz attempts, lesson completions, course completions, and certificates');
     console.log('   - Course enrollments');
     console.log('   - User account profile and credentials in both Postgres and Firebase Auth');
-    console.log('   (Authored courses and uploaded documents will be preserved with author snapshots)\n');
+    console.log('   (Authored courses and uploaded documents will be preserved with author snapshots)');
+    console.log('   (Message history is preserved for the other participant: the wiped user\'s references');
+    console.log('    are nulled and their display name kept via snapshots — no messages are deleted)\n');
 
     const confirmation = await askConfirmation('Type "yes" to confirm and proceed with the wipe: ');
     if (confirmation !== 'yes') {
@@ -220,7 +222,9 @@ async function main() {
         process.exit(1);
       }
 
-      console.log('✅ [1/2] Postgres wipe succeeded: all personal records and user row deleted.');
+      console.log(
+        '✅ [1/2] Postgres wipe succeeded: all personal records and user row deleted. Message history preserved for the other participant (FKs nulled, snapshots kept).',
+      );
     } catch (err) {
       console.error('❌ Postgres wipe error:', err.message);
       console.error('⛔ Firebase Auth deletion will NOT proceed.');

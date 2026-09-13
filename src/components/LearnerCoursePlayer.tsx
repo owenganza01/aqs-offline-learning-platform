@@ -26,6 +26,7 @@ import {
   Clock,
   X,
   Download,
+  MessageCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -34,6 +35,7 @@ interface LearnerCoursePlayerProps {
   token: string | null;
   onBack: () => void;
   onProgressUpdated: () => void;
+  onNavigateToMessages?: (courseId: number, instructorId: number) => void;
 }
 
 export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
@@ -41,6 +43,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   token,
   onBack,
   onProgressUpdated,
+  onNavigateToMessages,
 }) => {
   // Loading & Data states
   const [course, setCourse] = useState<Course | null>(null);
@@ -438,6 +441,18 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                   </h3>
                   <p className="text-ink-2 text-sm font-medium leading-relaxed">{course.description}</p>
                 </div>
+
+                {/* Message the instructor (learners only, hidden while the account is closing) */}
+                {onNavigateToMessages && course.createdBy && !course.instructorClosureStatus && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToMessages!(course.id, course.createdBy!)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-navy text-white text-sm font-bold shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Message Instructor
+                  </button>
+                )}
 
                 {/* Syllabus Progress */}
                 <div className="bg-paper-2 border border-rule rounded-2xl p-4 space-y-3">

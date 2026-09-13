@@ -89,3 +89,29 @@ export interface DocumentMetadata {
   fileSize: number;
   uploadedAt: string;
 }
+
+export interface Message {
+  id: number;
+  conversationId: number;
+  senderId: number | null;
+  senderName?: string | null;
+  senderNameSnapshot?: string | null;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface Conversation {
+  id: number;
+  courseId: number;
+  courseTitle?: string;
+  learnerId: number | null;
+  learnerName?: string | null;
+  instructorId: number | null;
+  instructorName?: string | null;
+  lastMessage?: string | null;
+  lastMessageAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  unreadCount?: number;
+}
