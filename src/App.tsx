@@ -427,6 +427,7 @@ export default function App() {
   const handleOpenMessagesIntent = (courseId: number, instructorId: number) => {
     setMessagesIntent({ courseId, instructorId });
     setLearnerNav('messages');
+    setActiveCourseId(null);
   };
 
   // Auth loading verification screen
