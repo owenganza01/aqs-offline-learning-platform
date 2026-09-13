@@ -7,6 +7,7 @@ import {
   reorderSchema,
   quizSchema,
   quizQuestionSchema,
+  courseTransferSchema,
 } from '../../middleware/validate.js';
 import {
   createCourse,
@@ -16,6 +17,9 @@ import {
   updateLesson,
   reorderLessons,
   deleteLesson,
+  transferCourse,
+  archiveCourse,
+  restoreCourse,
 } from '../controllers/admin-course-controller.js';
 import { saveQuiz, addQuizQuestion } from '../controllers/admin-quiz-controller.js';
 import { getAnalytics } from '../controllers/admin-analytics-controller.js';
@@ -68,6 +72,19 @@ export function registerAdminCourseRoutes(app: Application): void {
     validateBody(quizQuestionSchema),
     addQuizQuestion,
   );
+
+  // Account-closure admin actions (admin only — cannot be done by an instructor)
+  app.put(
+    '/api/admin/courses/:courseId/transfer',
+    requireAuth,
+    requireAdmin,
+    validateBody(courseTransferSchema),
+    transferCourse,
+  );
+
+  app.post('/api/admin/courses/:courseId/archive', requireAuth, requireAdmin, archiveCourse);
+
+  app.post('/api/admin/courses/:courseId/restore', requireAuth, requireAdmin, restoreCourse);
 
   app.get('/api/admin/analytics', requireAuth, requireAdmin, getAnalytics);
 }

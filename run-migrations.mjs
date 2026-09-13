@@ -27,6 +27,7 @@ const migrations = [
   'drizzle/0021_fix_certificate_uniqueness.sql',
   'drizzle/0022_add_certificate_template.sql',
   'drizzle/0023_wipe_user_and_preserve_authored_content.sql',
+  'drizzle/0025_instructor_closure.sql',
 ];
 
 async function run() {

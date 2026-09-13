@@ -13,6 +13,12 @@ export interface User {
   organization?: string | null;
   rejectionReason?: string | null;
   submittedAt?: string | null;
+  closureStatus?: 'pending' | 'closed' | null;
+  closureStartedAt?: string | null;
+  closureRetentionDays?: number | null;
+  closureReason?: string | null;
+  closureEffective?: 'pending' | 'closed' | null;
+  closureDeadline?: string | null;
   avatarUrl?: string | null;
   createdAt?: string;
 }
@@ -22,6 +28,11 @@ export interface Course {
   title: string;
   description: string;
   thumbnail: string | null;
+  createdBy?: number | null;
+  createdByName?: string | null;
+  isArchived?: boolean;
+  instructorClosureStatus?: 'pending' | 'closed' | null;
+  instructorClosureDeadline?: string | null;
   lessons?: Lesson[];
   quiz?: Quiz | null;
 }

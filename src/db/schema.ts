@@ -13,6 +13,10 @@ export const users = pgTable('users', {
   organization: text('organization'),
   rejectionReason: text('rejection_reason'),
   submittedAt: timestamp('submitted_at'),
+  closureStatus: text('closure_status'), // 'pending' | 'closed' | null (no closure)
+  closureStartedAt: timestamp('closure_started_at'),
+  closureRetentionDays: integer('closure_retention_days'), // 7..30, captured at initiation
+  closureReason: text('closure_reason'),
   avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -25,6 +29,7 @@ export const courses = pgTable('courses', {
   thumbnail: text('thumbnail'), // Data URL, image URL, or gradient code
   createdBy: integer('created_by').references(() => users.id),
   createdByName: text('created_by_name'),
+  isArchived: boolean('is_archived').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

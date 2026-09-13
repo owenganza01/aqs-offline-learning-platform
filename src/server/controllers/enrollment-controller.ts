@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.js';
 import { getUserEnrollments, enrollUserInCourse } from '../services/enrollment-service.js';
+import { ClosureError } from '../services/closure-service.js';
 
 export async function listEnrollments(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -18,6 +19,10 @@ export async function enrollCourse(req: AuthRequest, res: Response): Promise<voi
     const result = await enrollUserInCourse(req.dbUser!.id, courseId);
     res.json(result);
   } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
     console.error('Error creating enrollment:', error);
     res.status(500).json({ error: 'Failed to create enrollment.' });
   }

@@ -5,6 +5,7 @@ import {
   createInstructorSchema,
   changeRoleSchema,
   instructorDeclineSchema,
+  closureInitiateSchema,
 } from '../../middleware/validate.js';
 import {
   listUsers,
@@ -12,6 +13,7 @@ import {
   createInstructor,
   approveInstructorUser,
   declineInstructorUser,
+  closeInstructorAccount,
 } from '../controllers/admin-user-controller.js';
 
 export interface AdminUserRouteDeps {
@@ -49,5 +51,14 @@ export function registerAdminUserRoutes(app: Application, deps: AdminUserRouteDe
     deps.authRateLimit,
     validateBody(instructorDeclineSchema),
     declineInstructorUser,
+  );
+
+  app.post(
+    '/api/admin/users/:userId/close-initiate',
+    requireAuth,
+    requireAdmin,
+    deps.authRateLimit,
+    validateBody(closureInitiateSchema),
+    closeInstructorAccount,
   );
 }

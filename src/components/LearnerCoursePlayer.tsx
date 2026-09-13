@@ -424,7 +424,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/30 to-transparent flex items-end p-6 md:p-8">
                   <div className="text-white space-y-1">
                     <span className="bg-ochre text-white text-[9px] uppercase px-2.5 py-0.5 rounded-full font-mono tracking-wider">
-                      Active Syllabus
+                      {course.isArchived ? 'Archived Syllabus' : 'Active Syllabus'}
                     </span>
                     <h2 className="text-xl md:text-2xl font-display font-bold tracking-tight">{course.title}</h2>
                   </div>
@@ -454,6 +454,65 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     ></div>
                   </div>
                 </div>
+
+                {/* Instructor Account Closure Notice */}
+                {course.instructorClosureStatus && (
+                  <div
+                    className={`rounded-2xl p-5 flex items-start gap-4 ${
+                      course.instructorClosureStatus === 'pending'
+                        ? 'bg-ochre/10 border border-ochre/30'
+                        : 'bg-ink/5 border border-rule'
+                    }`}
+                  >
+                    <div
+                      className={`p-2.5 rounded-xl shrink-0 ${
+                        course.instructorClosureStatus === 'pending' ? 'bg-ochre text-white' : 'bg-ink/10 text-ink-3'
+                      }`}
+                    >
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-display font-bold tracking-tight text-ink">
+                        {course.instructorClosureStatus === 'pending'
+                          ? 'Instructor Account Closing'
+                          : 'Course Now Read-Only'}
+                      </h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        {course.instructorClosureStatus === 'pending' ? (
+                          <>
+                            The instructor's account is in the process of closing.{' '}
+                            {course.instructorClosureDeadline && (
+                              <span className="block text-xs font-mono mt-0.5 text-ink-3">
+                                Availability deadline: {new Date(course.instructorClosureDeadline).toLocaleDateString()}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            The instructor's account has been closed. This course is now preserved for enrolled learners
+                            and is no longer accepting new enrollments or messages.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Archived Course Notice */}
+                {course.isArchived && !course.instructorClosureStatus && (
+                  <div className="rounded-2xl p-5 flex items-start gap-4 bg-ink/5 border border-rule">
+                    <div className="p-2.5 rounded-xl shrink-0 bg-ink/10 text-ink-3">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-display font-bold tracking-tight text-ink">Course Archived</h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        An administrator has archived this course for reference. Existing enrolled learners can continue
+                        accessing the material.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Completion Banner */}
                 {allLessonsCompleted && isQuizPassed && completionData && (

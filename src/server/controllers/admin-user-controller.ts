@@ -10,6 +10,7 @@ import {
   declineInstructor,
   StateGuardError,
 } from '../services/user-service.js';
+import { initiateInstructorClosure, withClosureInfo, ClosureError } from '../services/closure-service.js';
 
 export async function listUsers(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -19,7 +20,9 @@ export async function listUsers(req: AuthRequest, res: Response): Promise<void> 
     );
     const { data, total } = await listUsersService({ limit, offset });
     res.setHeader('X-Total-Count', total);
-    res.json(data);
+    // Attach server-computed closure state to every row so the admin UI never
+    // re-implements the expiry rule client-side.
+    res.json(data.map((u: any) => withClosureInfo(u)));
   } catch (error: unknown) {
     console.error('List users error:', error);
     res.status(500).json({ error: 'Failed to fetch users.' });
@@ -110,5 +113,30 @@ export async function declineInstructorUser(req: AuthRequest, res: Response): Pr
     }
     console.error('Decline instructor error:', error);
     res.status(500).json({ error: 'Failed to decline instructor.' });
+  }
+}
+
+export async function closeInstructorAccount(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const targetUserId = parseInt(req.params.userId);
+    if (isNaN(targetUserId)) {
+      res.status(400).json({ error: 'Invalid user ID.' });
+      return;
+    }
+    // Admins cannot close their own account.
+    if (targetUserId === req.dbUser!.id) {
+      res.status(403).json({ error: 'You cannot close your own account.' });
+      return;
+    }
+    const { retentionDays, reason } = req.body ?? {};
+    const updated = await initiateInstructorClosure(targetUserId, { retentionDays, reason });
+    res.json({ success: true, dbUser: withClosureInfo(updated) });
+  } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Initiate closure error:', error);
+    res.status(500).json({ error: 'Failed to initiate account closure.' });
   }
 }

@@ -150,3 +150,15 @@ export const instructorOnboardSchema = z.object({
 export const instructorDeclineSchema = z.object({
   rejectionReason: z.string().min(1, 'A reason is required to decline an application').max(1000, 'Reason is too long'),
 });
+
+// Admin initiates instructor account closure.
+// retentionDays: 7..30 (default applied by the service when omitted).
+export const closureInitiateSchema = z.object({
+  retentionDays: z.number().int('Retention period must be a whole number of days').min(7).max(30).optional(),
+  reason: z.string().max(1000, 'Closure reason is too long').optional(),
+});
+
+// Admin transfers a course to another instructor.
+export const courseTransferSchema = z.object({
+  targetUserId: z.number().int('Target user ID must be an integer'),
+});

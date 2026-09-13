@@ -1,8 +1,23 @@
 // src/components/admin/CourseFactory.tsx
 import React, { useState, useEffect } from 'react';
-import { Course } from '../../types.js';
+import { Course, User } from '../../types.js';
 import { apiFetch } from '../../lib/api.js';
-import { BookOpen, Plus, Trash2, Edit3, Award, FileText, Upload, Check, AlertCircle } from 'lucide-react';
+import {
+  BookOpen,
+  Plus,
+  Trash2,
+  Edit3,
+  Award,
+  FileText,
+  Upload,
+  Check,
+  AlertCircle,
+  Shield,
+  UserCheck,
+  Archive,
+  ArchiveRestore,
+  Loader2,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface CourseFactoryProps {
@@ -103,6 +118,84 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
   } | null>(null);
   const [certLoading, setCertLoading] = useState<boolean>(false);
   const [certSaving, setCertSaving] = useState<boolean>(false);
+  const [instructors, setInstructors] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [transferTarget, setTransferTarget] = useState<number | ''>('');
+  const [transferBusy, setTransferBusy] = useState<boolean>(false);
+  const [archiveBusy, setArchiveBusy] = useState<boolean>(false);
+  const [ownershipMsg, setOwnershipMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!token || userRole !== 'admin') return;
+    apiFetch<User[]>(`/api/admin/users`)
+      .then(({ ok, data }) => {
+        if (ok && data) {
+          setInstructors(
+            data
+              .filter(
+                (u) =>
+                  u.role === 'instructor' &&
+                  u.onboardingStatus === 'active' &&
+                  !u.closureEffective &&
+                  u.id !== selectedCourse?.createdBy,
+              )
+              .map((u) => ({ id: u.id, name: u.name || u.email, email: u.email })),
+          );
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, userRole, selectedCourse?.id]);
+
+  const handleTransferCourse = async () => {
+    if (!token || !selectedCourse || transferTarget === '') return;
+    setTransferBusy(true);
+    setOwnershipMsg(null);
+    try {
+      const { ok, data } = await apiFetch(`/api/admin/courses/${selectedCourse.id}/transfer`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: transferTarget }),
+      });
+      if (ok) {
+        setOwnershipMsg({ type: 'success', text: data?.message || 'Course ownership transferred.' });
+        setTransferTarget('');
+        await loadCourseFullDetails(selectedCourse.id);
+      } else {
+        setOwnershipMsg({ type: 'error', text: data?.error || 'Transfer failed.' });
+      }
+    } catch (err) {
+      console.error('Transfer failed:', err);
+      setOwnershipMsg({ type: 'error', text: 'Network error — please try again.' });
+    } finally {
+      setTransferBusy(false);
+    }
+  };
+
+  const handleArchiveToggle = async () => {
+    if (!token || !selectedCourse) return;
+    setArchiveBusy(true);
+    setOwnershipMsg(null);
+    try {
+      const action = selectedCourse.isArchived ? 'restore' : 'archive';
+      const { ok, data } = await apiFetch(`/api/admin/courses/${selectedCourse.id}/${action}`, {
+        method: 'POST',
+      });
+      if (ok) {
+        setOwnershipMsg({
+          type: 'success',
+          text: action === 'archive' ? 'Course archived for reference.' : 'Course restored to normal operation.',
+        });
+        await loadCourseFullDetails(selectedCourse.id);
+      } else {
+        setOwnershipMsg({ type: 'error', text: data?.error || 'Failed to update course status.' });
+      }
+    } catch (err) {
+      console.error('Archive toggle failed:', err);
+      setOwnershipMsg({ type: 'error', text: 'Network error — please try again.' });
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -458,7 +551,11 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                     </div>
                     <div className="text-[12px] font-mono text-text-2">{unitsCount}</div>
                     <div>
-                      {isPublished ? (
+                      {course.isArchived ? (
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded bg-[#FCEBE9] text-error">
+                          ● Archived
+                        </span>
+                      ) : isPublished ? (
                         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded bg-[#E8F4EC] text-success">
                           ● Published
                         </span>
@@ -574,6 +671,103 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                 </form>
               </motion.div>
             </AnimatePresence>
+          )}
+        </div>
+      )}
+
+      {/* Ownership & Status (admin only) */}
+      {courseSubTab === 'settings' && userRole === 'admin' && selectedCourse && (
+        <div className="bg-white border border-stroke p-6 rounded-xl shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-rose-500"></div>
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-rose-500" />
+            <h3 className="text-lg font-display font-bold text-text tracking-tight">Ownership &amp; Status</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Transfer ownership */}
+            <div className="space-y-2">
+              <span className="block text-[11px] font-bold uppercase text-text-3 mb-1 font-mono">
+                Transfer ownership
+              </span>
+              <p className="text-xs text-text-3 leading-relaxed">
+                Move this course to another active instructor. The current owner&apos;s account may be closing, or you
+                may simply want to reassign the course. The course becomes un-archived automatically.
+              </p>
+              <div className="flex gap-2">
+                <select
+                  value={transferTarget}
+                  onChange={(e) => setTransferTarget(e.target.value === '' ? '' : parseInt(e.target.value))}
+                  className="flex-1 h-10 px-3 bg-white border-[1.5px] border-stroke rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel"
+                >
+                  <option value="">Select an instructor…</option>
+                  {instructors.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleTransferCourse}
+                  disabled={transferBusy || transferTarget === '' || instructors.length === 0}
+                  className="inline-flex items-center gap-1.5 h-10 px-4 bg-steel hover:bg-[#2d4a70] text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {transferBusy ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <UserCheck className="w-3.5 h-3.5" />
+                  )}
+                  <span>Transfer</span>
+                </button>
+              </div>
+              {instructors.length === 0 && (
+                <p className="text-[11px] text-warning">
+                  No other active instructors available to receive this course.
+                </p>
+              )}
+            </div>
+
+            {/* Archive / restore */}
+            <div className="space-y-2">
+              <span className="block text-[11px] font-bold uppercase text-text-3 mb-1 font-mono">Archive status</span>
+              <p className="text-xs text-text-3 leading-relaxed">
+                Archiving preserves the course for reference: existing learners keep access, but it is marked as
+                archived. Restoring returns it to normal operation.
+              </p>
+              <button
+                type="button"
+                onClick={handleArchiveToggle}
+                disabled={archiveBusy}
+                className="inline-flex items-center gap-1.5 h-10 px-4 bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {archiveBusy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : selectedCourse.isArchived ? (
+                  <ArchiveRestore className="w-3.5 h-3.5" />
+                ) : (
+                  <Archive className="w-3.5 h-3.5" />
+                )}
+                <span>{selectedCourse.isArchived ? 'Restore Course' : 'Archive Course'}</span>
+              </button>
+              <p className="text-xs text-text-2">
+                Current owner: {selectedCourse.createdByName || `Instructor #${selectedCourse.createdBy ?? '—'}`}
+                {selectedCourse.isArchived && <span className="font-semibold text-rose-500"> · Archived</span>}
+              </p>
+            </div>
+          </div>
+
+          {ownershipMsg && (
+            <div
+              className={`mt-4 flex items-start gap-2 rounded-lg p-3 text-xs font-medium ${
+                ownershipMsg.type === 'success'
+                  ? 'bg-success/10 border border-success/30 text-success'
+                  : 'bg-error-bg border border-error/30 text-error'
+              }`}
+            >
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{ownershipMsg.text}</span>
+            </div>
           )}
         </div>
       )}

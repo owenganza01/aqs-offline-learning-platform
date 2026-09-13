@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.js';
 import * as courseAdminService from '../services/course-admin-service.js';
 import * as lessonAdminService from '../services/lesson-admin-service.js';
+import { transferCourseOwnership, setCourseArchived, ClosureError } from '../services/closure-service.js';
 
 export async function createCourse(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -70,6 +71,64 @@ export async function deleteCourse(req: AuthRequest, res: Response): Promise<voi
   } catch (error: unknown) {
     console.error('CMS Course deletion error:', error);
     res.status(500).json({ error: 'Failed to delete course.' });
+  }
+}
+
+export async function transferCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const courseId = parseInt(req.params.courseId);
+    const { targetUserId } = req.body;
+    if (isNaN(courseId) || typeof targetUserId !== 'number') {
+      res.status(400).json({ error: 'Course ID and target user ID are required.' });
+      return;
+    }
+    const course = await transferCourseOwnership(courseId, targetUserId);
+    res.json({ success: true, course });
+  } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Course transfer error:', error);
+    res.status(500).json({ error: 'Failed to transfer course.' });
+  }
+}
+
+export async function archiveCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const courseId = parseInt(req.params.courseId);
+    if (isNaN(courseId)) {
+      res.status(400).json({ error: 'Invalid course ID' });
+      return;
+    }
+    const course = await setCourseArchived(courseId, true);
+    res.json({ success: true, course });
+  } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Course archive error:', error);
+    res.status(500).json({ error: 'Failed to archive course.' });
+  }
+}
+
+export async function restoreCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const courseId = parseInt(req.params.courseId);
+    if (isNaN(courseId)) {
+      res.status(400).json({ error: 'Invalid course ID' });
+      return;
+    }
+    const course = await setCourseArchived(courseId, false);
+    res.json({ success: true, course });
+  } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Course restore error:', error);
+    res.status(500).json({ error: 'Failed to restore course.' });
   }
 }
 

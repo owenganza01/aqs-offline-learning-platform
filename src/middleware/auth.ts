@@ -5,6 +5,7 @@ import { db } from '../db/index.js';
 import { users, lessons, enrollments } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { DecodedIdToken } from 'firebase-admin/auth';
+import { effectiveClosureStatus } from '../server/services/closure-service.js';
 
 export interface AuthRequest extends Request {
   user?: DecodedIdToken;
@@ -117,6 +118,16 @@ async function authenticate(
     const { user, conflict } = await resolveDbUser(decodedToken, intent);
     if (conflict) {
       res.status(409).json({ error: EMAIL_CONFLICT_MESSAGE });
+      return;
+    }
+
+    // Accounts in closure (pending or expired) are blocked from signing in.
+    // The 'pending' -> 'closed' deadline is resolved on read via the shared
+    // effectiveClosureStatus function.
+    if (effectiveClosureStatus(user) !== null) {
+      res.status(403).json({
+        error: 'Forbidden: This account has been closed. Please contact your administrator for help.',
+      });
       return;
     }
 

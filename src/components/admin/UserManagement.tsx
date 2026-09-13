@@ -2,7 +2,18 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../../types.js';
 import { apiFetch } from '../../lib/api.js';
-import { Users, UserPlus, Shield, RefreshCw, AlertCircle, CheckCircle, Clock, XCircle, Loader2 } from 'lucide-react';
+import {
+  Users,
+  UserPlus,
+  Shield,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Loader2,
+  UserX,
+} from 'lucide-react';
 
 interface UserManagementProps {
   token: string | null;
@@ -47,6 +58,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
   const [declineTarget, setDeclineTarget] = useState<User | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [declineError, setDeclineError] = useState('');
+  const [closeTarget, setCloseTarget] = useState<User | null>(null);
+  const [closeRetentionDays, setCloseRetentionDays] = useState(14);
+  const [closeReason, setCloseReason] = useState('');
+  const [closeError, setCloseError] = useState('');
 
   const loadUsers = async () => {
     if (!token) return;
@@ -175,6 +190,46 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
     } catch (err) {
       console.error('Decline failed:', err);
       setDeclineError('Network error — please try again');
+    } finally {
+      setActingOn(null);
+    }
+  };
+
+  const openClose = (user: User) => {
+    setCloseTarget(user);
+    setCloseRetentionDays(14);
+    setCloseReason('');
+    setCloseError('');
+  };
+
+  const submitClose = async () => {
+    if (!token || !closeTarget) return;
+
+    setActingOn(closeTarget.id);
+    setCloseError('');
+    try {
+      const { ok, data } = await apiFetch(`/api/admin/users/${closeTarget.id}/close-initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          retentionDays: closeRetentionDays,
+          reason: closeReason.trim() || undefined,
+        }),
+      });
+      if (ok) {
+        const updated = data?.dbUser as User | undefined;
+        if (updated) {
+          setUsers((prev) => prev.map((u) => (u.id === closeTarget.id ? updated : u)));
+        } else {
+          loadUsers();
+        }
+        setCloseTarget(null);
+      } else {
+        setCloseError(data?.error || 'Failed to initiate closure');
+      }
+    } catch (err) {
+      console.error('Close account failed:', err);
+      setCloseError('Network error — please try again');
     } finally {
       setActingOn(null);
     }
@@ -323,9 +378,33 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
                               {statusMeta.label}
                             </span>
                           )}
+                          {user.closureStatus === 'pending' && (
+                            <span className="text-[9px] font-bold bg-[#FDF3E0] text-warning border border-warning/30 px-1.5 py-0.5 rounded-full uppercase">
+                              Closing
+                              {user.closureDeadline &&
+                                ` · until ${new Date(user.closureDeadline).toLocaleDateString()}`}
+                            </span>
+                          )}
+                          {user.closureStatus === 'closed' && (
+                            <span className="text-[9px] font-bold bg-error-bg text-error border border-error/30 px-1.5 py-0.5 rounded-full uppercase">
+                              Closed
+                            </span>
+                          )}
                         </div>
                         <span className="text-xs text-text-3 truncate block">{user.email}</span>
                       </div>
+                      {user.role === 'instructor' && !user.closureEffective && user.id !== currentUserId && (
+                        <button
+                          type="button"
+                          disabled={actingOn === user.id}
+                          onClick={() => openClose(user)}
+                          title="Close instructor account"
+                          className="inline-flex items-center gap-1.5 h-9 px-3 bg-error-bg hover:bg-error/20 text-error text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                          <span>Close</span>
+                        </button>
+                      )}
                       <select
                         value={user.role}
                         onChange={(e) => handleRoleChange(user.id, e.target.value)}
@@ -474,6 +553,90 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
                 type="button"
                 onClick={() => setDeclineTarget(null)}
                 disabled={actingOn === declineTarget.id}
+                className="h-10 px-4 bg-paper-2 hover:bg-rule text-text text-sm font-semibold rounded-lg transition-all border border-stroke cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Close instructor account modal */}
+      {closeTarget && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="close-modal-title"
+        >
+          <div className="absolute inset-0 bg-navy/60 backdrop-blur-sm" onClick={() => setCloseTarget(null)} />
+          <div className="bg-white border border-stroke rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative z-10 p-6">
+            <h3 id="close-modal-title" className="text-lg font-display font-bold text-text tracking-tight">
+              Close Instructor Account
+            </h3>
+            <p className="text-xs text-text-3 mt-1 leading-relaxed">
+              Closing <span className="font-semibold text-text">{closeTarget.name || closeTarget.email}</span> will
+              immediately block sign-in, stop new enrollments across their courses, and begin a retention countdown.
+              Existing learners keep access until the deadline, then their courses become read-only unless transferred
+              to another instructor.
+            </p>
+
+            <div className="mt-4">
+              <label htmlFor="close-retention" className="text-[10px] font-bold text-text-3 uppercase tracking-wider">
+                Content retention period (days)
+              </label>
+              <input
+                id="close-retention"
+                type="number"
+                min={7}
+                max={30}
+                step={1}
+                value={closeRetentionDays}
+                onChange={(e) => setCloseRetentionDays(parseInt(e.target.value) || 14)}
+                className="mt-1 w-full h-10 px-3 bg-white border-[1.5px] border-stroke rounded-lg text-sm text-text focus:outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel"
+              />
+              <p className="text-[11px] text-text-3 mt-1">Between 7 and 30 days (default 14).</p>
+            </div>
+
+            <div className="mt-3">
+              <label htmlFor="close-reason" className="text-[10px] font-bold text-text-3 uppercase tracking-wider">
+                Reason <span className="text-text-3">(optional)</span>
+              </label>
+              <textarea
+                id="close-reason"
+                value={closeReason}
+                onChange={(e) => setCloseReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. Instructor left the school."
+                className="mt-1 w-full px-3 py-2.5 bg-white border-[1.5px] border-stroke rounded-lg text-sm text-text placeholder:text-text-3 focus:outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel resize-none"
+              />
+            </div>
+
+            {closeError && (
+              <p className="mt-2 text-xs font-semibold text-error" role="alert">
+                {closeError}
+              </p>
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={submitClose}
+                disabled={actingOn === closeTarget.id}
+                className="flex-1 h-10 bg-error hover:opacity-90 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center justify-center gap-1.5"
+              >
+                {actingOn === closeTarget.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Closing...
+                  </>
+                ) : (
+                  'Close Account'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCloseTarget(null)}
+                disabled={actingOn === closeTarget.id}
                 className="h-10 px-4 bg-paper-2 hover:bg-rule text-text text-sm font-semibold rounded-lg transition-all border border-stroke cursor-pointer disabled:opacity-50"
               >
                 Cancel
