@@ -124,9 +124,14 @@ async function authenticate(
     // Accounts in closure (pending or expired) are blocked from signing in.
     // The 'pending' -> 'closed' deadline is resolved on read via the shared
     // effectiveClosureStatus function.
-    if (effectiveClosureStatus(user) !== null) {
+    const closureStatus = effectiveClosureStatus(user);
+    if (closureStatus !== null) {
+      const closureMessage =
+        closureStatus === 'pending'
+          ? 'Your account is currently under review and messaging is temporarily disabled until this is resolved. Contact your administrator for details.'
+          : 'This account has been closed. Please contact your administrator for help.';
       res.status(403).json({
-        error: 'Forbidden: This account has been closed. Please contact your administrator for help.',
+        error: `Forbidden: ${closureMessage}`,
       });
       return;
     }
