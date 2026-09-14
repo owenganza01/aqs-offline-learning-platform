@@ -82,11 +82,37 @@ export async function processQuizSubmissions(
   const deduplicatedQuizzes = resolveSyncConflicts(quizSyncItems);
 
   const processedQuizzes = [];
+  const rejectedQuizzes = [];
   for (const item of deduplicatedQuizzes) {
     const sub = item.payload as { quizId: string; answers: number[]; attemptedAt?: string };
     const quizId = parseInt(sub.quizId);
     const answers = sub.answers;
     if (isNaN(quizId) || !Array.isArray(answers)) continue;
+
+    const quiz = await db
+      .select({ courseId: schema.quizzes.courseId })
+      .from(schema.quizzes)
+      .where(eq(schema.quizzes.id, quizId))
+      .limit(1);
+    if (quiz.length === 0) {
+      rejectedQuizzes.push({ quizId, reason: 'Quiz not found.' });
+      continue;
+    }
+
+    const enrolled = await db
+      .select({ id: schema.enrollments.id })
+      .from(schema.enrollments)
+      .where(and(eq(schema.enrollments.userId, userId), eq(schema.enrollments.courseId, quiz[0].courseId)))
+      .limit(1);
+    if (enrolled.length === 0) {
+      // This rejection path currently only fires for a payload referencing a course
+      // the learner was never enrolled in - unenroll doesn't exist yet, so a
+      // genuinely-enrolled learner can never legitimately reach this state. Revisit
+      // durability of this notice if an unenroll feature is ever added, since it
+      // would then affect real completed attempts, not just invalid ones.
+      rejectedQuizzes.push({ quizId, reason: 'You must be enrolled in this course to submit the quiz.' });
+      continue;
+    }
 
     const questionsList = await db
       .select({ correctOptionIndex: schema.questions.correctOptionIndex })
@@ -116,17 +142,14 @@ export async function processQuizSubmissions(
 
       // Check for certificate eligibility after sync quiz submission
       try {
-        const quiz = await db.select().from(schema.quizzes).where(eq(schema.quizzes.id, quizId)).limit(1);
-        if (quiz.length > 0) {
-          await issueCertificate(userId, quiz[0].courseId);
-        }
+        await issueCertificate(userId, quiz[0].courseId);
       } catch (err) {
         console.error('Certificate check after sync quiz submission failed:', err);
       }
     }
   }
 
-  return processedQuizzes;
+  return { processedQuizzes, rejectedQuizzes };
 }
 
 export async function getUserSyncState(userId: number) {

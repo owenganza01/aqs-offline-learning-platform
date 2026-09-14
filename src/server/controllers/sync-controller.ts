@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.js';
 import {
   getMaxLimits,
@@ -24,13 +24,14 @@ export async function syncHandler(req: AuthRequest, res: Response): Promise<void
     const userId = req.dbUser!.id;
 
     await processLessonCompletions(userId, localCompletions);
-    const processedQuizzes = await processQuizSubmissions(userId, localQuizzes);
+    const { processedQuizzes, rejectedQuizzes } = await processQuizSubmissions(userId, localQuizzes);
     const syncState = await getUserSyncState(userId);
 
     res.json({
       success: true,
       ...syncState,
       processedQuizzes,
+      rejectedQuizzes,
     });
   } catch (error: unknown) {
     console.error('Error in reconnect-sync engine:', error);
