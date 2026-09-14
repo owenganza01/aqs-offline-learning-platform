@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.js';
 import * as quizAdminService from '../services/quiz-admin-service.js';
+import * as courseAdminService from '../services/course-admin-service.js';
 
 export async function saveQuiz(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -9,6 +10,13 @@ export async function saveQuiz(req: AuthRequest, res: Response): Promise<void> {
     if (isNaN(courseId) || !title || !Array.isArray(questions)) {
       res.status(400).json({ error: 'Course ID, quiz title, and questions array are required.' });
       return;
+    }
+    if (req.dbUser!.role !== 'admin') {
+      const course = await courseAdminService.getCourseById(courseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only edit quizzes in your own courses' });
+        return;
+      }
     }
     const result = await quizAdminService.saveQuiz(courseId, title, questions);
     res.json({ success: true, ...result });
@@ -30,6 +38,13 @@ export async function addQuizQuestion(req: AuthRequest, res: Response): Promise<
     if (trimmedOptions.some((opt: string) => !opt)) {
       res.status(400).json({ error: 'All of the 4 options must be non-empty strings.' });
       return;
+    }
+    if (req.dbUser!.role !== 'admin') {
+      const course = await courseAdminService.getCourseById(courseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only edit quizzes in your own courses' });
+        return;
+      }
     }
     const result = await quizAdminService.addQuizQuestion(courseId, {
       questionText,

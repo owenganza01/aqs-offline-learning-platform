@@ -39,20 +39,23 @@ export function registerAdminCourseRoutes(app: Application): void {
     createLesson,
   );
 
-  app.put(
-    '/api/admin/courses/:courseId/lessons/:id',
-    requireAuth,
-    requireInstructorOrAdmin,
-    validateBody(lessonSchema),
-    updateLesson,
-  );
-
+  // NOTE: /reorder MUST be registered before /:id — otherwise Express matches
+  // the literal 'reorder' against the :id param and the reorder handler is
+  // unreachable (the shadowing route was previously hit instead).
   app.put(
     '/api/admin/courses/:courseId/lessons/reorder',
     requireAuth,
     requireInstructorOrAdmin,
     validateBody(reorderSchema),
     reorderLessons,
+  );
+
+  app.put(
+    '/api/admin/courses/:courseId/lessons/:id',
+    requireAuth,
+    requireInstructorOrAdmin,
+    validateBody(lessonSchema),
+    updateLesson,
   );
 
   app.delete('/api/admin/courses/:courseId/lessons/:id', requireAuth, requireInstructorOrAdmin, deleteLesson);

@@ -140,6 +140,13 @@ export async function createLesson(req: AuthRequest, res: Response): Promise<voi
       res.status(400).json({ error: 'Course ID, title and content are required.' });
       return;
     }
+    if (req.dbUser!.role !== 'admin') {
+      const course = await courseAdminService.getCourseById(courseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only create lessons in your own courses' });
+        return;
+      }
+    }
     const lesson = await lessonAdminService.createLesson(courseId, { title, content, videoUrl, slidesUrl, sortOrder });
     res.status(201).json(lesson);
   } catch (error: unknown) {
@@ -189,6 +196,13 @@ export async function reorderLessons(req: AuthRequest, res: Response): Promise<v
     if (isNaN(courseId)) {
       res.status(400).json({ error: 'Invalid course ID' });
       return;
+    }
+    if (req.dbUser!.role !== 'admin') {
+      const course = await courseAdminService.getCourseById(courseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only reorder lessons in your own courses' });
+        return;
+      }
     }
     const parsedIds = orderedIds.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
     await lessonAdminService.reorderLessons(courseId, parsedIds);
