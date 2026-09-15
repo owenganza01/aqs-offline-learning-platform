@@ -10,6 +10,7 @@ import { LearnerProgress } from './components/LearnerProgress.tsx';
 import { LearnerCoursePlayer } from './components/LearnerCoursePlayer.tsx';
 import { MessagesView } from './components/MessagesView.tsx';
 const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ default: m.AdminLMS })));
+import type { AdminLmsTab } from './components/AdminLMS.js';
 import { BannerOffline } from './components/BannerOffline.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
 import { LandingPage } from './components/LandingPage.tsx';
@@ -114,7 +115,7 @@ export default function App() {
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   // Lifted AdminLMS tab state
-  const [adminActiveTab, setAdminActiveTab] = useState<'courses' | 'analytics' | 'users'>('courses');
+  const [adminActiveTab, setAdminActiveTab] = useState<AdminLmsTab>('dashboard');
 
   // Sync badge state (lifted from BannerOffline + pending queue poll)
   const [syncInProgress, setSyncInProgress] = useState(false);
@@ -669,6 +670,10 @@ export default function App() {
                         userRole={dbUser?.role}
                         activeTab={adminActiveTab}
                         onActiveTabChange={setAdminActiveTab}
+                        user={dbUser}
+                        onProfileUpdated={() => token && syncUserProfile(token)}
+                        messagesIntent={messagesIntent}
+                        onClearMessagesIntent={() => setMessagesIntent(null)}
                       />
                     </Suspense>
                   ) : (

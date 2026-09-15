@@ -1,7 +1,8 @@
 // src/components/AdminLMS.tsx
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { Course, Lesson } from '../types.js';
+import { Course, Lesson, User } from '../types.js';
 import { apiFetch } from '../lib/api.js';
+import type { LucideIcon } from 'lucide-react';
 import {
   Plus,
   ChartLine,
@@ -13,6 +14,10 @@ import {
   ArrowDown,
   Edit3,
   Trash2,
+  LayoutDashboard,
+  GraduationCap,
+  MessageCircle,
+  Settings,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -23,6 +28,39 @@ const AnalyticsDashboard = lazy(() =>
   import('./admin/AnalyticsDashboard.tsx').then((m) => ({ default: m.AnalyticsDashboard })),
 );
 const UserManagement = lazy(() => import('./admin/UserManagement.tsx').then((m) => ({ default: m.UserManagement })));
+const InstructorDashboard = lazy(() =>
+  import('./InstructorDashboard.tsx').then((m) => ({ default: m.InstructorDashboard })),
+);
+const InstructorLearners = lazy(() =>
+  import('./InstructorLearners.tsx').then((m) => ({ default: m.InstructorLearners })),
+);
+const InstructorSettings = lazy(() =>
+  import('./InstructorSettings.tsx').then((m) => ({ default: m.InstructorSettings })),
+);
+const MessagesView = lazy(() => import('./MessagesView.tsx').then((m) => ({ default: m.MessagesView })));
+
+export type AdminLmsTab = 'dashboard' | 'courses' | 'learners' | 'analytics' | 'messages' | 'settings' | 'users';
+
+interface NavTab {
+  key: AdminLmsTab;
+  label: string;
+  icon: LucideIcon;
+}
+
+const INSTRUCTOR_TABS: NavTab[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'courses', label: 'Courses', icon: BookOpen },
+  { key: 'learners', label: 'Learners', icon: GraduationCap },
+  { key: 'analytics', label: 'Analytics', icon: ChartLine },
+  { key: 'messages', label: 'Messages', icon: MessageCircle },
+  { key: 'settings', label: 'Settings', icon: Settings },
+];
+
+const ADMIN_TABS: NavTab[] = [
+  { key: 'courses', label: 'Courses', icon: BookOpen },
+  { key: 'analytics', label: 'Analytics', icon: ChartLine },
+  { key: 'users', label: 'Manage users', icon: SquareUser },
+];
 
 interface AdminLMSProps {
   token: string | null;
@@ -30,8 +68,12 @@ interface AdminLMSProps {
   onRefreshCourses: () => void;
   currentUserId?: number;
   userRole?: string;
-  activeTab: 'courses' | 'analytics' | 'users';
-  onActiveTabChange: (tab: 'courses' | 'analytics' | 'users') => void;
+  activeTab: AdminLmsTab;
+  onActiveTabChange: (tab: AdminLmsTab) => void;
+  user?: User | null;
+  onProfileUpdated?: () => void;
+  messagesIntent?: { courseId: number; instructorId: number } | null;
+  onClearMessagesIntent?: () => void;
 }
 
 export const AdminLMS: React.FC<AdminLMSProps> = ({
@@ -42,8 +84,54 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
   userRole,
   activeTab,
   onActiveTabChange,
+  user,
+  onProfileUpdated,
+  messagesIntent,
+  onClearMessagesIntent,
 }) => {
   const setActiveTab = onActiveTabChange;
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+
+  const role: 'instructor' | 'admin' | null =
+    userRole === 'instructor' ? 'instructor' : userRole === 'admin' ? 'admin' : null;
+  const navTabs = role === 'instructor' ? INSTRUCTOR_TABS : ADMIN_TABS;
+  const effectiveTab: AdminLmsTab = navTabs.some((t) => t.key === activeTab)
+    ? activeTab
+    : (navTabs[0]?.key ?? 'courses');
+
+  // Persist a corrected tab whenever the current one is not valid for the role
+  // (e.g. a stored admin-only tab applied to an instructor session).
+  useEffect(() => {
+    if (!role) return;
+    if (!navTabs.some((t) => t.key === activeTab)) {
+      setActiveTab(navTabs[0].key);
+    }
+  }, [role, activeTab, navTabs, setActiveTab]);
+
+  // Unread-message badge for the instructor Messages tab (mirrors the learner
+  // pattern). Polled while the portal is mounted; the learner-side badge in App
+  // only runs on /study paths, so this keeps the portal badge fresh on /lms.
+  useEffect(() => {
+    if (userRole !== 'instructor') return;
+    let cancelled = false;
+    const poll = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const { ok, data } = await apiFetch<{ unreadTotal: number }>('/api/messages/unread-total');
+        if (!cancelled && ok) setUnreadMessageCount(data.unreadTotal);
+      } catch {
+        // Non-critical — badge keeps its last known value while offline.
+      }
+    };
+    poll();
+    const intervalId = window.setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [userRole]);
+
+  const visibleCourses = userRole === 'instructor' ? courses.filter((c) => c.createdBy === currentUserId) : courses;
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [courseSubTab, setCourseSubTab] = useState('lessons');
   const [lessonEditor, setLessonEditor] = useState<{ open: boolean; lesson: Lesson | null }>({
@@ -157,42 +245,31 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
             <p className="hidden lg:block text-[10px] uppercase tracking-[0.09em] text-white/25 px-2 pt-3 pb-[5px] select-none">
               Manage
             </p>
-            <button
-              onClick={() => {
-                setActiveTab('courses');
-                setSelectedCourse(null);
-              }}
-              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'courses' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
-            >
-              <BookOpen
-                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'courses' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
-              />
-              <span>Courses</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('analytics');
-                setSelectedCourse(null);
-              }}
-              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'analytics' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
-            >
-              <ChartLine
-                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'analytics' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
-              />
-              <span>Analytics</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('users');
-                setSelectedCourse(null);
-              }}
-              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'users' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
-            >
-              <SquareUser
-                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'users' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
-              />
-              <span>Manage users</span>
-            </button>
+            {navTabs.map(({ key: tabKey, label, icon: Icon }) => {
+              const isActive = effectiveTab === tabKey;
+              return (
+                <button
+                  key={tabKey}
+                  onClick={() => {
+                    setActiveTab(tabKey);
+                    setSelectedCourse(null);
+                  }}
+                  className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${isActive ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
+                >
+                  <Icon
+                    className={`w-[15px] h-[15px] shrink-0 ${isActive ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
+                  />
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{label}</span>
+                    {tabKey === 'messages' && unreadMessageCount > 0 && (
+                      <span className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-ochre text-white text-[10px] font-bold leading-none">
+                        {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -205,11 +282,11 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
               </div>
             }
           >
-            {activeTab === 'courses' ? (
+            {effectiveTab === 'courses' ? (
               !selectedCourse ? (
                 <CourseFactory
                   token={token}
-                  courses={courses}
+                  courses={visibleCourses}
                   selectedCourse={null}
                   setSelectedCourse={setSelectedCourse}
                   onRefreshCourses={onRefreshCourses}
@@ -429,7 +506,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                             {courseSubTab === 'settings' && (
                               <CourseFactory
                                 token={token}
-                                courses={courses}
+                                courses={visibleCourses}
                                 selectedCourse={selectedCourse}
                                 setSelectedCourse={setSelectedCourse}
                                 onRefreshCourses={onRefreshCourses}
@@ -446,10 +523,24 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                   </div>
                 </>
               )
-            ) : activeTab === 'analytics' ? (
-              <AnalyticsDashboard token={token} courses={courses} userRole={userRole} />
-            ) : activeTab === 'users' ? (
+            ) : effectiveTab === 'analytics' ? (
+              <AnalyticsDashboard token={token} courses={visibleCourses} userRole={userRole} />
+            ) : effectiveTab === 'users' ? (
               <UserManagement token={token} currentUserId={currentUserId} />
+            ) : effectiveTab === 'dashboard' ? (
+              <InstructorDashboard token={token} />
+            ) : effectiveTab === 'learners' ? (
+              <InstructorLearners token={token} />
+            ) : effectiveTab === 'settings' ? (
+              <InstructorSettings user={user ?? null} token={token} onProfileUpdated={onProfileUpdated} />
+            ) : effectiveTab === 'messages' ? (
+              <MessagesView
+                courses={visibleCourses}
+                currentUserId={currentUserId ?? 0}
+                currentUserRole={userRole === 'admin' ? 'admin' : 'instructor'}
+                messagesIntent={messagesIntent ?? null}
+                onClearMessagesIntent={onClearMessagesIntent ?? (() => {})}
+              />
             ) : null}
           </Suspense>
         </div>
