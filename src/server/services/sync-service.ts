@@ -35,9 +35,10 @@ export function resolveSyncConflicts<T extends SyncItem>(items: T[]): T[] {
 
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { scoreQuiz } from '../../lib/scoring.js';
 import { issueCertificate } from './certificate-service.js';
+import { completeCourse } from './course-service.js';
 
 const MAX_SYNC_COMPLETIONS = 500;
 const MAX_SYNC_QUIZZES = 100;
@@ -131,25 +132,90 @@ export async function processQuizSubmissions(
           passed,
           attemptedAt: sub.attemptedAt ? new Date(sub.attemptedAt) : new Date(),
         })
+        .onConflictDoNothing({
+          target: [schema.quizAttempts.userId, schema.quizAttempts.quizId, schema.quizAttempts.attemptedAt],
+        })
         .returning();
 
-      processedQuizzes.push({
-        quizId,
-        score,
-        passed,
-        attempt: attemptResult[0],
-      });
+      if (attemptResult.length > 0) {
+        processedQuizzes.push({
+          quizId,
+          score,
+          passed,
+          attempt: attemptResult[0],
+        });
 
-      // Check for certificate eligibility after sync quiz submission
-      try {
-        await issueCertificate(userId, quiz[0].courseId);
-      } catch (err) {
-        console.error('Certificate check after sync quiz submission failed:', err);
+        // Check for certificate eligibility after sync quiz submission
+        try {
+          await issueCertificate(userId, quiz[0].courseId);
+        } catch (err) {
+          console.error('Certificate check after sync quiz submission failed:', err);
+        }
+      } else {
+        // Same attempt flushed again (identical queued item / retry) — already stored.
+        processedQuizzes.push({ quizId, score, passed, attempt: null });
       }
     }
   }
 
   return { processedQuizzes, rejectedQuizzes };
+}
+
+// Reconcile course completion markers after an offline sync flush.
+// The online flow explicitly calls POST /api/courses/:id/complete once the final
+// lesson is done; the offline queue only replays lesson completions + quiz
+// attempts, so without this step an offline learner could never record a
+// courseCompletions row or receive their certificate. Courses are only
+// completable when ALL lessons are complete AND a passing quiz attempt exists,
+// and quiz attempts are enrollment-gated upstream — so only genuinely completed
+// courses can be marked. completeCourse is idempotent and throws when the
+// conditions are not yet met, which is expected and swallowed here.
+export async function reconcileCourseCompletions(
+  userId: number,
+  localCompletions: Array<{ lessonId: string; completedAt?: string }>,
+  localQuizzes: Array<{ quizId: string; answers: number[]; attemptedAt?: string }>,
+): Promise<string[]> {
+  const lessonIds = localCompletions.map((c) => parseInt(c.lessonId)).filter((id) => !isNaN(id));
+  const quizIds = localQuizzes.map((q) => parseInt(q.quizId)).filter((id) => !isNaN(id));
+  if (lessonIds.length === 0 && quizIds.length === 0) return [];
+
+  const courseIds = new Set<number>();
+  if (lessonIds.length > 0) {
+    const lessons = await db
+      .select({ courseId: schema.lessons.courseId })
+      .from(schema.lessons)
+      .where(
+        sql`${schema.lessons.id} IN ${sql`(${sql.join(
+          lessonIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`}`,
+      );
+    for (const l of lessons) courseIds.add(l.courseId);
+  }
+  if (quizIds.length > 0) {
+    const quizzes = await db
+      .select({ courseId: schema.quizzes.courseId })
+      .from(schema.quizzes)
+      .where(
+        sql`${schema.quizzes.id} IN ${sql`(${sql.join(
+          quizIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`}`,
+      );
+    for (const q of quizzes) courseIds.add(q.courseId);
+  }
+
+  const completedCourseIds: string[] = [];
+  for (const courseId of courseIds) {
+    try {
+      const result = await completeCourse(userId, courseId);
+      completedCourseIds.push(result.completionId);
+    } catch {
+      // Not completable yet (expected after a partial offline flush) or already
+      // complete — either way there is nothing to reconcile.
+    }
+  }
+  return completedCourseIds;
 }
 
 export async function getUserSyncState(userId: number) {

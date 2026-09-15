@@ -4,6 +4,7 @@ import {
   getMaxLimits,
   processLessonCompletions,
   processQuizSubmissions,
+  reconcileCourseCompletions,
   getUserSyncState,
 } from '../services/sync-service.js';
 
@@ -25,6 +26,7 @@ export async function syncHandler(req: AuthRequest, res: Response): Promise<void
 
     await processLessonCompletions(userId, localCompletions);
     const { processedQuizzes, rejectedQuizzes } = await processQuizSubmissions(userId, localQuizzes);
+    const reconciledCourseIds = await reconcileCourseCompletions(userId, localCompletions, localQuizzes);
     const syncState = await getUserSyncState(userId);
 
     res.json({
@@ -32,6 +34,7 @@ export async function syncHandler(req: AuthRequest, res: Response): Promise<void
       ...syncState,
       processedQuizzes,
       rejectedQuizzes,
+      reconciledCourseIds,
     });
   } catch (error: unknown) {
     console.error('Error in reconnect-sync engine:', error);

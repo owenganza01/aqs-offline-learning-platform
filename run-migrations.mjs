@@ -31,6 +31,7 @@ const migrations = [
   'drizzle/0025_instructor_closure.sql',
   'drizzle/0026_messaging.sql',
   'drizzle/0027_update_wipe_user_comments.sql',
+  'drizzle/0028_add_sync_idempotency.sql',
 ];
 
 async function run() {
