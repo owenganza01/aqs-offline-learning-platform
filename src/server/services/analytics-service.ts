@@ -511,3 +511,138 @@ export async function getInstructorAnalytics(instructorId: number) {
     recentActivity,
   };
 }
+
+// Instructor-scoped course roster — only courses owned by the logged-in instructor
+export async function getInstructorCourses(instructorId: number) {
+  const scope = await getInstructorScopeData(instructorId);
+
+  const courses = scope.ownedCourses.map((course) => {
+    const lessonsCount = (scope.lessonsByCourse[course.id] || []).length;
+    const enrollmentsCount = (scope.enrollmentsByCourse[course.id] || []).length;
+    const completionsCount = scope.completionsCountByCourse[course.id] || 0;
+    const certificatesIssued = scope.certificatesCountByCourse[course.id] || 0;
+    const quiz = scope.quizByCourse[course.id] || null;
+    const attempts = quiz ? scope.attempts.filter((a) => a.quizId === quiz.id) : [];
+    const passedAttempts = attempts.filter((a) => a.passed).length;
+    const passRate = attempts.length > 0 ? Math.round((passedAttempts / attempts.length) * 100) : 0;
+    const averageScore =
+      attempts.length > 0 ? Math.round(attempts.reduce((sum, a) => sum + a.score, 0) / attempts.length) : null;
+
+    return {
+      id: course.id,
+      title: course.title,
+      description: course.description,
+      thumbnail: course.thumbnail,
+      createdAt: course.createdAt,
+      createdBy: course.createdBy,
+      createdByName: course.createdByName,
+      isArchived: course.isArchived,
+      lessonsCount,
+      enrollmentsCount,
+      completionsCount,
+      certificatesIssued,
+      hasQuiz: Boolean(quiz),
+      passRate,
+      averageScore,
+    };
+  });
+
+  return { courses };
+}
+
+// Instructor-scoped learner roster — learners enrolled in any course owned by the instructor
+export async function getInstructorLearners(instructorId: number) {
+  const scope = await getInstructorScopeData(instructorId);
+
+  if (scope.enrolledUserIds.size === 0) {
+    return { learners: [] };
+  }
+
+  const userRows = await db
+    .select()
+    .from(schema.users)
+    .where(
+      sql`${schema.users.id} IN ${sql`(${sql.join(
+        [...scope.enrolledUserIds].map((id) => sql`${id}`),
+        sql`, `,
+      )})`}`,
+    );
+
+  const lessonIdsByCourse: Record<number, number[]> = {};
+  for (const course of scope.ownedCourses) {
+    lessonIdsByCourse[course.id] = (scope.lessonsByCourse[course.id] || []).map((l) => l.id);
+  }
+
+  const courseByEnrollment: Record<number, (typeof scope.ownedCourses)[number]> = {};
+  for (const e of scope.enrollments) {
+    const course = scope.ownedCourses.find((c) => c.id === e.courseId);
+    if (course) courseByEnrollment[e.id] = course;
+  }
+
+  const learners = userRows.map((user) => {
+    const userEnrollments = scope.enrollments.filter((e) => e.userId === user.id);
+    const enrolledCourses = userEnrollments
+      .map((e) => {
+        const course = courseByEnrollment[e.id];
+        return course ? { id: course.id, title: course.title } : null;
+      })
+      .filter((c): c is { id: number; title: string } => c !== null);
+
+    const completedLessonIds = new Set(
+      scope.completions
+        .filter((cmp) => cmp.lesson_completions.userId === user.id)
+        .map((cmp) => cmp.lesson_completions.lessonId),
+    );
+
+    let lessonsCompleted = 0;
+    let lessonsTotal = 0;
+    for (const course of scope.ownedCourses) {
+      const ids = lessonIdsByCourse[course.id] || [];
+      lessonsTotal += ids.length;
+      lessonsCompleted += ids.filter((lid) => completedLessonIds.has(lid)).length;
+    }
+
+    const attempts = scope.attemptsByUser[user.id] || [];
+    const quizzesPassed = attempts.filter((a) => a.passed).length;
+    const bestScore = attempts.length > 0 ? Math.max(...attempts.map((a) => a.score)) : null;
+
+    const certificatesCount = scope.issuedCertificates.filter(
+      (cert) => cert.userId === user.id && cert.courseId != null,
+    ).length;
+    const courseCompletionsCount = scope.courseCompletions.filter((cc) => cc.userId === user.id).length;
+
+    let lastActive: string | null = null;
+    for (const cmp of scope.completions) {
+      if (cmp.lesson_completions.userId === user.id) {
+        const time = new Date(cmp.lesson_completions.completedAt).getTime();
+        if (lastActive === null || time > new Date(lastActive).getTime()) {
+          lastActive = new Date(cmp.lesson_completions.completedAt).toISOString();
+        }
+      }
+    }
+    for (const attempt of attempts) {
+      const time = new Date(attempt.attemptedAt).getTime();
+      if (lastActive === null || time > new Date(lastActive).getTime()) {
+        lastActive = new Date(attempt.attemptedAt).toISOString();
+      }
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      joinedAt: user.createdAt,
+      enrolledCourses,
+      lessonsCompleted,
+      lessonsTotal,
+      quizzesPassed,
+      bestScore,
+      courseCompletionsCount,
+      certificatesCount,
+      lastActive,
+    };
+  });
+
+  return { learners };
+}

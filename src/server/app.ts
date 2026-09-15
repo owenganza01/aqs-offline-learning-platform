@@ -19,6 +19,7 @@ import {
   registerEnrollmentRoutes,
   registerDocumentRoutes,
   registerInstructorAnalyticsRoutes,
+  registerInstructorDashboardRoutes,
   registerCertificateRoutes,
   registerInstructorRoutes,
   registerMessageRoutes,
@@ -206,6 +207,7 @@ export async function createApp() {
   registerEnrollmentRoutes(app, { enrollmentRateLimit });
   registerDocumentRoutes(app, { uploadRateLimit });
   registerInstructorAnalyticsRoutes(app, { instructorLimiter: instructorAnalyticsLimiter });
+  registerInstructorDashboardRoutes(app, { instructorLimiter: instructorAnalyticsLimiter });
   registerInstructorRoutes(app, { onboardRateLimit });
   registerCertificateRoutes(app, {
     certificateRateLimit: certificateLimiter,
