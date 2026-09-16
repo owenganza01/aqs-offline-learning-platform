@@ -1,7 +1,9 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { randomUUID } from 'crypto';
 import { AuthRequest, checkDocumentAccess } from '../../middleware/auth.js';
 import { documentStorage } from '../providers/document-storage.js';
+import * as lessonAdminService from '../services/lesson-admin-service.js';
+import * as courseAdminService from '../services/course-admin-service.js';
 
 export async function uploadDocument(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -17,6 +19,19 @@ export async function uploadDocument(req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    if (parsedLessonId && parsedLessonId > 0 && req.dbUser!.role !== 'admin') {
+      const lessonCourseId = await lessonAdminService.getLessonCourseId(parsedLessonId);
+      if (lessonCourseId === null) {
+        res.status(404).json({ error: 'Lesson not found.' });
+        return;
+      }
+      const course = await courseAdminService.getCourseById(lessonCourseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only attach documents to lessons in your own courses' });
+        return;
+      }
+    }
+
     const doc = await documentStorage.upload(req.file.buffer, {
       lessonId: parsedLessonId && parsedLessonId > 0 ? parsedLessonId : null,
       originalFileName: req.file.originalname,
@@ -24,6 +39,7 @@ export async function uploadDocument(req: AuthRequest, res: Response): Promise<v
       mimeType: req.file.mimetype,
       fileSize: req.file.size,
       uploadedBy: req.dbUser!.id,
+      uploadedByName: req.dbUser!.name || req.dbUser!.email,
     });
 
     res.status(201).json({
@@ -102,6 +118,41 @@ export async function downloadDocument(req: AuthRequest, res: Response): Promise
 
 export async function deleteDocument(req: AuthRequest, res: Response): Promise<void> {
   try {
+    const meta = await documentStorage.getMetadata(req.params.id);
+    if (!meta) {
+      res.status(404).json({ error: 'Document not found.' });
+      return;
+    }
+
+    const isAdmin = req.dbUser!.role === 'admin';
+
+    let attachedCourseId: number | null = null;
+    if (meta.lessonId != null) {
+      attachedCourseId = await lessonAdminService.getLessonCourseId(meta.lessonId);
+    }
+
+    if (attachedCourseId != null) {
+      // Attached to a live lesson -> only that course's current owner, or an admin.
+      if (!isAdmin) {
+        const course = await courseAdminService.getCourseById(attachedCourseId);
+        if (!course) {
+          res.status(404).json({ error: 'Course not found.' });
+          return;
+        }
+        if (course.createdBy !== req.dbUser!.id) {
+          res.status(403).json({ error: 'Forbidden: You can only delete documents in your own courses' });
+          return;
+        }
+      }
+    } else {
+      // Orphaned (never attached, or its lesson no longer exists) -> the uploader, or an admin.
+      // uploadedBy === null (wiped/legacy uploader) on an orphaned document -> admin only.
+      if (!isAdmin && meta.uploadedBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only delete your own uploaded documents' });
+        return;
+      }
+    }
+
     const deleted = await documentStorage.delete(req.params.id);
     if (!deleted) {
       res.status(404).json({ error: 'Document not found.' });

@@ -35,15 +35,46 @@ export function resolveSyncConflicts<T extends SyncItem>(items: T[]): T[] {
 
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { scoreQuiz } from '../../lib/scoring.js';
 import { issueCertificate } from './certificate-service.js';
+import { completeCourse } from './course-service.js';
+import { enrollUserInCourse } from './enrollment-service.js';
 
 const MAX_SYNC_COMPLETIONS = 500;
 const MAX_SYNC_QUIZZES = 100;
 
 export function getMaxLimits() {
   return { maxCompletions: MAX_SYNC_COMPLETIONS, maxQuizzes: MAX_SYNC_QUIZZES };
+}
+
+/**
+ * Replays locally-queued enrollments server-side. Idempotent (ON CONFLICT DO
+ * NOTHING) and error-isolated per item so one blocked enrollment (e.g. its
+ * instructor is closing) never aborts the rest of the sync flush.
+ */
+export async function processEnrollments(
+  userId: number,
+  localEnrollments: Array<{ courseId: number | string }>,
+): Promise<{ processedEnrollments: number[]; rejectedEnrollments: { courseId: number; reason: string }[] }> {
+  const processedEnrollments: number[] = [];
+  const rejectedEnrollments: { courseId: number; reason: string }[] = [];
+
+  for (const item of localEnrollments) {
+    const courseId = parseInt(String(item.courseId));
+    if (isNaN(courseId)) continue;
+    try {
+      await enrollUserInCourse(userId, courseId);
+      processedEnrollments.push(courseId);
+    } catch (err) {
+      rejectedEnrollments.push({
+        courseId,
+        reason: err instanceof Error ? err.message.replace(/\.$/, '') : 'Enrollment failed.',
+      });
+    }
+  }
+
+  return { processedEnrollments, rejectedEnrollments };
 }
 
 export async function processLessonCompletions(
@@ -82,11 +113,37 @@ export async function processQuizSubmissions(
   const deduplicatedQuizzes = resolveSyncConflicts(quizSyncItems);
 
   const processedQuizzes = [];
+  const rejectedQuizzes = [];
   for (const item of deduplicatedQuizzes) {
     const sub = item.payload as { quizId: string; answers: number[]; attemptedAt?: string };
     const quizId = parseInt(sub.quizId);
     const answers = sub.answers;
     if (isNaN(quizId) || !Array.isArray(answers)) continue;
+
+    const quiz = await db
+      .select({ courseId: schema.quizzes.courseId })
+      .from(schema.quizzes)
+      .where(eq(schema.quizzes.id, quizId))
+      .limit(1);
+    if (quiz.length === 0) {
+      rejectedQuizzes.push({ quizId, reason: 'Quiz not found.' });
+      continue;
+    }
+
+    const enrolled = await db
+      .select({ id: schema.enrollments.id })
+      .from(schema.enrollments)
+      .where(and(eq(schema.enrollments.userId, userId), eq(schema.enrollments.courseId, quiz[0].courseId)))
+      .limit(1);
+    if (enrolled.length === 0) {
+      // This rejection path currently only fires for a payload referencing a course
+      // the learner was never enrolled in - unenroll doesn't exist yet, so a
+      // genuinely-enrolled learner can never legitimately reach this state. Revisit
+      // durability of this notice if an unenroll feature is ever added, since it
+      // would then affect real completed attempts, not just invalid ones.
+      rejectedQuizzes.push({ quizId, reason: 'You must be enrolled in this course to submit the quiz.' });
+      continue;
+    }
 
     const questionsList = await db
       .select({ correctOptionIndex: schema.questions.correctOptionIndex })
@@ -105,28 +162,90 @@ export async function processQuizSubmissions(
           passed,
           attemptedAt: sub.attemptedAt ? new Date(sub.attemptedAt) : new Date(),
         })
+        .onConflictDoNothing({
+          target: [schema.quizAttempts.userId, schema.quizAttempts.quizId, schema.quizAttempts.attemptedAt],
+        })
         .returning();
 
-      processedQuizzes.push({
-        quizId,
-        score,
-        passed,
-        attempt: attemptResult[0],
-      });
+      if (attemptResult.length > 0) {
+        processedQuizzes.push({
+          quizId,
+          score,
+          passed,
+          attempt: attemptResult[0],
+        });
 
-      // Check for certificate eligibility after sync quiz submission
-      try {
-        const quiz = await db.select().from(schema.quizzes).where(eq(schema.quizzes.id, quizId)).limit(1);
-        if (quiz.length > 0) {
+        // Check for certificate eligibility after sync quiz submission
+        try {
           await issueCertificate(userId, quiz[0].courseId);
+        } catch (err) {
+          console.error('Certificate check after sync quiz submission failed:', err);
         }
-      } catch (err) {
-        console.error('Certificate check after sync quiz submission failed:', err);
+      } else {
+        // Same attempt flushed again (identical queued item / retry) — already stored.
+        processedQuizzes.push({ quizId, score, passed, attempt: null });
       }
     }
   }
 
-  return processedQuizzes;
+  return { processedQuizzes, rejectedQuizzes };
+}
+
+// Reconcile course completion markers after an offline sync flush.
+// The online flow explicitly calls POST /api/courses/:id/complete once the final
+// lesson is done; the offline queue only replays lesson completions + quiz
+// attempts, so without this step an offline learner could never record a
+// courseCompletions row or receive their certificate. Courses are only
+// completable when ALL lessons are complete AND a passing quiz attempt exists,
+// and quiz attempts are enrollment-gated upstream — so only genuinely completed
+// courses can be marked. completeCourse is idempotent and throws when the
+// conditions are not yet met, which is expected and swallowed here.
+export async function reconcileCourseCompletions(
+  userId: number,
+  localCompletions: Array<{ lessonId: string; completedAt?: string }>,
+  localQuizzes: Array<{ quizId: string; answers: number[]; attemptedAt?: string }>,
+): Promise<string[]> {
+  const lessonIds = localCompletions.map((c) => parseInt(c.lessonId)).filter((id) => !isNaN(id));
+  const quizIds = localQuizzes.map((q) => parseInt(q.quizId)).filter((id) => !isNaN(id));
+  if (lessonIds.length === 0 && quizIds.length === 0) return [];
+
+  const courseIds = new Set<number>();
+  if (lessonIds.length > 0) {
+    const lessons = await db
+      .select({ courseId: schema.lessons.courseId })
+      .from(schema.lessons)
+      .where(
+        sql`${schema.lessons.id} IN ${sql`(${sql.join(
+          lessonIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`}`,
+      );
+    for (const l of lessons) courseIds.add(l.courseId);
+  }
+  if (quizIds.length > 0) {
+    const quizzes = await db
+      .select({ courseId: schema.quizzes.courseId })
+      .from(schema.quizzes)
+      .where(
+        sql`${schema.quizzes.id} IN ${sql`(${sql.join(
+          quizIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`}`,
+      );
+    for (const q of quizzes) courseIds.add(q.courseId);
+  }
+
+  const completedCourseIds: string[] = [];
+  for (const courseId of courseIds) {
+    try {
+      const result = await completeCourse(userId, courseId);
+      completedCourseIds.push(result.completionId);
+    } catch {
+      // Not completable yet (expected after a partial offline flush) or already
+      // complete — either way there is nothing to reconcile.
+    }
+  }
+  return completedCourseIds;
 }
 
 export async function getUserSyncState(userId: number) {

@@ -12,6 +12,7 @@
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "db:generate": "drizzle-kit generate --config=src/db/drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config=src/db/drizzle.config.ts",
+    "wipe-user": "node scripts/wipe-user.js",
     "prepare": "husky"
   },
   "dependencies": {

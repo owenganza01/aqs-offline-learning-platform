@@ -9,15 +9,21 @@ interface BannerOfflineProps {
   onSyncComplete: () => void;
   token: string | null;
   onSyncStateChange?: (state: { syncing: boolean }) => void;
+  onSyncNow?: () => void;
 }
 
-export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, token, onSyncStateChange }) => {
+export const BannerOffline: React.FC<BannerOfflineProps> = ({
+  onSyncComplete,
+  token,
+  onSyncStateChange,
+  onSyncNow,
+}) => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string>(
     navigator.onLine ? '' : 'Working offline. All answers and lessons completed will save locally.',
   );
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error' | 'warning'>('idle');
 
   const triggerSync = async () => {
     if (!navigator.onLine || !token) {
@@ -33,7 +39,11 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
       // 1. Get queued items from local PouchDB
       const queue = await PouchDBService.getSyncQueue();
 
-      if (queue.lessonCompletions.length === 0 && queue.quizSubmissions.length === 0) {
+      if (
+        queue.lessonCompletions.length === 0 &&
+        queue.quizSubmissions.length === 0 &&
+        (queue.enrollments || []).length === 0
+      ) {
         setSyncing(false);
         setSyncStatus('idle');
         setSyncMessage('');
@@ -60,19 +70,31 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
             // 4. Clear the local sync queue since it has been stored on production DB
             await PouchDBService.clearSyncQueue();
 
-            setSyncStatus('success');
-            setSyncMessage(
-              `Synced ${queue.lessonCompletions.length} lessons & ${queue.quizSubmissions.length} quizzes!`,
-            );
+            const rejected: { quizId: number; reason: string }[] = data.rejectedQuizzes || [];
+            if (rejected.length > 0) {
+              // Warning state for rejected sync items.
+              // See sync-service.processQuizSubmissions — rejection only fires for
+              // never-enrolled courses today; add durability if unenroll ever ships.
+              setSyncStatus('warning');
+              const reasonText = rejected.map((r) => `${r.reason.replace(/\.$/, '')} (Quiz ${r.quizId})`).join('; ');
+              setSyncMessage(
+                `${rejected.length} saved quiz ${rejected.length === 1 ? 'attempt was not' : 'attempts were not'} recorded: ${reasonText}. Contact your administrator if you believe this is an error.`,
+              );
+            } else {
+              setSyncStatus('success');
+              setSyncMessage(
+                `Synced ${queue.lessonCompletions.length} lessons & ${queue.quizSubmissions.length} quizzes!`,
+              );
 
-            // Let main app refresh its state
+              // Clear success message after 5 seconds
+              setTimeout(() => {
+                setSyncMessage('');
+                setSyncStatus('idle');
+              }, 5000);
+            }
+
+            // Let main app refresh its state (processed items did land server-side)
             onSyncComplete();
-
-            // Clear success message after 5 seconds
-            setTimeout(() => {
-              setSyncMessage('');
-              setSyncStatus('idle');
-            }, 5000);
           } else {
             throw new Error('Sync failed server side');
           }
@@ -148,7 +170,9 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
               ? 'bg-success/10 border-success/30'
               : syncStatus === 'error'
                 ? 'bg-error-bg border-error/30'
-                : 'bg-ochre-dim/60 border-ochre/30'
+                : syncStatus === 'warning'
+                  ? 'bg-ochre/10 border-ochre/40'
+                  : 'bg-ochre-dim/60 border-ochre/30'
           }`}
         >
           <div className="flex items-center gap-3 w-full">
@@ -163,7 +187,7 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
             >
               {syncStatus === 'success' ? (
                 <CheckCircle className="w-6 h-6" />
-              ) : syncStatus === 'error' ? (
+              ) : syncStatus === 'error' || syncStatus === 'warning' ? (
                 <AlertTriangle className="w-6 h-6" />
               ) : (
                 <RefreshCw className="w-6 h-6 animate-spin" />
@@ -175,7 +199,9 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
                   ? 'Sync Completed successfully!'
                   : syncStatus === 'error'
                     ? 'Unable to Synchronize'
-                    : 'Internet Detected'}
+                    : syncStatus === 'warning'
+                      ? 'Sync completed with warnings'
+                      : 'Internet Detected'}
               </p>
               <p className="text-sm font-medium leading-relaxed text-ink-2 mt-0.5 opacity-90">{syncMessage}</p>
             </div>
@@ -183,8 +209,8 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
 
           {token && (
             <button
-              onClick={triggerSync}
-              disabled={syncing}
+              onClick={onSyncNow ?? triggerSync}
+              disabled={!onSyncNow && syncing}
               className={`shrink-0 h-12 min-w-[160px] text-sm font-bold px-5 rounded-full border flex items-center justify-center gap-2 active:scale-95 transition-all ${
                 syncStatus === 'success'
                   ? 'bg-success text-white hover:opacity-90 border-success/40'

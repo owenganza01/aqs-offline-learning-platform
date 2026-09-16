@@ -8,10 +8,14 @@ import { PouchDBService } from './lib/pouchdb-service.js';
 import { LearnerDashboard } from './components/LearnerDashboard.tsx';
 import { LearnerProgress } from './components/LearnerProgress.tsx';
 import { LearnerCoursePlayer } from './components/LearnerCoursePlayer.tsx';
+import { MessagesView } from './components/MessagesView.tsx';
 const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ default: m.AdminLMS })));
+import type { AdminLmsTab } from './components/AdminLMS.js';
 import { BannerOffline } from './components/BannerOffline.tsx';
+import { SyncOverlay } from './components/SyncOverlay.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
 import { LandingPage } from './components/LandingPage.tsx';
+import { InstructorOnboardingFlow } from './components/InstructorOnboardingFlow.tsx';
 import { apiFetch, setApiToken } from './lib/api.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import {
@@ -25,14 +29,16 @@ import {
   CircleCheck,
   LayoutGrid,
   Search,
+  MessageCircle,
 } from 'lucide-react';
 
 interface SyncBadgeProps {
   syncInProgress: boolean;
   pendingSyncCount: number;
+  onClick: () => void;
 }
 
-function SyncBadge({ syncInProgress, pendingSyncCount }: SyncBadgeProps) {
+function SyncBadge({ syncInProgress, pendingSyncCount, onClick }: SyncBadgeProps) {
   const isOnline = useOnlineStatus();
 
   const state: 'offline' | 'syncing' | 'synced' = !isOnline
@@ -52,8 +58,10 @@ function SyncBadge({ syncInProgress, pendingSyncCount }: SyncBadgeProps) {
   return (
     <button
       type="button"
-      title="Sync status"
-      className="hidden md:flex items-center gap-1.5 border border-white/10 rounded px-2.5 py-1 text-navtext text-[11px] font-mono cursor-default select-none"
+      title="Open sync panel"
+      aria-label="Open sync panel"
+      onClick={onClick}
+      className="flex items-center gap-1.5 border border-white/10 rounded px-2.5 py-1 text-navtext text-[11px] font-mono cursor-pointer hover:bg-white/5 transition-colors"
     >
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
       <span>{label}</span>
@@ -65,6 +73,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { key: 'progress', label: 'Progress', icon: CircleCheck },
   { key: 'discover', label: 'Discover', icon: Search },
+  { key: 'messages', label: 'Messages', icon: MessageCircle },
 ] as const;
 
 type LearnerNavKey = (typeof NAV_ITEMS)[number]['key'];
@@ -75,7 +84,12 @@ export default function App() {
   const [dbUser, setDbUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [showProfileEdit, setShowProfileEdit] = useState<boolean>(false);
+
+  // Session-only override: "Continue as a Learner" lets a not-yet-approved
+  // instructor use the learner dashboard without changing their server state.
+  const [learnerSessionOverride, setLearnerSessionOverride] = useState<boolean>(false);
 
   // Registration form state
   const [showRegisterForm, setShowRegisterForm] = useState(false);
@@ -95,16 +109,25 @@ export default function App() {
   const [activeCourseId, setActiveCourseId] = useState<number | null>(null);
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
 
-  // Learner left-nav destination state (dashboard + sub-tab, or Progress view)
-  const [learnerNav, setLearnerNav] = useState<'dashboard' | 'progress'>('dashboard');
+  // Learner left-nav destination state (dashboard + sub-tab, Progress view, or Messages)
+  const [learnerNav, setLearnerNav] = useState<'dashboard' | 'progress' | 'messages'>('dashboard');
   const [dashboardTab, setDashboardTab] = useState<'browse' | null>(null);
 
+  // Deep-link intent from a course player: open the Messages view on (or creating)
+  // a conversation with that course's instructor.
+  const [messagesIntent, setMessagesIntent] = useState<{ courseId: number; instructorId: number } | null>(null);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+
   // Lifted AdminLMS tab state
-  const [adminActiveTab, setAdminActiveTab] = useState<'courses' | 'analytics' | 'users'>('courses');
+  const [adminActiveTab, setAdminActiveTab] = useState<AdminLmsTab>('dashboard');
 
   // Sync badge state (lifted from BannerOffline + pending queue poll)
   const [syncInProgress, setSyncInProgress] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  // User-triggered full-screen sync overlay (from the header badge or the
+  // offline banner). Gives a live, per-step view of the offline queue flush.
+  const [syncOverlayOpen, setSyncOverlayOpen] = useState(false);
 
   // Simple router popstate listener
   useEffect(() => {
@@ -129,14 +152,28 @@ export default function App() {
     currentPath.startsWith('/admin');
 
   // Synchronize database user profile and pull remote statistics
-  const syncUserProfile = async (_idToken: string) => {
+  const syncUserProfile = async (_idToken?: string) => {
     try {
-      const { ok, data } = await apiFetch('/api/auth/me');
+      // Consume the entry-point intent (instructor portal vs. default learner) once.
+      const intent = sessionStorage.getItem('aqs_auth_intent');
+      if (intent) sessionStorage.removeItem('aqs_auth_intent');
+      const query = intent ? `?intent=${encodeURIComponent(intent)}` : '';
+      const { ok, status, data } = await apiFetch(`/api/auth/me${query}`);
       if (ok) {
+        setAuthError(null);
         setDbUser(data.dbUser);
+      } else if (status === 409) {
+        // Email already claimed by a different account — surface the message on
+        // the landing page and sign the user out so they can contact an admin.
+        setAuthError(
+          data?.error || 'This email is already linked to an account. Please contact your administrator for help.',
+        );
+        await signOut(auth);
+      } else {
+        console.warn('Failed to synchronize user profile:', status, data);
       }
     } catch (error) {
-      console.warn('Network error synchronizing credentials; defaulting to local schema role representation.', error);
+      console.warn('Network error synchronizing credentials.', error);
     }
   };
 
@@ -159,13 +196,20 @@ export default function App() {
       // Online upgrade: Fetch latest from PG when connected!
       if (navigator.onLine && activeToken) {
         try {
+          // Replay any queued writes (pending enrollments, plus any completions
+          // or quizzes still waiting) alongside the server-state refresh.
+          const pendingQueue = await PouchDBService.getSyncQueue();
           // Fire courses, sync, and enrollments in parallel — none depends on the other
           const [coursesResult, syncResult, enrollResult] = await Promise.all([
             apiFetch('/api/courses'),
             apiFetch('/api/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lessonCompletions: [], quizSubmissions: [] }),
+              body: JSON.stringify({
+                lessonCompletions: pendingQueue.lessonCompletions,
+                quizSubmissions: pendingQueue.quizSubmissions,
+                enrollments: pendingQueue.enrollments,
+              }),
             }),
             apiFetch<{ courseIds: number[] }>('/api/enrollments'),
           ]);
@@ -207,6 +251,8 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAuthLoading(true);
+      // Reset session-only overrides whenever the auth identity changes.
+      setLearnerSessionOverride(false);
       if (user) {
         setFirebaseUser(user);
         const idToken = await user.getIdToken();
@@ -223,6 +269,8 @@ export default function App() {
         setCourses([]);
         setCompletedLessonIds([]);
         setQuizAttempts([]);
+        setMessagesIntent(null);
+        setUnreadMessageCount(0);
       }
       setAuthLoading(false);
     });
@@ -247,10 +295,22 @@ export default function App() {
       try {
         const queue = await PouchDBService.getSyncQueue();
         if (!cancelled) {
-          setPendingSyncCount(queue.lessonCompletions.length + queue.quizSubmissions.length);
+          setPendingSyncCount(
+            queue.lessonCompletions.length + queue.quizSubmissions.length + (queue.enrollments || []).length,
+          );
         }
       } catch {
         // Non-critical — badge just keeps its last known value.
+      }
+
+      // Unread message badge (learner Messages nav) — rides the same poll tick.
+      try {
+        const unread = await apiFetch<{ unreadTotal: number }>('/api/messages/unread-total');
+        if (!cancelled && unread.ok) {
+          setUnreadMessageCount(unread.data.unreadTotal);
+        }
+      } catch {
+        // Non-critical — badge keeps its last known value.
       }
     };
 
@@ -314,6 +374,14 @@ export default function App() {
   const handleLogout = async () => {
     try {
       setAuthLoading(true);
+      setLearnerSessionOverride(false);
+      setAuthError(null);
+      // Clear user-scoped local data so a reused email / different account does
+      // not inherit the previous user's cached progress or role state.
+      localStorage.removeItem('aqs_enrolled_courses');
+      localStorage.removeItem('aqs_local_progress');
+      localStorage.removeItem('aqs_sync_queue');
+      sessionStorage.removeItem('aqs_auth_intent');
       await signOut(auth);
     } catch (error) {
       console.error('Logout error:', error);
@@ -352,15 +420,32 @@ export default function App() {
 
   // Left-nav active destination (dashboard sub-tab drives Dashboard/My courses/Discover highlight)
   const activeNavItem: LearnerNavKey =
-    learnerNav === 'progress' ? 'progress' : dashboardTab === 'browse' ? 'discover' : 'dashboard';
+    learnerNav === 'progress'
+      ? 'progress'
+      : learnerNav === 'messages'
+        ? 'messages'
+        : dashboardTab === 'browse'
+          ? 'discover'
+          : 'dashboard';
 
   const handleNavClick = (key: LearnerNavKey) => {
     if (key === 'progress') {
       setLearnerNav('progress');
       return;
     }
+    if (key === 'messages') {
+      setLearnerNav('messages');
+      setMessagesIntent(null);
+      return;
+    }
     setLearnerNav('dashboard');
     setDashboardTab(key === 'discover' ? 'browse' : null);
+  };
+
+  const handleOpenMessagesIntent = (courseId: number, instructorId: number) => {
+    setMessagesIntent({ courseId, instructorId });
+    setLearnerNav('messages');
+    setActiveCourseId(null);
   };
 
   // Auth loading verification screen
@@ -381,6 +466,8 @@ export default function App() {
         <LandingPage
           onLogin={handleLogin}
           authLoading={authLoading}
+          authError={authError}
+          onClearAuthError={() => setAuthError(null)}
           onRegister={handleRegister}
           regName={regName}
           setRegName={setRegName}
@@ -396,6 +483,62 @@ export default function App() {
             setRegSuccess('');
           }}
         />
+      </div>
+    );
+  }
+
+  // Approved instructors and admins may enter the Instructor Portal.
+  const canAccessLms =
+    dbUser?.role === 'admin' || (dbUser?.role === 'instructor' && (dbUser.onboardingStatus ?? 'active') === 'active');
+
+  // An instructor who has not yet been approved (or is pending/rejected) must go
+  // through onboarding before accessing the Instructor Portal. "Continue as a
+  // Learner" lifts this gate for the current session only.
+  const instructorOnboardingIncomplete =
+    !!firebaseUser &&
+    dbUser?.role === 'instructor' &&
+    (dbUser.onboardingStatus ?? 'active') !== 'active' &&
+    !learnerSessionOverride;
+
+  // Instructor onboarding flow (profile form, pending, or rejected screens).
+  if (instructorOnboardingIncomplete) {
+    return (
+      <div className="min-h-screen theme-lms bg-lms text-ink flex flex-col font-sans selection:bg-ochre selection:text-white">
+        <header
+          className="sticky top-0 z-50 border-b px-7 py-2.5 min-h-[58px] flex items-center justify-between shadow-sm select-none transition-colors duration-200 bg-lms text-white border-white/[0.06]"
+          style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="text-white rounded w-8 h-8 flex items-center justify-center shrink-0 bg-steel">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex flex-col justify-center">
+              <h1 className="text-[17px] font-display font-semibold tracking-tight text-white whitespace-nowrap leading-snug pb-0.5">
+                AQS Learning
+              </h1>
+              <p className="text-[10px] font-bold font-mono tracking-wider -mt-0.5 uppercase truncate text-white/60">
+                Instructor Portal
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-white/80 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        </header>
+
+        <main className="flex-grow flex flex-col justify-start bg-appbg">
+          <InstructorOnboardingFlow
+            user={dbUser}
+            token={token}
+            onContinueAsLearner={() => setLearnerSessionOverride(true)}
+            onProfileUpdated={() => token && syncUserProfile(token)}
+          />
+        </main>
       </div>
     );
   }
@@ -438,10 +581,16 @@ export default function App() {
         {firebaseUser && dbUser && (
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Sync status badge (learner only) — positioned to the left so it never shifts the Student/Admin toggle */}
-            {!isLmsPath && <SyncBadge syncInProgress={syncInProgress} pendingSyncCount={pendingSyncCount} />}
+            {!isLmsPath && (
+              <SyncBadge
+                syncInProgress={syncInProgress}
+                pendingSyncCount={pendingSyncCount}
+                onClick={() => setSyncOverlayOpen(true)}
+              />
+            )}
 
             {/* Portal switcher for admin/instructor users */}
-            {(dbUser.role === 'admin' || dbUser.role === 'instructor') && (
+            {canAccessLms && (
               <div
                 className={`hidden lg:flex items-center gap-1 rounded-lg p-0.5 border transition-colors duration-200 ${
                   isLmsPath ? 'border-white/[0.12] bg-lms-3/50' : 'border-white/[0.12] bg-navy-3/50'
@@ -527,7 +676,7 @@ export default function App() {
                   transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="w-full"
                 >
-                  {dbUser?.role === 'admin' || dbUser?.role === 'instructor' ? (
+                  {canAccessLms && dbUser ? (
                     /* WORKSPACE A: ADMIN LMS */
                     <Suspense
                       fallback={
@@ -544,6 +693,10 @@ export default function App() {
                         userRole={dbUser?.role}
                         activeTab={adminActiveTab}
                         onActiveTabChange={setAdminActiveTab}
+                        user={dbUser}
+                        onProfileUpdated={() => token && syncUserProfile(token)}
+                        messagesIntent={messagesIntent}
+                        onClearMessagesIntent={() => setMessagesIntent(null)}
                       />
                     </Suspense>
                   ) : (
@@ -599,7 +752,14 @@ export default function App() {
                               <Icon
                                 className={`w-[15px] h-[15px] shrink-0 ${isActive ? 'opacity-100' : 'opacity-65'}`}
                               />
-                              <span>{label}</span>
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                {label}
+                                {key === 'messages' && unreadMessageCount > 0 && (
+                                  <span className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-ochre text-white text-[10px] font-bold leading-none">
+                                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                                  </span>
+                                )}
+                              </span>
                             </button>
                           );
                         })}
@@ -612,10 +772,20 @@ export default function App() {
                         onSyncComplete={loadAppData}
                         onSyncStateChange={(state) => setSyncInProgress(state.syncing)}
                         token={token}
+                        onSyncNow={() => setSyncOverlayOpen(true)}
                       />
 
                       {activeCourseId === null ? (
-                        learnerNav === 'progress' ? (
+                        learnerNav === 'messages' ? (
+                          /* Learner Messages view (threads with instructors) */
+                          <MessagesView
+                            courses={courses}
+                            currentUserId={dbUser?.id ?? 0}
+                            currentUserRole={dbUser?.role ?? 'learner'}
+                            messagesIntent={messagesIntent}
+                            onClearMessagesIntent={() => setMessagesIntent(null)}
+                          />
+                        ) : learnerNav === 'progress' ? (
                           /* Learner Progress view (real existing completion/quiz data via ProgressTree) */
                           <LearnerProgress
                             courses={courses}
@@ -648,6 +818,14 @@ export default function App() {
                           token={token}
                           onBack={() => setActiveCourseId(null)}
                           onProgressUpdated={loadAppData}
+                          onLessonCompleted={(lessonId) =>
+                            setCompletedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
+                          }
+                          onNavigateToMessages={
+                            dbUser?.role === 'learner'
+                              ? (courseId, instructorId) => handleOpenMessagesIntent(courseId, instructorId)
+                              : undefined
+                          }
                         />
                       )}
                     </div>
@@ -673,7 +851,14 @@ export default function App() {
                                 isActive ? 'text-ochre' : 'text-navtext hover:text-white'
                               }`}
                             >
-                              <Icon className="w-5 h-5 shrink-0" />
+                              <div className="relative">
+                                <Icon className="w-5 h-5 shrink-0" />
+                                {key === 'messages' && unreadMessageCount > 0 && (
+                                  <span className="absolute -top-1.5 -right-2 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-ochre text-white text-[10px] font-bold leading-none">
+                                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] font-bold leading-none truncate">{label}</span>
                             </button>
                           );
@@ -686,7 +871,7 @@ export default function App() {
             </AnimatePresence>
 
             {/* Float Mobile Route switcher helper */}
-            {firebaseUser && dbUser && (dbUser.role === 'admin' || dbUser.role === 'instructor') && (
+            {canAccessLms && (
               <div
                 className="block sm:hidden fixed bottom-6 right-6 z-50"
                 style={{
@@ -725,6 +910,16 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {syncOverlayOpen && token && (
+        <SyncOverlay
+          onClose={() => setSyncOverlayOpen(false)}
+          onSynced={() => {
+            loadAppData();
+            setPendingSyncCount(0);
+          }}
+        />
+      )}
 
       {/* Decorative footer */}
       <footer className="bg-navy border-t border-white/10 text-navtext/60 py-6 text-center text-xs font-mono select-none mt-auto">

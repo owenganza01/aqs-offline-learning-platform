@@ -22,6 +22,8 @@ export interface LandingPageProps {
   initialCourses?: PublicCourse[];
   onLogin: () => void;
   authLoading?: boolean;
+  authError?: string | null;
+  onClearAuthError?: () => void;
   onRegister: (e: FormEvent) => void;
   regName: string;
   setRegName: (val: string) => void;
@@ -515,10 +517,11 @@ function RoleSelect({ onNav }: RoleSelectProps) {
 interface LoginViewProps {
   onLogin: () => void;
   authLoading?: boolean;
+  authError?: string | null;
   onSwitchToSignup: () => void;
 }
 
-function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
+function LoginView({ onLogin, authLoading, authError, onSwitchToSignup }: LoginViewProps) {
   return (
     <div className="min-h-[60vh] flex items-center justify-center bg-paper px-4 py-16">
       <div className="max-w-md w-full text-center bg-paper-2 border border-rule p-8 rounded-3xl shadow-lg relative overflow-hidden">
@@ -534,6 +537,15 @@ function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
         </p>
 
         <div className="mt-8 space-y-4">
+          {authError && (
+            <div
+              className="bg-error-bg border border-error/20 rounded-xl p-4 text-sm font-semibold text-error text-left"
+              role="alert"
+            >
+              {authError}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={onLogin}
@@ -752,7 +764,10 @@ function InstructorOnboarding({ onLogin, onBack }: InstructorOnboardingProps) {
         <div className="mt-8 space-y-3">
           <button
             type="button"
-            onClick={onLogin}
+            onClick={() => {
+              sessionStorage.setItem('aqs_auth_intent', 'instructor');
+              onLogin();
+            }}
             style={{ minHeight: '48px' }}
             className="w-full bg-navy hover:bg-navy-2 text-white font-bold text-sm px-6 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-navy"
           >
@@ -801,6 +816,8 @@ export function LandingPage({
   initialCourses,
   onLogin,
   authLoading = false,
+  authError,
+  onClearAuthError,
   onRegister,
   regName,
   setRegName,
@@ -939,8 +956,10 @@ export function LandingPage({
           <LoginView
             onLogin={onLogin}
             authLoading={authLoading}
+            authError={authError}
             onSwitchToSignup={() => {
               if (onClearRegForm) onClearRegForm();
+              if (onClearAuthError) onClearAuthError();
               setView('signup-role');
             }}
           />

@@ -105,13 +105,20 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
 
   const handleEnroll = async (courseId: number) => {
     await PouchDBService.enrollInCourse(courseId);
-    // Persist enrollment to server (best-effort — offline will sync later)
+    // Persist enrollment to server (best-effort — offline will sync later via
+    // the pending-enrollment queue flushed on reconnect).
     if (token) {
       apiFetch('/api/enrollments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseId }),
-      }).catch(() => {});
+      })
+        .then(({ ok }) => {
+          if (ok) return PouchDBService.removeEnrollmentFromQueue(courseId);
+        })
+        .catch(() => {
+          // Offline or failed — the queue entry keeps the enrollment pending.
+        });
     }
     const ids = await PouchDBService.getEnrolledCourseIds();
     setEnrolledCourseIds(ids);
@@ -540,7 +547,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                         className="mt-auto w-full h-9 bg-accent hover:opacity-90 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>+ Choose Course</span>
+                        <span>Choose Course</span>
                       </button>
                     </div>
                   </div>

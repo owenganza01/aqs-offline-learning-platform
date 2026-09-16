@@ -8,6 +8,15 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name'),
   role: text('role').default('learner').notNull(), // 'learner' | 'instructor' | 'admin'
+  onboardingStatus: text('onboarding_status').default('active').notNull(), // 'onboarding' | 'pending_approval' | 'active' | 'rejected'
+  bio: text('bio'),
+  organization: text('organization'),
+  rejectionReason: text('rejection_reason'),
+  submittedAt: timestamp('submitted_at'),
+  closureStatus: text('closure_status'), // 'pending' | 'closed' | null (no closure)
+  closureStartedAt: timestamp('closure_started_at'),
+  closureRetentionDays: integer('closure_retention_days'), // 7..30, captured at initiation
+  closureReason: text('closure_reason'),
   avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -19,6 +28,8 @@ export const courses = pgTable('courses', {
   description: text('description').notNull(),
   thumbnail: text('thumbnail'), // Data URL, image URL, or gradient code
   createdBy: integer('created_by').references(() => users.id),
+  createdByName: text('created_by_name'),
+  isArchived: boolean('is_archived').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -122,9 +133,8 @@ export const documents = pgTable(
     mimeType: text('mime_type').notNull(),
     fileSize: integer('file_size').notNull(),
     uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
-    uploadedBy: integer('uploaded_by')
-      .references(() => users.id)
-      .notNull(),
+    uploadedBy: integer('uploaded_by').references(() => users.id),
+    uploadedByName: text('uploaded_by_name'),
     fileData: text('file_data').notNull(), // Base64-encoded binary content
   },
   (table) => [index('documents_lesson_id_idx').on(table.lessonId)],
@@ -189,6 +199,51 @@ export const issuedCertificates = pgTable(
     index('issued_certificates_user_id_idx').on(table.userId),
     index('issued_certificates_verification_code_idx').on(table.verificationCode),
     unique('issued_certificates_user_course_config_key').on(table.userId, table.courseId, table.certificateConfigId),
+  ],
+);
+
+// 13. Conversations (learner <-> instructor threads, one per course/triplet)
+// Historical data: participant FKs are ON DELETE SET NULL; name snapshots keep
+// the thread readable for the surviving participant after a wipe.
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: serial('id').primaryKey(),
+    courseId: integer('course_id')
+      .references(() => courses.id, { onDelete: 'cascade' })
+      .notNull(),
+    learnerId: integer('learner_id').references(() => users.id, { onDelete: 'set null' }),
+    instructorId: integer('instructor_id').references(() => users.id, { onDelete: 'set null' }),
+    learnerNameSnapshot: text('learner_name_snapshot'),
+    instructorNameSnapshot: text('instructor_name_snapshot'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('conversations_course_learner_instructor_key').on(table.courseId, table.learnerId, table.instructorId),
+    index('conversations_learner_id_idx').on(table.learnerId),
+    index('conversations_instructor_id_idx').on(table.instructorId),
+  ],
+);
+
+// 14. Messages (thread contents; sender FK nulls + snapshot on wipe)
+export const messages = pgTable(
+  'messages',
+  {
+    id: serial('id').primaryKey(),
+    conversationId: integer('conversation_id')
+      .references(() => conversations.id, { onDelete: 'cascade' })
+      .notNull(),
+    senderId: integer('sender_id').references(() => users.id, { onDelete: 'set null' }),
+    senderNameSnapshot: text('sender_name_snapshot'),
+    content: text('content').notNull(),
+    isRead: boolean('is_read').default(false).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('messages_conversation_id_created_at_idx').on(table.conversationId, table.createdAt),
+    index('messages_conversation_id_is_read_idx').on(table.conversationId, table.isRead),
+    index('messages_sender_id_idx').on(table.senderId),
   ],
 );
 
@@ -309,5 +364,32 @@ export const issuedCertificatesRelations = relations(issuedCertificates, ({ one 
   certificateConfig: one(certificateConfigs, {
     fields: [issuedCertificates.certificateConfigId],
     references: [certificateConfigs.id],
+  }),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  course: one(courses, {
+    fields: [conversations.courseId],
+    references: [courses.id],
+  }),
+  learner: one(users, {
+    fields: [conversations.learnerId],
+    references: [users.id],
+  }),
+  instructor: one(users, {
+    fields: [conversations.instructorId],
+    references: [users.id],
+  }),
+  threadMessages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [messages.conversationId],
+    references: [conversations.id],
+  }),
+  sender: one(users, {
+    fields: [messages.senderId],
+    references: [users.id],
   }),
 }));

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Course } from '../../types.js';
 import { apiFetch } from '../../lib/api.js';
-import { RefreshCw, BarChart2, Download, Sparkles, Activity, Users, Layout } from 'lucide-react';
+import { RefreshCw, BarChart2, Download, Sparkles, Activity, Users, Layout, Award } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface AnalyticsDashboardProps {
@@ -64,6 +64,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
     const totalActiveLearners = analytics.courseStats.reduce((acc: number, s: any) => acc + (s.activeStudents || 0), 0);
     const totalCompletions = analytics.courseStats.reduce((acc: number, s: any) => acc + (s.completions || 0), 0);
     const totalPassed = analytics.courseStats.reduce((acc: number, s: any) => acc + (s.passedQuizzes || 0), 0);
+    const totalCertificatesIssued = analytics.courseStats.reduce(
+      (acc: number, s: any) => acc + (s.certificatesIssued || 0),
+      0,
+    );
 
     const blank = '\r\n';
 
@@ -81,9 +85,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
     csv += 'DASHBOARD SUMMARY\r\n';
     csv += blank;
     csv += 'Metric,Value\r\n';
-    csv += `Total Enrolled Learners,${analytics.totalLearnersCount}\r\n`;
+    csv += `Total Enrolled Learners,${analytics.totalLearners ?? analytics.totalLearnersCount ?? 0}\r\n`;
     csv += `Active Courses,${courses.length}\r\n`;
     csv += `Global Completion Rate,${globalCompletionRate}%\r\n`;
+    csv += `Certificates Issued,${analytics.certificatesIssued ?? totalCertificatesIssued ?? 0}\r\n`;
     csv += blank;
     csv += blank;
     csv += blank;
@@ -91,14 +96,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
     // ── Course Statistics ──
     csv += 'COURSE STATISTICS\r\n';
     csv += blank;
-    csv += '#,Course ID,Course Title,Lessons,Active Learners,Completions,Passed Quiz,Avg Score,Completion Rate\r\n';
+    csv +=
+      '#,Course ID,Course Title,Lessons,Active Learners,Completions,Passed Quiz,Avg Score,Completion Rate,Certificates Issued\r\n';
     analytics.courseStats.forEach((stat: any, index: number) => {
       const escapedTitle = stat.title ? `"${stat.title.replace(/"/g, '""')}"` : '""';
       const avgScore = stat.averageScore !== null ? `${stat.averageScore}%` : 'N/A';
-      csv += `${index + 1},${stat.id},${escapedTitle},${stat.lessonsCount},${stat.activeStudents},${stat.completions},${stat.passedQuizzes},${avgScore},${stat.completionRate}%\r\n`;
+      csv += `${index + 1},${stat.id},${escapedTitle},${stat.lessonsCount},${stat.activeStudents},${stat.completions},${stat.passedQuizzes},${avgScore},${stat.completionRate}%,${stat.certificatesIssued ?? 0}\r\n`;
     });
     csv += blank;
-    csv += `,TOTALS,,${totalLessons},${totalActiveLearners},${totalCompletions},${totalPassed},,${globalCompletionRate}%\r\n`;
+    csv += `,TOTALS,,${totalLessons},${totalActiveLearners},${totalCompletions},${totalPassed},,${globalCompletionRate}%,${totalCertificatesIssued}\r\n`;
     csv += blank;
     csv += blank;
     csv += blank;
@@ -161,7 +167,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
             analytics.courseStats.length,
         )
       : null;
-  const totalLessonsCompleted = analytics.courseStats?.reduce((acc: number, s: any) => acc + (s.lessonsCount || 0), 0);
+  const totalLessonsCompleted = analytics.lessonCompletions ?? 0;
+  const certificatesIssuedTotal =
+    analytics.certificatesIssued ??
+    analytics.courseStats?.reduce((acc: number, s: any) => acc + (s.certificatesIssued || 0), 0) ??
+    0;
 
   return (
     <motion.div
@@ -191,9 +201,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
-          <p className="font-display text-[28px] text-text leading-none mb-1.5">{analytics.totalLearnersCount}</p>
+          <p className="font-display text-[28px] text-text leading-none mb-1.5">
+            {analytics.totalLearners ?? analytics.totalLearnersCount ?? 0}
+          </p>
           <p className="text-[12px] text-text-3 font-medium">Total learners</p>
           <p className="font-mono text-[11px] text-success mt-2">
             <Users className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
@@ -211,11 +223,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
           </p>
         </div>
         <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
-          <p className="font-display text-[28px] text-text leading-none mb-1.5">{totalLessonsCompleted || 0}</p>
+          <p className="font-display text-[28px] text-text leading-none mb-1.5">{totalLessonsCompleted}</p>
           <p className="text-[12px] text-text-3 font-medium">Lessons completed</p>
           <p className="font-mono text-[11px] text-success mt-2">
             <Layout className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
-            Syllabus units
+            Across all courses
+          </p>
+        </div>
+        <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
+          <p className="font-display text-[28px] text-text leading-none mb-1.5">{certificatesIssuedTotal}</p>
+          <p className="text-[12px] text-text-3 font-medium">Certificates issued</p>
+          <p className="font-mono text-[11px] text-success mt-2">
+            <Award className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+            Graduated learners
           </p>
         </div>
         <div className="bg-white border border-stroke rounded-lg px-[18px] py-4 relative overflow-hidden">
@@ -277,7 +297,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
 
           {/* Simple donut using conic-gradient */}
           {(() => {
-            const total = analytics.totalLearnersCount || 0;
+            const total = analytics.totalLearners ?? analytics.totalLearnersCount ?? 0;
             const totalCompletions = (analytics.courseStats || []).reduce(
               (acc: number, s: any) => acc + (s.completions || 0),
               0,
@@ -367,6 +387,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ token, c
                       {stat.averageScore !== null ? `${stat.averageScore}%` : 'N/A'}
                     </span>
                   </div>
+                  {stat.certificatesIssued > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span>Certificates Issued:</span>
+                      <span className="font-semibold text-success">{stat.certificatesIssued}</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

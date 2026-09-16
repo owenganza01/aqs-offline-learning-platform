@@ -35,7 +35,15 @@ if (!getApps().length) {
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     try {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      // Render (and some other platforms) inject env vars with literal newline
+      // characters inside the private_key value instead of the \n escape sequence,
+      // which breaks JSON.parse(). We normalise them here before parsing.
+      const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON.replace(/\\n/g, '\n') // keep already-escaped \n as-is
+        .replace(
+          /"private_key"\s*:\s*"([\s\S]*?)"/,
+          (_match, key) => `"private_key": "${key.replace(/\n/g, '\\n').replace(/\r/g, '')}"`,
+        );
+      const serviceAccount = JSON.parse(rawJson);
 
       options.credential = cert(serviceAccount);
 

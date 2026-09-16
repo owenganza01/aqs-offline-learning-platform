@@ -4,6 +4,15 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 import { toYouTubeEmbed } from '../../lib/utils.js';
 import { documentStorage } from '../providers/document-storage.js';
 
+export async function getLessonCourseId(lessonId: number): Promise<number | null> {
+  const rows = await db
+    .select({ courseId: schema.lessons.courseId })
+    .from(schema.lessons)
+    .where(eq(schema.lessons.id, lessonId))
+    .limit(1);
+  return rows.length > 0 ? rows[0].courseId : null;
+}
+
 export async function createLesson(
   courseId: number,
   data: { title: string; content: string; videoUrl?: string; slidesUrl?: string; sortOrder?: number },
@@ -82,13 +91,15 @@ export async function reorderLessons(courseId: number, orderedIds: number[]) {
     });
   }
 
+  const caseExpr = sql`CASE ${schema.lessons.id} ${sql.join(
+    parsedIds.map((_id: number, i: number) => sql`WHEN ${parsedIds[i]} THEN ${i}`),
+    sql.raw(' '),
+  )} END`;
+
   await db
     .update(schema.lessons)
     .set({
-      sortOrder: sql`CASE ${schema.lessons.id} ${sql.join(
-        parsedIds.map((_id: number, i: number) => sql`WHEN ${parsedIds[i]} THEN ${i}`),
-        sql.raw(' '),
-      )} END`,
+      sortOrder: sql`${caseExpr}::integer`,
     })
     .where(inArray(schema.lessons.id, parsedIds));
 }

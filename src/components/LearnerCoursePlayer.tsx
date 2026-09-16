@@ -26,6 +26,7 @@ import {
   Clock,
   X,
   Download,
+  MessageCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -34,6 +35,8 @@ interface LearnerCoursePlayerProps {
   token: string | null;
   onBack: () => void;
   onProgressUpdated: () => void;
+  onLessonCompleted: (lessonId: number) => void;
+  onNavigateToMessages?: (courseId: number, instructorId: number) => void;
 }
 
 export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
@@ -41,6 +44,8 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   token,
   onBack,
   onProgressUpdated,
+  onLessonCompleted,
+  onNavigateToMessages,
 }) => {
   // Loading & Data states
   const [course, setCourse] = useState<Course | null>(null);
@@ -245,21 +250,29 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
       setCompletedLessonIds(updated);
     }
 
+    // Queue locally first (offline-first): the completion is reflected
+    // immediately and replayed later if the direct POST can't reach the server.
     await PouchDBService.queueLessonCompletionOffline(lessonId);
 
-    if (navigator.onLine && token) {
-      try {
-        await withBackoff(() =>
-          apiFetch(`/api/lessons/${lessonId}/complete`, {
-            method: 'POST',
-          }),
-        );
-      } catch (e) {
-        console.warn('Server completion post skipped offline; queued in PouchDB.');
-      }
-    }
+    // Lightweight UI refresh — no full course reload, no catalog re-fetch.
+    onLessonCompleted(lessonId);
 
-    onProgressUpdated();
+    // Fire-and-forget direct POST: never block the UI on the network. On
+    // success the queued duplicate is dropped so a later sync doesn't replay
+    // it; on failure the queue entry keeps the completion safe.
+    if (navigator.onLine && token) {
+      withBackoff(() =>
+        apiFetch(`/api/lessons/${lessonId}/complete`, {
+          method: 'POST',
+        }),
+      )
+        .then(({ ok }) => {
+          if (ok) return PouchDBService.removeLessonFromQueue(lessonId);
+        })
+        .catch((e) => {
+          console.warn('Server completion post failed; keeping completion in the sync queue.', e);
+        });
+    }
   };
 
   const handleOptionSelect = (questionId: number, optionIndex: number) => {
@@ -424,7 +437,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/30 to-transparent flex items-end p-6 md:p-8">
                   <div className="text-white space-y-1">
                     <span className="bg-ochre text-white text-[9px] uppercase px-2.5 py-0.5 rounded-full font-mono tracking-wider">
-                      Active Syllabus
+                      {course.isArchived ? 'Archived Syllabus' : 'Active Syllabus'}
                     </span>
                     <h2 className="text-xl md:text-2xl font-display font-bold tracking-tight">{course.title}</h2>
                   </div>
@@ -438,6 +451,18 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                   </h3>
                   <p className="text-ink-2 text-sm font-medium leading-relaxed">{course.description}</p>
                 </div>
+
+                {/* Message the instructor (learners only, hidden while the account is closing) */}
+                {onNavigateToMessages && course.createdBy && !course.instructorClosureStatus && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToMessages!(course.id, course.createdBy!)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-navy text-white text-sm font-bold shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Message Instructor
+                  </button>
+                )}
 
                 {/* Syllabus Progress */}
                 <div className="bg-paper-2 border border-rule rounded-2xl p-4 space-y-3">
@@ -454,6 +479,65 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     ></div>
                   </div>
                 </div>
+
+                {/* Instructor Account Closure Notice */}
+                {course.instructorClosureStatus && (
+                  <div
+                    className={`rounded-2xl p-5 flex items-start gap-4 ${
+                      course.instructorClosureStatus === 'pending'
+                        ? 'bg-ochre/10 border border-ochre/30'
+                        : 'bg-ink/5 border border-rule'
+                    }`}
+                  >
+                    <div
+                      className={`p-2.5 rounded-xl shrink-0 ${
+                        course.instructorClosureStatus === 'pending' ? 'bg-ochre text-white' : 'bg-ink/10 text-ink-3'
+                      }`}
+                    >
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-display font-bold tracking-tight text-ink">
+                        {course.instructorClosureStatus === 'pending'
+                          ? 'Instructor Account Closing'
+                          : 'Course Now Read-Only'}
+                      </h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        {course.instructorClosureStatus === 'pending' ? (
+                          <>
+                            The instructor's account is in the process of closing.{' '}
+                            {course.instructorClosureDeadline && (
+                              <span className="block text-xs font-mono mt-0.5 text-ink-3">
+                                Availability deadline: {new Date(course.instructorClosureDeadline).toLocaleDateString()}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            The instructor's account has been closed. This course is now preserved for enrolled learners
+                            and is no longer accepting new enrollments or messages.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Archived Course Notice */}
+                {course.isArchived && !course.instructorClosureStatus && (
+                  <div className="rounded-2xl p-5 flex items-start gap-4 bg-ink/5 border border-rule">
+                    <div className="p-2.5 rounded-xl shrink-0 bg-ink/10 text-ink-3">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-display font-bold tracking-tight text-ink">Course Archived</h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        An administrator has archived this course for reference. Existing enrolled learners can continue
+                        accessing the material.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Completion Banner */}
                 {allLessonsCompleted && isQuizPassed && completionData && (
