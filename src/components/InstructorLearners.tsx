@@ -1,11 +1,12 @@
 // src/components/InstructorLearners.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api.js';
-import { RefreshCw, GraduationCap, Search, Award, Users } from 'lucide-react';
+import { RefreshCw, GraduationCap, Search, Award, Users, MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface InstructorLearnersProps {
   token: string | null;
+  onStartConversation?: (courseId: number, learnerId: number, learnerName?: string | null) => void;
 }
 
 interface LearnerRow {
@@ -31,7 +32,7 @@ function formatDate(value: string | null | undefined): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export const InstructorLearners: React.FC<InstructorLearnersProps> = ({ token }) => {
+export const InstructorLearners: React.FC<InstructorLearnersProps> = ({ token, onStartConversation }) => {
   const [learners, setLearners] = useState<LearnerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -144,6 +145,7 @@ export const InstructorLearners: React.FC<InstructorLearnersProps> = ({ token })
                 <th className="py-2.5 px-4">Courses completed</th>
                 <th className="py-2.5 px-4">Certificates</th>
                 <th className="py-2.5 px-4">Last active</th>
+                {onStartConversation && <th className="py-2.5 px-4">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -209,6 +211,45 @@ export const InstructorLearners: React.FC<InstructorLearnersProps> = ({ token })
                     <td className="py-3 px-4 text-[12px] text-text-3 font-mono whitespace-nowrap">
                       {formatDate(learner.lastActive)}
                     </td>
+                    {onStartConversation && (
+                      <td className="py-3 px-4">
+                        {learner.enrolledCourses.length === 1 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onStartConversation(
+                                learner.enrolledCourses[0].id,
+                                learner.id,
+                                learner.name ?? learner.email,
+                              )
+                            }
+                            className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-steel text-white text-[12px] font-semibold hover:opacity-90 transition-opacity cursor-pointer"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            Message
+                          </button>
+                        ) : learner.enrolledCourses.length > 1 ? (
+                          <select
+                            aria-label={`Message ${learner.name ?? learner.email}`}
+                            defaultValue=""
+                            onChange={(e) => {
+                              const courseId = e.target.value ? Number(e.target.value) : 0;
+                              if (courseId) onStartConversation(courseId, learner.id, learner.name ?? learner.email);
+                            }}
+                            className="h-8 rounded-lg border border-stroke bg-white px-2 text-[12px] text-text font-medium focus:outline-none focus:ring-2 focus:ring-steel/30 cursor-pointer"
+                          >
+                            <option value="">Message…</option>
+                            {learner.enrolledCourses.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.title}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-[11px] text-text-3 font-mono">No course</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

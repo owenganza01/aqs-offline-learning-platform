@@ -92,6 +92,19 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
   const setActiveTab = onActiveTabChange;
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
+  // Instructor-initiated thread intent: a learner selected on the Learners tab
+  // with a chosen course. MessagesView consumes it to open/start the thread.
+  const [instructorThreadIntent, setInstructorThreadIntent] = useState<{
+    courseId: number;
+    learnerId: number;
+    learnerName?: string | null;
+  } | null>(null);
+
+  const handleStartConversation = (courseId: number, learnerId: number, learnerName?: string | null) => {
+    setInstructorThreadIntent({ courseId, learnerId, learnerName });
+    setActiveTab('messages');
+  };
+
   const role: 'instructor' | 'admin' | null =
     userRole === 'instructor' ? 'instructor' : userRole === 'admin' ? 'admin' : null;
   const navTabs = role === 'instructor' ? INSTRUCTOR_TABS : ADMIN_TABS;
@@ -530,7 +543,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
             ) : effectiveTab === 'dashboard' ? (
               <InstructorDashboard token={token} />
             ) : effectiveTab === 'learners' ? (
-              <InstructorLearners token={token} />
+              <InstructorLearners token={token} onStartConversation={handleStartConversation} />
             ) : effectiveTab === 'settings' ? (
               <InstructorSettings user={user ?? null} token={token} onProfileUpdated={onProfileUpdated} />
             ) : effectiveTab === 'messages' ? (
@@ -540,6 +553,8 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                 currentUserRole={userRole === 'admin' ? 'admin' : 'instructor'}
                 messagesIntent={messagesIntent ?? null}
                 onClearMessagesIntent={onClearMessagesIntent ?? (() => {})}
+                instructorThreadIntent={instructorThreadIntent}
+                onClearInstructorThreadIntent={() => setInstructorThreadIntent(null)}
               />
             ) : null}
           </Suspense>

@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.js';
 import {
   getMaxLimits,
+  processEnrollments,
   processLessonCompletions,
   processQuizSubmissions,
   reconcileCourseCompletions,
@@ -10,7 +11,11 @@ import {
 
 export async function syncHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { lessonCompletions: localCompletions, quizSubmissions: localQuizzes } = req.body;
+    const {
+      lessonCompletions: localCompletions,
+      quizSubmissions: localQuizzes,
+      enrollments: localEnrollments = [],
+    } = req.body;
     const { maxCompletions, maxQuizzes } = getMaxLimits();
 
     if (localCompletions.length > maxCompletions) {
@@ -24,6 +29,9 @@ export async function syncHandler(req: AuthRequest, res: Response): Promise<void
 
     const userId = req.dbUser!.id;
 
+    // Flush queued enrollments FIRST so a quiz submitted in the same batch
+    // satisfies the server's enrollment gate.
+    const { processedEnrollments, rejectedEnrollments } = await processEnrollments(userId, localEnrollments);
     await processLessonCompletions(userId, localCompletions);
     const { processedQuizzes, rejectedQuizzes } = await processQuizSubmissions(userId, localQuizzes);
     const reconciledCourseIds = await reconcileCourseCompletions(userId, localCompletions, localQuizzes);
@@ -32,6 +40,8 @@ export async function syncHandler(req: AuthRequest, res: Response): Promise<void
     res.json({
       success: true,
       ...syncState,
+      processedEnrollments,
+      rejectedEnrollments,
       processedQuizzes,
       rejectedQuizzes,
       reconciledCourseIds,

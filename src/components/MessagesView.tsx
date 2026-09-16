@@ -11,6 +11,8 @@ interface MessagesViewProps {
   currentUserRole: 'learner' | 'instructor' | 'admin';
   messagesIntent: { courseId: number; instructorId: number } | null;
   onClearMessagesIntent: () => void;
+  instructorThreadIntent?: { courseId: number; learnerId: number; learnerName?: string | null } | null;
+  onClearInstructorThreadIntent?: () => void;
 }
 
 const POLL_MS = 5000;
@@ -18,8 +20,11 @@ const POLL_MS = 5000;
 export const MessagesView: React.FC<MessagesViewProps> = ({
   courses,
   currentUserId,
+  currentUserRole,
   messagesIntent,
   onClearMessagesIntent,
+  instructorThreadIntent = null,
+  onClearInstructorThreadIntent = () => {},
 }) => {
   const isOnline = useOnlineStatus();
 
@@ -34,6 +39,15 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   const [sending, setSending] = useState(false);
 
   const [pendingNewThread, setPendingNewThread] = useState<{ courseId: number; instructorId: number } | null>(null);
+
+  // Instructor-initiated draft (picked from the Learners tab): no server-side
+  // conversation exists yet, so the first send resolves the thread via
+  // courseId + learnerId.
+  const [instructorDraft, setInstructorDraft] = useState<{
+    courseId: number;
+    learnerId: number;
+    learnerName?: string | null;
+  } | null>(null);
 
   // Mobile single-pane navigation
   const [mobilePane, setMobilePane] = useState<'list' | 'thread'>('list');
@@ -103,6 +117,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         if (res.ok) {
           setMessages(res.data.messages);
         }
+        // Only mark read on an explicit thread open (never on background polls)
+        // so the current read state isn't rewritten to the server every 5s.
         if (markRead) {
           await apiFetch(`/api/messages/conversations/${conversationId}/read`, { method: 'POST' });
           fetchConversations();
@@ -121,7 +137,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
     const poll = async () => {
       if (cancelled || !navigator.onLine) return;
-      await fetchThread(activeConversationId, true);
+      await fetchThread(activeConversationId, false);
     };
 
     if (navigator.onLine) {
@@ -135,11 +151,39 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     };
   }, [activeConversationId, fetchThread]);
 
+  // Instructor clicked "Message" on a learner row: open the existing thread, or
+  // stage a draft for the first message if none exists yet. Applied in a
+  // deferred tick so the intent doesn't cascade synchronous renders.
+  useEffect(() => {
+    if (!instructorThreadIntent) return;
+    const { courseId, learnerId, learnerName } = instructorThreadIntent;
+    const apply = window.setTimeout(() => {
+      const matching = conversations.find(
+        (c) => c.courseId === courseId && c.learnerId === learnerId && c.instructorId === currentUserId,
+      );
+      if (matching) {
+        setActiveConversationId(matching.id);
+        setPendingNewThread(null);
+        setInstructorDraft(null);
+        setMobilePane('thread');
+        void fetchThread(matching.id, true);
+      } else {
+        setInstructorDraft({ courseId, learnerId, learnerName: learnerName ?? null });
+        setActiveConversationId(null);
+        setMobilePane('thread');
+      }
+    }, 0);
+    onClearInstructorThreadIntent();
+    return () => window.clearTimeout(apply);
+  }, [instructorThreadIntent, conversations, currentUserId, fetchThread, onClearInstructorThreadIntent]);
+
   const openConversation = (id: number) => {
     setActiveConversationId(id);
     setPendingNewThread(null);
+    setInstructorDraft(null);
     onClearMessagesIntent();
     setMobilePane('thread');
+    void fetchThread(id, true);
   };
 
   const handleSend = async () => {
@@ -153,7 +197,9 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         ? { conversationId: activeConversationId, content: text }
         : pendingNewThread
           ? { courseId: pendingNewThread.courseId, instructorId: pendingNewThread.instructorId, content: text }
-          : null;
+          : instructorDraft
+            ? { courseId: instructorDraft.courseId, learnerId: instructorDraft.learnerId, content: text }
+            : null;
       if (!body) return;
 
       const res = await apiFetch<{ conversationId: number; message: Message; error?: string }>('/api/messages/send', {
@@ -172,6 +218,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         setActiveConversationId(res.data.conversationId);
         setMobilePane('thread');
       }
+      if (instructorDraft) {
+        setInstructorDraft(null);
+        setActiveConversationId(res.data.conversationId);
+        setMobilePane('thread');
+      }
       fetchConversations();
       if (res.data.conversationId) {
         fetchThread(res.data.conversationId, true);
@@ -185,7 +236,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
 
-  const pendingCourse = pendingNewThread ? (courses.find((c) => c.id === pendingNewThread.courseId) ?? null) : null;
+  const pendingCourse = pendingNewThread
+    ? (courses.find((c) => c.id === pendingNewThread.courseId) ?? null)
+    : instructorDraft
+      ? (courses.find((c) => c.id === instructorDraft.courseId) ?? null)
+      : null;
 
   const renderSkeleton = (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -199,7 +254,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       ? conversation.learnerId === currentUserId
         ? (conversation.instructorName ?? 'Instructor')
         : (conversation.learnerName ?? 'Learner')
-      : (pendingCourse?.createdByName ?? 'Instructor');
+      : pendingNewThread
+        ? (pendingCourse?.createdByName ?? 'Instructor')
+        : instructorDraft
+          ? (instructorDraft.learnerName ?? 'Learner')
+          : 'Instructor';
 
     const courseTitle = conversation?.courseTitle ?? pendingCourse?.title ?? '';
 
@@ -270,21 +329,27 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 handleSend();
               }
             }}
+            disabled={!isOnline}
             placeholder={
               conversation ? `Reply to ${counterpartName}…` : `Start a conversation with ${counterpartName}…`
             }
             rows={2}
-            className="flex-1 resize-none rounded-xl border border-rule bg-white px-3 py-2 text-sm text-ink focus:ring-2 focus:ring-ochre/40 focus:border-ochre outline-none"
+            className="flex-1 resize-none rounded-xl border border-rule bg-white px-3 py-2 text-sm text-ink focus:ring-2 focus:ring-ochre/40 focus:border-ochre outline-none disabled:opacity-60 disabled:cursor-not-allowed"
           />
           <button
             type="submit"
-            disabled={sending || content.trim().length === 0}
+            disabled={sending || content.trim().length === 0 || !isOnline}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-navy text-white text-sm font-bold shadow-sm hover:bg-navy-2 disabled:opacity-40 transition-all cursor-pointer"
           >
             <Send className="w-4 h-4" />
             <span className="hidden sm:inline">{sending ? '…' : 'Send'}</span>
           </button>
         </form>
+        {!isOnline && (
+          <p className="px-4 pb-3 text-[11px] font-mono text-ink-3 -mt-1">
+            You're offline. Messages can't be sent right now — they'll work again once you reconnect.
+          </p>
+        )}
       </div>
     );
   };
@@ -299,11 +364,15 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       <div className="flex-1 overflow-y-auto bg-paper min-h-0">
         {loading && conversations.length === 0 ? (
           renderSkeleton
-        ) : conversations.length === 0 && !pendingNewThread ? (
+        ) : conversations.length === 0 && !pendingNewThread && !instructorDraft ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <Inbox className="w-10 h-10 text-ink-3 mb-3" />
             <p className="text-sm font-bold text-ink">No conversations yet</p>
-            <p className="text-xs font-mono text-ink-3 mt-1">Open a course and press “Message Instructor” to start.</p>
+            <p className="text-xs font-mono text-ink-3 mt-1">
+              {currentUserRole === 'learner'
+                ? 'Open a course and press “Message Instructor” to start.'
+                : 'Pick a learner on the Learners tab to start a thread.'}
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-rule">
@@ -319,6 +388,24 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-ink truncate">
                     New conversation with {pendingCourse?.createdByName ?? 'Instructor'}
+                  </p>
+                  <p className="text-[11px] font-mono text-ink-3 truncate">{pendingCourse?.title ?? ''}</p>
+                </div>
+                <span className="text-[10px] font-mono text-ochre font-bold uppercase">Draft</span>
+              </button>
+            )}
+            {instructorDraft && (
+              <button
+                type="button"
+                onClick={() => setMobilePane('thread')}
+                className="w-full flex items-center gap-3 px-5 py-3.5 text-left bg-ochre/5 hover:bg-ochre/10 transition-colors cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-full bg-ochre text-white flex items-center justify-center shrink-0">
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-ink truncate">
+                    New conversation with {instructorDraft.learnerName ?? 'Learner'}
                   </p>
                   <p className="text-[11px] font-mono text-ink-3 truncate">{pendingCourse?.title ?? ''}</p>
                 </div>
@@ -376,7 +463,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         </div>
         {!isOnline && (
           <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-ink-3 bg-ink/5 border border-rule rounded-full px-2.5 py-1">
-            <AlertCircle className="w-3 h-3" /> Offline — send will sync next time you're online
+            <AlertCircle className="w-3 h-3" /> Offline — messaging is paused until you reconnect
           </span>
         )}
       </div>
@@ -389,35 +476,34 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       )}
 
       <div className="bg-paper border border-rule rounded-2xl shadow-sm overflow-hidden">
-        {!isOnline ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <AlertCircle className="w-8 h-8 text-ink-3 mb-3" />
-            <p className="text-sm font-bold text-ink">You're offline</p>
-            <p className="text-xs font-mono text-ink-3 mt-1">Messages will load automatically when you reconnect.</p>
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] h-[560px] max-h-[70vh]">
+          {/* List pane — single pane on mobile unless a thread is open */}
+          <div
+            className={`${mobilePane === 'thread' && activeConversationId !== null ? 'hidden lg:block' : ''} min-h-0 border-r border-rule`}
+          >
+            {renderList}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] h-[560px] max-h-[70vh]">
-            {/* List pane — single pane on mobile unless a thread is open */}
-            <div
-              className={`${mobilePane === 'thread' && activeConversationId !== null ? 'hidden lg:block' : ''} min-h-0 border-r border-rule`}
-            >
-              {renderList}
+          {/* Thread pane */}
+          {(mobilePane === 'thread' ||
+            activeConversationId !== null ||
+            pendingNewThread !== null ||
+            instructorDraft !== null) && (
+            <div className={`${mobilePane === 'list' ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col`}>
+              {pendingNewThread && !activeConversationId ? renderThread(null) : renderThread(activeConversation)}
             </div>
-            {/* Thread pane */}
-            {(mobilePane === 'thread' || activeConversationId !== null || pendingNewThread) && (
-              <div className={`${mobilePane === 'list' ? 'hidden lg:flex' : 'flex'} min-h-0 flex-col`}>
-                {pendingNewThread && !activeConversationId ? renderThread(null) : renderThread(activeConversation)}
-              </div>
-            )}
-            {!pendingNewThread && !activeConversation && mobilePane === 'list' && (
-              <div className="hidden lg:flex flex-col items-center justify-center text-center px-8">
-                <MessageCircle className="w-10 h-10 text-ink-3 mb-3" />
-                <p className="text-sm font-bold text-ink">Select a conversation</p>
-                <p className="text-xs font-mono text-ink-3 mt-1">Or open a course and press “Message Instructor”.</p>
-              </div>
-            )}
-          </div>
-        )}
+          )}
+          {!pendingNewThread && !instructorDraft && !activeConversation && mobilePane === 'list' && (
+            <div className="hidden lg:flex flex-col items-center justify-center text-center px-8">
+              <MessageCircle className="w-10 h-10 text-ink-3 mb-3" />
+              <p className="text-sm font-bold text-ink">Select a conversation</p>
+              <p className="text-xs font-mono text-ink-3 mt-1">
+                {currentUserRole === 'learner'
+                  ? 'Or open a course and press “Message Instructor”.'
+                  : 'Or pick a learner on the Learners tab.'}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Mobile back button when inside a thread */}

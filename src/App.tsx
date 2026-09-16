@@ -12,6 +12,7 @@ import { MessagesView } from './components/MessagesView.tsx';
 const AdminLMS = lazy(() => import('./components/AdminLMS.tsx').then((m) => ({ default: m.AdminLMS })));
 import type { AdminLmsTab } from './components/AdminLMS.js';
 import { BannerOffline } from './components/BannerOffline.tsx';
+import { SyncOverlay } from './components/SyncOverlay.tsx';
 import { ProfileEditModal } from './components/ProfileEditModal.tsx';
 import { LandingPage } from './components/LandingPage.tsx';
 import { InstructorOnboardingFlow } from './components/InstructorOnboardingFlow.tsx';
@@ -34,9 +35,10 @@ import {
 interface SyncBadgeProps {
   syncInProgress: boolean;
   pendingSyncCount: number;
+  onClick: () => void;
 }
 
-function SyncBadge({ syncInProgress, pendingSyncCount }: SyncBadgeProps) {
+function SyncBadge({ syncInProgress, pendingSyncCount, onClick }: SyncBadgeProps) {
   const isOnline = useOnlineStatus();
 
   const state: 'offline' | 'syncing' | 'synced' = !isOnline
@@ -56,8 +58,10 @@ function SyncBadge({ syncInProgress, pendingSyncCount }: SyncBadgeProps) {
   return (
     <button
       type="button"
-      title="Sync status"
-      className="hidden md:flex items-center gap-1.5 border border-white/10 rounded px-2.5 py-1 text-navtext text-[11px] font-mono cursor-default select-none"
+      title="Open sync panel"
+      aria-label="Open sync panel"
+      onClick={onClick}
+      className="flex items-center gap-1.5 border border-white/10 rounded px-2.5 py-1 text-navtext text-[11px] font-mono cursor-pointer hover:bg-white/5 transition-colors"
     >
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: dotColor }} />
       <span>{label}</span>
@@ -120,6 +124,10 @@ export default function App() {
   // Sync badge state (lifted from BannerOffline + pending queue poll)
   const [syncInProgress, setSyncInProgress] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  // User-triggered full-screen sync overlay (from the header badge or the
+  // offline banner). Gives a live, per-step view of the offline queue flush.
+  const [syncOverlayOpen, setSyncOverlayOpen] = useState(false);
 
   // Simple router popstate listener
   useEffect(() => {
@@ -188,13 +196,20 @@ export default function App() {
       // Online upgrade: Fetch latest from PG when connected!
       if (navigator.onLine && activeToken) {
         try {
+          // Replay any queued writes (pending enrollments, plus any completions
+          // or quizzes still waiting) alongside the server-state refresh.
+          const pendingQueue = await PouchDBService.getSyncQueue();
           // Fire courses, sync, and enrollments in parallel — none depends on the other
           const [coursesResult, syncResult, enrollResult] = await Promise.all([
             apiFetch('/api/courses'),
             apiFetch('/api/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lessonCompletions: [], quizSubmissions: [] }),
+              body: JSON.stringify({
+                lessonCompletions: pendingQueue.lessonCompletions,
+                quizSubmissions: pendingQueue.quizSubmissions,
+                enrollments: pendingQueue.enrollments,
+              }),
             }),
             apiFetch<{ courseIds: number[] }>('/api/enrollments'),
           ]);
@@ -280,7 +295,9 @@ export default function App() {
       try {
         const queue = await PouchDBService.getSyncQueue();
         if (!cancelled) {
-          setPendingSyncCount(queue.lessonCompletions.length + queue.quizSubmissions.length);
+          setPendingSyncCount(
+            queue.lessonCompletions.length + queue.quizSubmissions.length + (queue.enrollments || []).length,
+          );
         }
       } catch {
         // Non-critical — badge just keeps its last known value.
@@ -564,7 +581,13 @@ export default function App() {
         {firebaseUser && dbUser && (
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Sync status badge (learner only) — positioned to the left so it never shifts the Student/Admin toggle */}
-            {!isLmsPath && <SyncBadge syncInProgress={syncInProgress} pendingSyncCount={pendingSyncCount} />}
+            {!isLmsPath && (
+              <SyncBadge
+                syncInProgress={syncInProgress}
+                pendingSyncCount={pendingSyncCount}
+                onClick={() => setSyncOverlayOpen(true)}
+              />
+            )}
 
             {/* Portal switcher for admin/instructor users */}
             {canAccessLms && (
@@ -749,6 +772,7 @@ export default function App() {
                         onSyncComplete={loadAppData}
                         onSyncStateChange={(state) => setSyncInProgress(state.syncing)}
                         token={token}
+                        onSyncNow={() => setSyncOverlayOpen(true)}
                       />
 
                       {activeCourseId === null ? (
@@ -794,6 +818,9 @@ export default function App() {
                           token={token}
                           onBack={() => setActiveCourseId(null)}
                           onProgressUpdated={loadAppData}
+                          onLessonCompleted={(lessonId) =>
+                            setCompletedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
+                          }
                           onNavigateToMessages={
                             dbUser?.role === 'learner'
                               ? (courseId, instructorId) => handleOpenMessagesIntent(courseId, instructorId)
@@ -883,6 +910,16 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {syncOverlayOpen && token && (
+        <SyncOverlay
+          onClose={() => setSyncOverlayOpen(false)}
+          onSynced={() => {
+            loadAppData();
+            setPendingSyncCount(0);
+          }}
+        />
+      )}
 
       {/* Decorative footer */}
       <footer className="bg-navy border-t border-white/10 text-navtext/60 py-6 text-center text-xs font-mono select-none mt-auto">

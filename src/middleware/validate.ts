@@ -130,6 +130,14 @@ export const syncSchema = z.object({
       attemptedAt: z.string().optional(),
     }),
   ),
+  enrollments: z
+    .array(
+      z.object({
+        courseId: z.union([z.number(), z.string()]),
+        enrolledAt: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 // Change a user's role
@@ -164,15 +172,24 @@ export const courseTransferSchema = z.object({
 });
 
 // Send a message: either into an existing conversation (conversationId) or to
-// a new/existing course-thread resolved atomically via (courseId + instructorId).
+// a new/existing course-thread resolved atomically via (courseId + instructorId)
+// for a learner-initiated thread, or (courseId + learnerId) when the course
+// instructor starts a conversation with one of their learners.
 export const sendMessageSchema = z
   .object({
     conversationId: z.number().int().positive().optional(),
     courseId: z.number().int().positive().optional(),
     instructorId: z.number().int().positive().optional(),
+    learnerId: z.number().int().positive().optional(),
     content: z.string().min(1, 'Message cannot be empty').max(5000, 'Message is too long'),
   })
-  .refine((v) => Boolean(v.conversationId) || (Boolean(v.courseId) && Boolean(v.instructorId)), {
-    message: 'Provide conversationId, or courseId + instructorId',
-    path: ['conversationId'],
-  });
+  .refine(
+    (v) =>
+      Boolean(v.conversationId) ||
+      (Boolean(v.courseId) && Boolean(v.instructorId)) ||
+      (Boolean(v.courseId) && Boolean(v.learnerId)),
+    {
+      message: 'Provide conversationId, courseId + instructorId, or courseId + learnerId',
+      path: ['conversationId'],
+    },
+  );

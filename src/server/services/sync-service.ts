@@ -39,12 +39,42 @@ import { eq, and, sql } from 'drizzle-orm';
 import { scoreQuiz } from '../../lib/scoring.js';
 import { issueCertificate } from './certificate-service.js';
 import { completeCourse } from './course-service.js';
+import { enrollUserInCourse } from './enrollment-service.js';
 
 const MAX_SYNC_COMPLETIONS = 500;
 const MAX_SYNC_QUIZZES = 100;
 
 export function getMaxLimits() {
   return { maxCompletions: MAX_SYNC_COMPLETIONS, maxQuizzes: MAX_SYNC_QUIZZES };
+}
+
+/**
+ * Replays locally-queued enrollments server-side. Idempotent (ON CONFLICT DO
+ * NOTHING) and error-isolated per item so one blocked enrollment (e.g. its
+ * instructor is closing) never aborts the rest of the sync flush.
+ */
+export async function processEnrollments(
+  userId: number,
+  localEnrollments: Array<{ courseId: number | string }>,
+): Promise<{ processedEnrollments: number[]; rejectedEnrollments: { courseId: number; reason: string }[] }> {
+  const processedEnrollments: number[] = [];
+  const rejectedEnrollments: { courseId: number; reason: string }[] = [];
+
+  for (const item of localEnrollments) {
+    const courseId = parseInt(String(item.courseId));
+    if (isNaN(courseId)) continue;
+    try {
+      await enrollUserInCourse(userId, courseId);
+      processedEnrollments.push(courseId);
+    } catch (err) {
+      rejectedEnrollments.push({
+        courseId,
+        reason: err instanceof Error ? err.message.replace(/\.$/, '') : 'Enrollment failed.',
+      });
+    }
+  }
+
+  return { processedEnrollments, rejectedEnrollments };
 }
 
 export async function processLessonCompletions(

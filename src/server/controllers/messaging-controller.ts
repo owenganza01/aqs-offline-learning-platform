@@ -12,8 +12,8 @@ import {
 
 export async function sendMessageHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { conversationId, courseId, instructorId, content } = req.body;
-    const result = await sendMessage(req.dbUser!.id, content, { conversationId, courseId, instructorId });
+    const { conversationId, courseId, instructorId, learnerId, content } = req.body;
+    const result = await sendMessage(req.dbUser!.id, content, { conversationId, courseId, instructorId, learnerId });
     res.status(201).json({
       success: true,
       conversationId: result.conversation.id,

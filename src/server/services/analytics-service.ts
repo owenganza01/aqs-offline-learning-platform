@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export type InstructorScopeData = Awaited<ReturnType<typeof getInstructorScopeData>>;
 
@@ -17,6 +17,7 @@ export async function getInstructorScopeData(instructorId: number) {
       enrollments: [] as (typeof schema.enrollments.$inferSelect)[],
       enrollmentsByCourse: {} as Record<number, (typeof schema.enrollments.$inferSelect)[]>,
       enrolledUserIds: new Set<number>(),
+      courseIdsByLearner: {} as Record<number, number[]>,
       completions: [] as { lesson_completions: typeof schema.lessonCompletions.$inferSelect }[],
       quizzes: [] as (typeof schema.quizzes.$inferSelect)[],
       quizByCourse: {} as Record<number, typeof schema.quizzes.$inferSelect>,
@@ -55,26 +56,21 @@ export async function getInstructorScopeData(instructorId: number) {
       )})`}`,
     );
   const enrollmentsByCourse: Record<number, typeof allEnrollments> = {};
-  const enrolledUserIds = new Set<number>();
   for (const e of allEnrollments) {
     if (!enrollmentsByCourse[e.courseId]) enrollmentsByCourse[e.courseId] = [];
     enrollmentsByCourse[e.courseId].push(e);
-    enrolledUserIds.add(e.userId);
   }
 
-  const allCompletions =
-    enrolledUserIds.size > 0
-      ? await db
-          .select()
-          .from(schema.lessonCompletions)
-          .innerJoin(schema.lessons, eq(schema.lessonCompletions.lessonId, schema.lessons.id))
-          .where(
-            sql`${schema.lessons.courseId} IN ${sql`(${sql.join(
-              ownedCourseIds.map((id) => sql`${id}`),
-              sql`, `,
-            )})`}`,
-          )
-      : [];
+  const allCompletions = await db
+    .select()
+    .from(schema.lessonCompletions)
+    .innerJoin(schema.lessons, eq(schema.lessonCompletions.lessonId, schema.lessons.id))
+    .where(
+      sql`${schema.lessons.courseId} IN ${sql`(${sql.join(
+        ownedCourseIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})`}`,
+    );
 
   const allQuizzes = await db
     .select()
@@ -138,6 +134,54 @@ export async function getInstructorScopeData(instructorId: number) {
     certificatesCountByCourse[cid] = (certificatesCountByCourse[cid] || 0) + 1;
   }
 
+  // The roster is a union of every learner who has ANY participation in the
+  // instructor's owned courses: formal enrollments plus lesson completions,
+  // quiz attempts, course completions and issued certificates. This recovers
+  // learners whose enrollment row was never created (e.g. offline enrollment
+  // that predates enrollment syncing) and excludes admins/instructors.
+  const participationUserIds = new Set<number>();
+  for (const e of allEnrollments) participationUserIds.add(e.userId);
+  for (const c of allCompletions) participationUserIds.add(c.lesson_completions.userId);
+  for (const a of allAttempts) participationUserIds.add(a.userId);
+  for (const cc of allCourseCompletions) participationUserIds.add(cc.userId);
+  for (const cert of allIssuedCertificates) if (cert.userId !== null) participationUserIds.add(cert.userId);
+
+  const learnerSet = new Set<number>();
+  if (participationUserIds.size > 0) {
+    const participantRows = await db
+      .select({ id: schema.users.id, role: schema.users.role })
+      .from(schema.users)
+      .where(
+        sql`${schema.users.id} IN ${sql`(${sql.join(
+          [...participationUserIds].map((id) => sql`${id}`),
+          sql`, `,
+        )})`}`,
+      );
+    for (const row of participantRows) {
+      if (row.role === 'learner') learnerSet.add(row.id);
+    }
+  }
+  const enrolledUserIds = learnerSet;
+
+  // Course roots per learner: union of enrollment rows and participation
+  // evidence. A participation-only learner (no enrollment row) still gets a
+  // resolvable course list for the roster's enrolledCourses / Message action.
+  const courseIdsByLearner: Record<number, number[]> = {};
+  const addCourseRoot = (userId: number, courseId: number) => {
+    const existing = courseIdsByLearner[userId] || [];
+    if (!existing.includes(courseId)) courseIdsByLearner[userId] = [...existing, courseId];
+  };
+  for (const e of allEnrollments) addCourseRoot(e.userId, e.courseId);
+  for (const c of allCompletions) addCourseRoot(c.lesson_completions.userId, c.lessons.courseId);
+  for (const a of allAttempts) {
+    const course = quizByCourse[a.quizId];
+    if (course) addCourseRoot(a.userId, course.courseId);
+  }
+  for (const cc of allCourseCompletions) addCourseRoot(cc.userId, cc.courseId);
+  for (const cert of allIssuedCertificates) {
+    if (cert.userId !== null && cert.courseId != null) addCourseRoot(cert.userId, cert.courseId);
+  }
+
   return {
     ownedCourses,
     ownedCourseIds,
@@ -146,6 +190,7 @@ export async function getInstructorScopeData(instructorId: number) {
     enrollments: allEnrollments,
     enrollmentsByCourse,
     enrolledUserIds,
+    courseIdsByLearner,
     completions: allCompletions,
     quizzes: allQuizzes,
     quizByCourse,
@@ -558,32 +603,37 @@ export async function getInstructorLearners(instructorId: number) {
     return { learners: [] };
   }
 
-  const userRows = await db
-    .select()
-    .from(schema.users)
-    .where(
-      sql`${schema.users.id} IN ${sql`(${sql.join(
-        [...scope.enrolledUserIds].map((id) => sql`${id}`),
-        sql`, `,
-      )})`}`,
-    );
+  const userRows = (
+    await db
+      .select()
+      .from(schema.users)
+      .where(
+        sql`${schema.users.id} IN ${sql`(${sql.join(
+          [...scope.enrolledUserIds].map((id) => sql`${id}`),
+          sql`, `,
+        )})`}`,
+      )
+  ).filter((u) => u.role === 'learner');
 
   const lessonIdsByCourse: Record<number, number[]> = {};
   for (const course of scope.ownedCourses) {
     lessonIdsByCourse[course.id] = (scope.lessonsByCourse[course.id] || []).map((l) => l.id);
   }
 
-  const courseByEnrollment: Record<number, (typeof scope.ownedCourses)[number]> = {};
-  for (const e of scope.enrollments) {
-    const course = scope.ownedCourses.find((c) => c.id === e.courseId);
-    if (course) courseByEnrollment[e.id] = course;
-  }
-
   const learners = userRows.map((user) => {
-    const userEnrollments = scope.enrollments.filter((e) => e.userId === user.id);
-    const enrolledCourses = userEnrollments
-      .map((e) => {
-        const course = courseByEnrollment[e.id];
+    // Course roots: union of formal enrollment rows and participation evidence
+    // (completions, attempts, course completion, certificate) within the owned
+    // courses — so participation-only learners still get enrolledCourses.
+    const userCourseRoots = new Set<number>();
+    for (const e of scope.enrollments) {
+      if (e.userId === user.id) userCourseRoots.add(e.courseId);
+    }
+    for (const courseId of scope.courseIdsByLearner[user.id] || []) {
+      userCourseRoots.add(courseId);
+    }
+    const enrolledCourses = [...userCourseRoots]
+      .map((courseId) => {
+        const course = scope.ownedCourses.find((c) => c.id === courseId);
         return course ? { id: course.id, title: course.title } : null;
       })
       .filter((c): c is { id: number; title: string } => c !== null);

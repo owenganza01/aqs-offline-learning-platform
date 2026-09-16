@@ -35,6 +35,7 @@ interface LearnerCoursePlayerProps {
   token: string | null;
   onBack: () => void;
   onProgressUpdated: () => void;
+  onLessonCompleted: (lessonId: number) => void;
   onNavigateToMessages?: (courseId: number, instructorId: number) => void;
 }
 
@@ -43,6 +44,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   token,
   onBack,
   onProgressUpdated,
+  onLessonCompleted,
   onNavigateToMessages,
 }) => {
   // Loading & Data states
@@ -248,21 +250,29 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
       setCompletedLessonIds(updated);
     }
 
+    // Queue locally first (offline-first): the completion is reflected
+    // immediately and replayed later if the direct POST can't reach the server.
     await PouchDBService.queueLessonCompletionOffline(lessonId);
 
-    if (navigator.onLine && token) {
-      try {
-        await withBackoff(() =>
-          apiFetch(`/api/lessons/${lessonId}/complete`, {
-            method: 'POST',
-          }),
-        );
-      } catch (e) {
-        console.warn('Server completion post skipped offline; queued in PouchDB.');
-      }
-    }
+    // Lightweight UI refresh — no full course reload, no catalog re-fetch.
+    onLessonCompleted(lessonId);
 
-    onProgressUpdated();
+    // Fire-and-forget direct POST: never block the UI on the network. On
+    // success the queued duplicate is dropped so a later sync doesn't replay
+    // it; on failure the queue entry keeps the completion safe.
+    if (navigator.onLine && token) {
+      withBackoff(() =>
+        apiFetch(`/api/lessons/${lessonId}/complete`, {
+          method: 'POST',
+        }),
+      )
+        .then(({ ok }) => {
+          if (ok) return PouchDBService.removeLessonFromQueue(lessonId);
+        })
+        .catch((e) => {
+          console.warn('Server completion post failed; keeping completion in the sync queue.', e);
+        });
+    }
   };
 
   const handleOptionSelect = (questionId: number, optionIndex: number) => {

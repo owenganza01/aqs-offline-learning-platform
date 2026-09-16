@@ -9,9 +9,15 @@ interface BannerOfflineProps {
   onSyncComplete: () => void;
   token: string | null;
   onSyncStateChange?: (state: { syncing: boolean }) => void;
+  onSyncNow?: () => void;
 }
 
-export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, token, onSyncStateChange }) => {
+export const BannerOffline: React.FC<BannerOfflineProps> = ({
+  onSyncComplete,
+  token,
+  onSyncStateChange,
+  onSyncNow,
+}) => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string>(
@@ -33,7 +39,11 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
       // 1. Get queued items from local PouchDB
       const queue = await PouchDBService.getSyncQueue();
 
-      if (queue.lessonCompletions.length === 0 && queue.quizSubmissions.length === 0) {
+      if (
+        queue.lessonCompletions.length === 0 &&
+        queue.quizSubmissions.length === 0 &&
+        (queue.enrollments || []).length === 0
+      ) {
         setSyncing(false);
         setSyncStatus('idle');
         setSyncMessage('');
@@ -199,8 +209,8 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({ onSyncComplete, to
 
           {token && (
             <button
-              onClick={triggerSync}
-              disabled={syncing}
+              onClick={onSyncNow ?? triggerSync}
+              disabled={!onSyncNow && syncing}
               className={`shrink-0 h-12 min-w-[160px] text-sm font-bold px-5 rounded-full border flex items-center justify-center gap-2 active:scale-95 transition-all ${
                 syncStatus === 'success'
                   ? 'bg-success text-white hover:opacity-90 border-success/40'

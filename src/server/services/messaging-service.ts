@@ -91,11 +91,50 @@ export async function getOrCreateConversation(
 }
 
 /**
+ * True when the learner has any recorded participation in the course even if
+ * an explicit enrollments row is missing (legacy offline enrollments, or a row
+ * that predates enrollment syncing). Keeps messaging usable for genuinely
+ * active learners without re-opening the gate to unenrolled strangers.
+ */
+async function hasActiveParticipation(userId: number, courseId: number): Promise<boolean> {
+  const lc = await db
+    .select({ id: schema.lessonCompletions.id })
+    .from(schema.lessonCompletions)
+    .innerJoin(schema.lessons, eq(schema.lessonCompletions.lessonId, schema.lessons.id))
+    .where(and(eq(schema.lessonCompletions.userId, userId), eq(schema.lessons.courseId, courseId)))
+    .limit(1);
+  if (lc.length > 0) return true;
+
+  const qa = await db
+    .select({ id: schema.quizAttempts.id })
+    .from(schema.quizAttempts)
+    .innerJoin(schema.quizzes, eq(schema.quizAttempts.quizId, schema.quizzes.id))
+    .where(and(eq(schema.quizAttempts.userId, userId), eq(schema.quizzes.courseId, courseId)))
+    .limit(1);
+  if (qa.length > 0) return true;
+
+  const cc = await db
+    .select({ id: schema.courseCompletions.id })
+    .from(schema.courseCompletions)
+    .where(and(eq(schema.courseCompletions.userId, userId), eq(schema.courseCompletions.courseId, courseId)))
+    .limit(1);
+  if (cc.length > 0) return true;
+
+  const cert = await db
+    .select({ id: schema.issuedCertificates.id })
+    .from(schema.issuedCertificates)
+    .where(and(eq(schema.issuedCertificates.userId, userId), eq(schema.issuedCertificates.courseId, courseId)))
+    .limit(1);
+  return cert.length > 0;
+}
+
+/**
  * Authorization gate for sending a message into a conversation.
  * Applies symmetrically to BOTH participants:
  *   - the thread is fully read-only while the instructor is in closure
  *     (pending or closed) — same rule on the learner and instructor side;
- *   - a learner sender must have a current active enrollment for the course;
+ *   - a learner sender must have a current active enrollment for the course,
+ *     OR any recorded participation in it (completions, attempts, certificate);
  *   - the sender must be a participant of the conversation.
  */
 export async function assertCanSend(
@@ -133,15 +172,16 @@ async function assertThreadGates(
     );
   }
 
-  // Learner senders must hold a current enrollment. Sender id is never NULL
-  // here (a real authenticated user is sending), so this check is safe.
+  // Learner senders must hold a current enrollment (or equivalent participation)
+  // in the course. Sender id is never NULL here (a real authenticated user is
+  // sending), so these checks are safe.
   if (sender.role === 'learner') {
     const enrolled = await db
       .select({ id: schema.enrollments.id })
       .from(schema.enrollments)
       .where(and(eq(schema.enrollments.userId, sender.id), eq(schema.enrollments.courseId, target.courseId)))
       .limit(1);
-    if (enrolled.length === 0) {
+    if (enrolled.length === 0 && !(await hasActiveParticipation(sender.id, target.courseId))) {
       throw new MessagingError('You must be enrolled in this course to send messages.', 403);
     }
   }
@@ -150,7 +190,7 @@ async function assertThreadGates(
 export async function sendMessage(
   senderId: number,
   content: string,
-  opts: { conversationId?: number; courseId?: number; instructorId?: number },
+  opts: { conversationId?: number; courseId?: number; instructorId?: number; learnerId?: number },
 ): Promise<{ conversation: typeof schema.conversations.$inferSelect; message: typeof schema.messages.$inferSelect }> {
   const sender = await getUserById(senderId);
   if (!sender) {
@@ -165,11 +205,20 @@ export async function sendMessage(
     }
     conversation = rows[0];
     await assertCanSend(sender, conversation);
+  } else if (opts.courseId && opts.learnerId) {
+    // Instructor-initiated thread: the sender must be the course instructor
+    // (ownership is enforced in getOrCreateConversation) and the target learner
+    // is the thread's learner participant.
+    if (sender.role !== 'instructor' && sender.role !== 'admin') {
+      throw new MessagingError('Only course instructors may start a conversation with a learner.', 403);
+    }
+    await assertThreadGates(sender, { courseId: opts.courseId, instructorId: sender.id });
+    conversation = await getOrCreateConversation(opts.courseId, opts.learnerId, sender.id);
   } else if (opts.courseId && opts.instructorId) {
     await assertThreadGates(sender, { courseId: opts.courseId, instructorId: opts.instructorId });
     conversation = await getOrCreateConversation(opts.courseId, sender.id, opts.instructorId);
   } else {
-    throw new MessagingError('Either conversationId or courseId+instructorId is required.', 400);
+    throw new MessagingError('Either conversationId or a course participant pair is required.', 400);
   }
 
   const now = new Date();
