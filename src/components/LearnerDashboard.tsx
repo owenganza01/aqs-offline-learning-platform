@@ -540,7 +540,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                         className="mt-auto w-full h-9 bg-accent hover:opacity-90 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>+ Choose Course</span>
+                        <span>Choose Course</span>
                       </button>
                     </div>
                   </div>

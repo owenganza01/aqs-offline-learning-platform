@@ -303,30 +303,34 @@ export const UserManagement: React.FC<UserManagementProps> = ({ token, currentUs
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {user.onboardingStatus === 'pending_approval' && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={actingOn === user.id}
-                        onClick={() => handleApprove(user)}
-                        className="inline-flex items-center gap-1.5 h-9 px-3 bg-success hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {actingOn === user.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        )}
-                        <span>Approve</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={actingOn === user.id}
-                        onClick={() => openDecline(user)}
-                        className="inline-flex items-center gap-1.5 h-9 px-3 bg-error-bg hover:bg-error/20 text-error text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
+                    <button
+                      type="button"
+                      disabled={actingOn === user.id}
+                      onClick={() => handleApprove(user)}
+                      className="inline-flex items-center gap-1.5 h-9 px-3 bg-success hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {actingOn === user.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-3.5 h-3.5" />
+                      )}
+                      <span>Approve</span>
+                    </button>
+                  )}
+                  {(user.onboardingStatus === 'pending_approval' || user.onboardingStatus === 'onboarding') && (
+                    <button
+                      type="button"
+                      disabled={actingOn === user.id}
+                      onClick={() => openDecline(user)}
+                      className="inline-flex items-center gap-1.5 h-9 px-3 bg-error-bg hover:bg-error/20 text-error text-xs font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {actingOn === user.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
                         <XCircle className="w-3.5 h-3.5" />
-                        <span>Decline</span>
-                      </button>
-                    </>
+                      )}
+                      <span>Deny</span>
+                    </button>
                   )}
                 </div>
               </div>
