@@ -13,6 +13,12 @@ export async function getLessonCourseId(lessonId: number): Promise<number | null
   return rows.length > 0 ? rows[0].courseId : null;
 }
 
+function extractDocIds(url: string | null | undefined): string[] {
+  if (!url) return [];
+  const matches = url.match(/doc:([a-zA-Z0-9_-]+)/g);
+  return matches ? matches.map((m) => m.slice(4)) : [];
+}
+
 export async function createLesson(
   courseId: number,
   data: { title: string; content: string; videoUrl?: string; slidesUrl?: string; sortOrder?: number },
@@ -30,12 +36,10 @@ export async function createLesson(
     .returning();
 
   const savedLesson = result[0];
-  if (data.slidesUrl && data.slidesUrl.startsWith('doc:')) {
-    const docId = data.slidesUrl.slice(4);
+  for (const docId of extractDocIds(data.slidesUrl)) {
     await documentStorage.backfillLessonId(docId, savedLesson.id);
   }
-  if (data.videoUrl && data.videoUrl.startsWith('doc:')) {
-    const docId = data.videoUrl.slice(4);
+  for (const docId of extractDocIds(data.videoUrl)) {
     await documentStorage.backfillLessonId(docId, savedLesson.id);
   }
   return savedLesson;
@@ -66,12 +70,10 @@ export async function updateLesson(
 
   if (updated.length === 0) return null;
 
-  if (data.slidesUrl && data.slidesUrl.startsWith('doc:')) {
-    const docId = data.slidesUrl.slice(4);
+  for (const docId of extractDocIds(data.slidesUrl)) {
     await documentStorage.backfillLessonId(docId, lessonId);
   }
-  if (data.videoUrl && data.videoUrl.startsWith('doc:')) {
-    const docId = data.videoUrl.slice(4);
+  for (const docId of extractDocIds(data.videoUrl)) {
     await documentStorage.backfillLessonId(docId, lessonId);
   }
   return updated[0];
@@ -117,9 +119,10 @@ export async function deleteLesson(lessonId: number, courseId: number) {
 
   if (deleted.length === 0) return null;
 
-  if (lessonRows.length > 0 && lessonRows[0].slidesUrl?.startsWith('doc:')) {
-    const docId = lessonRows[0].slidesUrl.slice(4);
-    await documentStorage.delete(docId).catch(() => {});
+  if (lessonRows.length > 0) {
+    for (const docId of extractDocIds(lessonRows[0].slidesUrl)) {
+      await documentStorage.delete(docId).catch(() => {});
+    }
   }
 
   return deleted[0];

@@ -480,19 +480,19 @@ export async function getInstructorAnalytics(instructorId: number) {
     });
   }
 
-  const userMap = new Map(
-    (
-      await db
-        .select()
-        .from(schema.users)
-        .where(
-          sql`${schema.users.id} IN ${sql`(${sql.join(
-            [...enrolledUserIds].map((id) => sql`${id}`),
-            sql`, `,
-          )})`}`,
-        )
-    ).map((u) => [u.id, u]),
-  );
+  const userRows =
+    enrolledUserIds.size > 0
+      ? await db
+          .select()
+          .from(schema.users)
+          .where(
+            sql`${schema.users.id} IN ${sql`(${sql.join(
+              [...enrolledUserIds].map((id) => sql`${id}`),
+              sql`, `,
+            )})`}`,
+          )
+      : [];
+  const userMap = new Map(userRows.map((u) => [u.id, u]));
   const lessonMap = new Map(scope.lessons.map((l) => [l.id, l]));
   const quizMap = new Map(scope.quizzes.map((q) => [q.id, q]));
 

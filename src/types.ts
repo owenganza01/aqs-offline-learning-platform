@@ -99,6 +99,9 @@ export interface Message {
   content: string;
   isRead: boolean;
   createdAt: string;
+  attachmentFileName?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentFileSize?: number | null;
 }
 
 export interface Conversation {

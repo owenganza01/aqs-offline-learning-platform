@@ -491,6 +491,11 @@ export default function App() {
   const canAccessLms =
     dbUser?.role === 'admin' || (dbUser?.role === 'instructor' && (dbUser.onboardingStatus ?? 'active') === 'active');
 
+  // The portal switcher label reflects the user's actual role — the internal
+  // "learner" role is always presented as "Student", while admins and
+  // instructors get their own label. DB role semantics are unchanged.
+  const portalLabel = dbUser?.role === 'admin' ? 'Admin' : 'Instructor';
+
   // An instructor who has not yet been approved (or is pending/rejected) must go
   // through onboarding before accessing the Instructor Portal. "Continue as a
   // Learner" lifts this gate for the current session only.
@@ -612,7 +617,7 @@ export default function App() {
                     isLmsPath ? 'bg-steel text-white shadow-sm' : 'text-white/70 hover:text-white'
                   }`}
                 >
-                  Admin
+                  {portalLabel}
                 </button>
               </div>
             )}

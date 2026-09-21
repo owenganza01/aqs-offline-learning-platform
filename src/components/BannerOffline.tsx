@@ -1,6 +1,6 @@
 // src/components/BannerOffline.tsx
 import React, { useState, useEffect } from 'react';
-import { WifiOff, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
+import { WifiOff, RefreshCw, CheckCircle, AlertTriangle, X } from 'lucide-react';
 import { PouchDBService } from '../lib/pouchdb-service.js';
 import { apiFetch } from '../lib/api.js';
 import { withBackoff } from '../lib/retry.js';
@@ -24,6 +24,14 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({
     navigator.onLine ? '' : 'Working offline. All answers and lessons completed will save locally.',
   );
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error' | 'warning'>('idle');
+
+  // Warning/error states carry useful information (e.g. a quiz attempt that was
+  // not recorded). They persist until explicitly dismissed so the learner can
+  // read and act on them — unlike the transient success message.
+  const dismissBanner = () => {
+    setSyncMessage('');
+    setSyncStatus('idle');
+  };
 
   const triggerSync = async () => {
     if (!navigator.onLine || !token) {
@@ -220,6 +228,17 @@ export const BannerOffline: React.FC<BannerOfflineProps> = ({
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               <span>SYNC NOW</span>
+            </button>
+          )}
+
+          {(syncStatus === 'warning' || syncStatus === 'error') && (
+            <button
+              type="button"
+              onClick={dismissBanner}
+              aria-label="Dismiss notification"
+              className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-ink-3 hover:text-ink hover:bg-ink/5 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
             </button>
           )}
         </div>

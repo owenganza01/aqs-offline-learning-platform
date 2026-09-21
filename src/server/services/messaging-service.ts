@@ -30,6 +30,26 @@ export async function getUserById(userId: number) {
 }
 
 /**
+ * Message shape safe for normal API responses. Attachment metadata is exposed,
+ * but the base64 payload (attachment_data) is NEVER returned — it is only
+ * served by the dedicated downloads endpoint.
+ */
+export function toPublicMessage(m: typeof schema.messages.$inferSelect) {
+  return {
+    id: m.id,
+    conversationId: m.conversationId,
+    senderId: m.senderId,
+    senderNameSnapshot: m.senderNameSnapshot,
+    content: m.content,
+    isRead: m.isRead,
+    createdAt: m.createdAt,
+    attachmentFileName: m.attachmentFileName,
+    attachmentMimeType: m.attachmentMimeType,
+    attachmentFileSize: m.attachmentFileSize,
+  };
+}
+
+/**
  * Atomic find-or-create of a (course_id, learner_id, instructor_id) thread.
  * Single INSERT .. ON CONFLICT DO UPDATE — no check-then-insert race.
  * Names are snapshotted at creation time and never refreshed.
@@ -187,11 +207,19 @@ async function assertThreadGates(
   }
 }
 
+export interface MessageAttachmentInput {
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  data: Buffer;
+}
+
 export async function sendMessage(
   senderId: number,
   content: string,
   opts: { conversationId?: number; courseId?: number; instructorId?: number; learnerId?: number },
-): Promise<{ conversation: typeof schema.conversations.$inferSelect; message: typeof schema.messages.$inferSelect }> {
+  attachment?: MessageAttachmentInput,
+): Promise<{ conversation: typeof schema.conversations.$inferSelect; message: ReturnType<typeof toPublicMessage> }> {
   const sender = await getUserById(senderId);
   if (!sender) {
     throw new MessagingError('Sender not found.', 404);
@@ -231,12 +259,56 @@ export async function sendMessage(
       content,
       isRead: false,
       createdAt: now,
+      ...(attachment
+        ? {
+            attachmentFileName: attachment.fileName,
+            attachmentMimeType: attachment.mimeType,
+            attachmentFileSize: attachment.fileSize,
+            attachmentData: attachment.data.toString('base64'),
+          }
+        : {}),
     })
     .returning();
 
   await db.update(schema.conversations).set({ updatedAt: now }).where(eq(schema.conversations.id, conversation.id));
 
-  return { conversation, message };
+  return { conversation, message: toPublicMessage(message) };
+}
+
+export async function getMessageAttachment(
+  conversationId: number,
+  messageId: number,
+  userId: number,
+): Promise<{ fileName: string; mimeType: string; fileSize: number | null; data: Buffer }> {
+  const [conversation] = await db
+    .select()
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, conversationId));
+  if (!conversation) {
+    throw new MessagingError('Conversation not found.', 404);
+  }
+  const isParticipant = conversation.learnerId === userId || conversation.instructorId === userId;
+  if (!isParticipant) {
+    throw new MessagingError('You are not part of this conversation.', 403);
+  }
+
+  const [message] = await db
+    .select()
+    .from(schema.messages)
+    .where(and(eq(schema.messages.id, messageId), eq(schema.messages.conversationId, conversationId)));
+  if (!message) {
+    throw new MessagingError('Message not found.', 404);
+  }
+  if (!message.attachmentData || !message.attachmentFileName || !message.attachmentMimeType) {
+    throw new MessagingError('This message has no attachment.', 404);
+  }
+
+  return {
+    fileName: message.attachmentFileName,
+    mimeType: message.attachmentMimeType,
+    fileSize: message.attachmentFileSize,
+    data: Buffer.from(message.attachmentData, 'base64'),
+  };
 }
 
 export async function listConversations(userId: number) {
@@ -334,7 +406,7 @@ export async function getMessages(conversationId: number, userId: number) {
       updatedAt: conversation.updatedAt.toISOString(),
     },
     messages: rows.map((m) => ({
-      ...m,
+      ...toPublicMessage(m),
       senderName: displayName(m.senderId !== null ? (senderById.get(m.senderId) ?? null) : null, m.senderNameSnapshot),
     })),
   };

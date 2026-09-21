@@ -4,6 +4,7 @@ import { requireAuth, requireInstructorOrAdmin, requireAuthOrQueryToken } from '
 import { ALL_MIME_TYPE_SET, MAX_UPLOAD_SIZE_BYTES } from '../../lib/mime-types.js';
 import {
   uploadDocument,
+  uploadBatchDocuments,
   getDocumentMetadata,
   downloadDocument,
   deleteDocument,
@@ -33,6 +34,15 @@ export function registerDocumentRoutes(app: Application, deps: DocumentRouteDeps
     deps.uploadRateLimit,
     upload.single('file'),
     uploadDocument,
+  );
+
+  app.post(
+    '/api/admin/documents/upload-batch',
+    requireAuth,
+    requireInstructorOrAdmin,
+    deps.uploadRateLimit,
+    upload.array('files', 10),
+    uploadBatchDocuments,
   );
 
   app.get('/api/documents/:id', requireAuth, getDocumentMetadata);

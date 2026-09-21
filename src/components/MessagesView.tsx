@@ -1,9 +1,10 @@
 // src/components/MessagesView.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Course, Conversation, Message } from '../types.js';
 import { apiFetch } from '../lib/api.js';
 import { useOnlineStatus } from '../hooks/useOnlineStatus.js';
-import { ArrowLeft, RefreshCw, Send, MessageCircle, AlertCircle, Inbox, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Send, MessageCircle, AlertCircle, Inbox, ChevronLeft, Paperclip, X } from 'lucide-react';
+import { ALLOWED_MESSAGE_EXTENSIONS } from '../lib/mime-types.js';
 
 interface MessagesViewProps {
   courses: Course[];
@@ -16,6 +17,40 @@ interface MessagesViewProps {
 }
 
 const POLL_MS = 5000;
+
+// Split into capture-group pairs: even indices are plain text, odd indices are
+// fully-qualified http(s) URLs. Only https? links become anchors — everything
+// else (including rejected javascript:/data:/vbscript: schemes) stays inert
+// text. React escapes the text nodes, so no raw HTML can be injected.
+const LINK_RE = /(https?:\/\/[^\s<>]+)/g;
+
+function renderContent(text: string): React.ReactNode[] {
+  return text.split(LINK_RE).map((part, i) =>
+    i % 2 === 1 ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline underline-offset-2 hover:opacity-80"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    ),
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(1)} GB`;
+}
 
 export const MessagesView: React.FC<MessagesViewProps> = ({
   courses,
@@ -37,6 +72,10 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [pendingNewThread, setPendingNewThread] = useState<{ courseId: number; instructorId: number } | null>(null);
 
@@ -186,32 +225,65 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     void fetchThread(id, true);
   };
 
+  const handleEnroll = async (courseId: number) => {
+    if (enrolling) return;
+    setEnrolling(true);
+    setError('');
+    try {
+      const { ok, data } = await apiFetch<{ error?: string }>('/api/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId }),
+      });
+      if (ok) {
+        setError('Enrollment complete. You can now send messages to the instructor.');
+      } else {
+        setError(data?.error || 'Enrollment failed. Please try again.');
+      }
+    } catch {
+      setError('Network error while enrolling — please try again.');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
   const handleSend = async () => {
     const text = content.trim();
-    if (!text || sending) return;
+    if ((!text && !attachment) || sending) return;
 
     setSending(true);
     setError('');
+    setAttachmentError('');
     try {
-      const body = activeConversationId
-        ? { conversationId: activeConversationId, content: text }
-        : pendingNewThread
-          ? { courseId: pendingNewThread.courseId, instructorId: pendingNewThread.instructorId, content: text }
-          : instructorDraft
-            ? { courseId: instructorDraft.courseId, learnerId: instructorDraft.learnerId, content: text }
-            : null;
-      if (!body) return;
+      const body = new FormData();
+      if (activeConversationId) {
+        body.append('conversationId', String(activeConversationId));
+      } else if (pendingNewThread) {
+        body.append('courseId', String(pendingNewThread.courseId));
+        body.append('instructorId', String(pendingNewThread.instructorId));
+      } else if (instructorDraft) {
+        body.append('courseId', String(instructorDraft.courseId));
+        body.append('learnerId', String(instructorDraft.learnerId));
+      } else {
+        return;
+      }
+      body.append('content', text);
+      if (attachment) body.append('attachment', attachment);
 
+      // No Content-Type header: apiFetch forwards the FormData untouched, so the
+      // browser sets the multipart boundary itself. Numeric id fields above are
+      // strings here and coerced by the zod schema on the server.
       const res = await apiFetch<{ conversationId: number; message: Message; error?: string }>('/api/messages/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body,
       });
       if (!res.ok) {
         setError(res.data?.error || 'Failed to send message.');
         return;
       }
       setContent('');
+      setAttachment(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       if (pendingNewThread) {
         setPendingNewThread(null);
         onClearMessagesIntent();
@@ -234,6 +306,12 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     }
   };
 
+  const handlePickFile = (file: File | undefined) => {
+    if (!file) return;
+    setAttachment(file);
+    setAttachmentError('');
+  };
+
   const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
 
   const pendingCourse = pendingNewThread
@@ -241,6 +319,14 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     : instructorDraft
       ? (courses.find((c) => c.id === instructorDraft.courseId) ?? null)
       : null;
+
+  // The learner's messaging gate (must be enrolled in the course) surfaces this
+  // server error; offer an inline enroll action that resolves the course from
+  // whichever thread state is active.
+  const errorNeedsEnrollment = error.toLowerCase().includes('enrolled in this course');
+  const enrollCourseId = errorNeedsEnrollment
+    ? (pendingNewThread?.courseId ?? instructorDraft?.courseId ?? activeConversation?.courseId ?? null)
+    : null;
 
   const renderSkeleton = (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -300,7 +386,31 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                         : 'bg-paper-2 border border-rule text-ink rounded-bl-md'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                    {m.content ? (
+                      <p className="whitespace-pre-wrap break-words">{renderContent(m.content)}</p>
+                    ) : (
+                      <p className={mine ? 'text-white/80' : 'text-ink-2'}>[Attachment only]</p>
+                    )}
+                    {m.attachmentFileName && (
+                      <a
+                        href={`/api/messages/conversations/${m.conversationId}/messages/${m.id}/attachment`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`mt-2 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold border transition-colors ${
+                          mine
+                            ? 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+                            : 'bg-ink/5 border-rule hover:bg-ink/10'
+                        }`}
+                      >
+                        <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate max-w-[160px]">{m.attachmentFileName}</span>
+                        {m.attachmentFileSize != null && (
+                          <span className={`opacity-70 ${mine ? 'text-white/70' : 'text-ink-3'} whitespace-nowrap`}>
+                            {formatBytes(m.attachmentFileSize)}
+                          </span>
+                        )}
+                      </a>
+                    )}
                     <p className={`text-[10px] font-mono mt-1 ${mine ? 'text-white/70' : 'text-ink-3'}`}>
                       {new Date(m.createdAt).toLocaleString()} ·{' '}
                       {m.senderName ?? m.senderNameSnapshot ?? 'Former participant'}
@@ -318,32 +428,69 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             e.preventDefault();
             handleSend();
           }}
-          className="flex items-end gap-2 px-4 py-3 border-t border-rule bg-paper-2"
+          className="flex flex-col gap-2 px-4 py-3 border-t border-rule bg-paper-2"
         >
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            disabled={!isOnline}
-            placeholder={
-              conversation ? `Reply to ${counterpartName}…` : `Start a conversation with ${counterpartName}…`
-            }
-            rows={2}
-            className="flex-1 resize-none rounded-xl border border-rule bg-white px-3 py-2 text-sm text-ink focus:ring-2 focus:ring-ochre/40 focus:border-ochre outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ALLOWED_MESSAGE_EXTENSIONS}
+            className="hidden"
+            onChange={(e) => handlePickFile(e.target.files?.[0])}
           />
-          <button
-            type="submit"
-            disabled={sending || content.trim().length === 0 || !isOnline}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-navy text-white text-sm font-bold shadow-sm hover:bg-navy-2 disabled:opacity-40 transition-all cursor-pointer"
-          >
-            <Send className="w-4 h-4" />
-            <span className="hidden sm:inline">{sending ? '…' : 'Send'}</span>
-          </button>
+          {attachment && (
+            <div className="flex items-center gap-2 rounded-lg border border-rule bg-white px-2.5 py-2 text-xs font-semibold text-ink">
+              <Paperclip className="w-3.5 h-3.5 text-ochre shrink-0" />
+              <span className="truncate flex-1">{attachment.name}</span>
+              <span className="text-ink-3 whitespace-nowrap">{formatBytes(attachment.size)}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setAttachment(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                aria-label="Remove attachment"
+                className="text-ink-3 hover:text-error cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          {attachmentError && <p className="text-[11px] font-mono text-error">{attachmentError}</p>}
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!isOnline}
+              aria-label="Attach a file"
+              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl border border-rule bg-white text-ink-2 hover:text-ink hover:border-ochre disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              disabled={!isOnline}
+              placeholder={
+                conversation ? `Reply to ${counterpartName}…` : `Start a conversation with ${counterpartName}…`
+              }
+              rows={2}
+              className="flex-1 resize-none rounded-xl border border-rule bg-white px-3 py-2 text-sm text-ink focus:ring-2 focus:ring-ochre/40 focus:border-ochre outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+            />
+            <button
+              type="submit"
+              disabled={sending || (content.trim().length === 0 && !attachment) || !isOnline}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-navy text-white text-sm font-bold shadow-sm hover:bg-navy-2 disabled:opacity-40 transition-all cursor-pointer"
+            >
+              <Send className="w-4 h-4" />
+              <span className="hidden sm:inline">{sending ? '…' : 'Send'}</span>
+            </button>
+          </div>
         </form>
         {!isOnline && (
           <p className="px-4 pb-3 text-[11px] font-mono text-ink-3 -mt-1">
@@ -471,7 +618,17 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       {error && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-error/30 bg-error/5 px-4 py-3 text-sm font-medium text-error">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
+          <span className="flex-1">{error}</span>
+          {errorNeedsEnrollment && enrollCourseId !== null && (
+            <button
+              type="button"
+              onClick={() => handleEnroll(enrollCourseId as number)}
+              disabled={enrolling}
+              className="shrink-0 px-4 py-2 rounded-xl bg-navy text-white text-xs font-bold hover:bg-navy-2 transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+            >
+              {enrolling ? 'Enrolling…' : 'Enroll now'}
+            </button>
+          )}
         </div>
       )}
 

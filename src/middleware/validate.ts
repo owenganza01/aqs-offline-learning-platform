@@ -68,7 +68,7 @@ export const lessonSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   content: z.string().min(1, 'Content is required').max(50000),
   videoUrl: z.string().max(500).optional(),
-  slidesUrl: z.string().max(500).optional(),
+  slidesUrl: z.string().max(5000).optional(),
   sortOrder: z
     .union([
       z.number().int().min(0),
@@ -175,12 +175,15 @@ export const courseTransferSchema = z.object({
 // a new/existing course-thread resolved atomically via (courseId + instructorId)
 // for a learner-initiated thread, or (courseId + learnerId) when the course
 // instructor starts a conversation with one of their learners.
+//
+// Ids use z.coerce so numeric strings from the multipart (attachment) path
+// parse into integers — plain-JSON requests with real numbers keep working.
 export const sendMessageSchema = z
   .object({
-    conversationId: z.number().int().positive().optional(),
-    courseId: z.number().int().positive().optional(),
-    instructorId: z.number().int().positive().optional(),
-    learnerId: z.number().int().positive().optional(),
+    conversationId: z.coerce.number().int().positive().optional(),
+    courseId: z.coerce.number().int().positive().optional(),
+    instructorId: z.coerce.number().int().positive().optional(),
+    learnerId: z.coerce.number().int().positive().optional(),
     content: z.string().min(1, 'Message cannot be empty').max(5000, 'Message is too long'),
   })
   .refine(
@@ -192,4 +195,8 @@ export const sendMessageSchema = z
       message: 'Provide conversationId, courseId + instructorId, or courseId + learnerId',
       path: ['conversationId'],
     },
-  );
+  )
+  .refine((v) => !/(?:javascript|data|vbscript)\s*:/i.test(v.content), {
+    message: 'Message cannot contain unsafe link schemes',
+    path: ['content'],
+  });

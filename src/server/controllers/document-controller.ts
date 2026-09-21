@@ -59,6 +59,68 @@ export async function uploadDocument(req: AuthRequest, res: Response): Promise<v
   }
 }
 
+export async function uploadBatchDocuments(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      res.status(400).json({ error: 'No files provided.' });
+      return;
+    }
+
+    const { lessonId } = req.body;
+    const parsedLessonId = lessonId ? parseInt(lessonId) : null;
+    if (lessonId && isNaN(parsedLessonId!)) {
+      res.status(400).json({ error: 'Invalid lessonId.' });
+      return;
+    }
+
+    if (parsedLessonId && parsedLessonId > 0 && req.dbUser!.role !== 'admin') {
+      const lessonCourseId = await lessonAdminService.getLessonCourseId(parsedLessonId);
+      if (lessonCourseId === null) {
+        res.status(404).json({ error: 'Lesson not found.' });
+        return;
+      }
+      const course = await courseAdminService.getCourseById(lessonCourseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only attach documents to lessons in your own courses' });
+        return;
+      }
+    }
+
+    const uploadedDocs = [];
+    for (const file of files) {
+      const doc = await documentStorage.upload(file.buffer, {
+        lessonId: parsedLessonId && parsedLessonId > 0 ? parsedLessonId : null,
+        originalFileName: file.originalname,
+        storedFileName: `${randomUUID()}_${file.originalname}`,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        uploadedBy: req.dbUser!.id,
+        uploadedByName: req.dbUser!.name || req.dbUser!.email,
+      });
+      uploadedDocs.push({
+        id: doc.id,
+        originalFileName: doc.originalFileName,
+        mimeType: doc.mimeType,
+        fileSize: doc.fileSize,
+        url: `/api/documents/${doc.id}/file`,
+      });
+    }
+
+    res.status(201).json({
+      count: uploadedDocs.length,
+      documents: uploadedDocs,
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as any).code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({ error: 'File too large. Maximum size per file is 10MB.' });
+      return;
+    }
+    console.error('Batch document upload error:', err);
+    res.status(500).json({ error: 'Upload failed.' });
+  }
+}
+
 export async function getDocumentMetadata(req: AuthRequest, res: Response): Promise<void> {
   try {
     const meta = await documentStorage.getMetadata(req.params.id);

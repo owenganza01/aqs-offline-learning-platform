@@ -239,6 +239,12 @@ export const messages = pgTable(
     content: text('content').notNull(),
     isRead: boolean('is_read').default(false).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
+    // Optional single attachment per message (base64, mirroring documents.file_data).
+    // Metadata stays as structured columns — never concatenated into content.
+    attachmentFileName: text('attachment_file_name'),
+    attachmentMimeType: text('attachment_mime_type'),
+    attachmentFileSize: integer('attachment_file_size'),
+    attachmentData: text('attachment_data'),
   },
   (table) => [
     index('messages_conversation_id_created_at_idx').on(table.conversationId, table.createdAt),
