@@ -198,7 +198,7 @@ export const issuedCertificates = pgTable(
   (table) => [
     index('issued_certificates_user_id_idx').on(table.userId),
     index('issued_certificates_verification_code_idx').on(table.verificationCode),
-    unique('issued_certificates_user_course_config_key').on(table.userId, table.courseId, table.certificateConfigId),
+    unique('issued_certificates_user_course_unique').on(table.userId, table.courseId),
   ],
 );
 
