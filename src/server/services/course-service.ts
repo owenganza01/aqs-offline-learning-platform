@@ -7,6 +7,7 @@ import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
+import { issueCertificate } from './certificate-service.js';
 
 interface CompletionStatus {
   isCompletable: boolean;
@@ -107,6 +108,13 @@ export async function completeCourse(
         completedAt: now,
       })
       .returning();
+
+    // Check for certificate eligibility after course completion
+    try {
+      await issueCertificate(userId, courseId);
+    } catch (err) {
+      console.error('Certificate check after course completion failed:', err);
+    }
 
     return { completionId: record.completionId, completedAt: record.completedAt };
   } catch (err: any) {

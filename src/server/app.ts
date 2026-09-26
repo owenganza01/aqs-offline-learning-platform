@@ -17,8 +17,12 @@ import {
   registerSyncRoutes,
   registerAdminCourseRoutes,
   registerEnrollmentRoutes,
-  registerCohortRoutes,
   registerDocumentRoutes,
+  registerInstructorAnalyticsRoutes,
+  registerInstructorDashboardRoutes,
+  registerCertificateRoutes,
+  registerInstructorRoutes,
+  registerMessageRoutes,
 } from './routes/index.js';
 
 const allowedOrigins = [
@@ -166,6 +170,31 @@ export async function createApp() {
     max: 30,
     message: 'Too many requests, please try again later',
   });
+  const onboardRateLimit = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: 'Too many requests, please try again later',
+  });
+  const instructorAnalyticsLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: 'Too many requests, please try again later',
+  });
+  const certificateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: 'Too many requests, please try again later',
+  });
+  const publicVerifyLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: 'Too many verification requests, please try again later',
+  });
+  const messageLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    message: 'Too many requests, please try again later',
+  });
 
   // Register route modules
   registerHealthRoutes(app);
@@ -176,8 +205,15 @@ export async function createApp() {
   registerSyncRoutes(app, { syncRateLimit });
   registerAdminCourseRoutes(app);
   registerEnrollmentRoutes(app, { enrollmentRateLimit });
-  registerCohortRoutes(app, { adminLimiter });
   registerDocumentRoutes(app, { uploadRateLimit });
+  registerInstructorAnalyticsRoutes(app, { instructorLimiter: instructorAnalyticsLimiter });
+  registerInstructorDashboardRoutes(app, { instructorLimiter: instructorAnalyticsLimiter });
+  registerInstructorRoutes(app, { onboardRateLimit });
+  registerCertificateRoutes(app, {
+    certificateRateLimit: certificateLimiter,
+    publicVerifyRateLimit: publicVerifyLimiter,
+  });
+  registerMessageRoutes(app, { messageRateLimit: messageLimiter });
 
   // HaltOnTimedout — stop processing timed-out requests
   app.use((req: Request, _res: Response, next: NextFunction) => {

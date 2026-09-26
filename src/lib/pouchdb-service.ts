@@ -19,6 +19,7 @@ interface ProgressState {
 interface SyncQueueState {
   lessonCompletions: { lessonId: number; completedAt: string }[];
   quizSubmissions: { quizId: number; answers: number[]; attemptedAt: string }[];
+  enrollments: { courseId: number; enrolledAt: string }[];
 }
 
 export class PouchDBService {
@@ -162,7 +163,11 @@ export class PouchDBService {
   /**
    * Fetches the local sync queue.
    */
-  static async getSyncQueue(): Promise<{ lessonCompletions: any[]; quizSubmissions: any[] }> {
+  static async getSyncQueue(): Promise<{
+    lessonCompletions: any[];
+    quizSubmissions: any[];
+    enrollments: { courseId: number; enrolledAt: string }[];
+  }> {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SYNC_QUEUE);
       if (data) {
@@ -170,6 +175,7 @@ export class PouchDBService {
         return {
           lessonCompletions: state.lessonCompletions || [],
           quizSubmissions: state.quizSubmissions || [],
+          enrollments: state.enrollments || [],
         };
       }
     } catch (e) {
@@ -178,7 +184,7 @@ export class PouchDBService {
         e,
       );
     }
-    return { lessonCompletions: [], quizSubmissions: [] };
+    return { lessonCompletions: [], quizSubmissions: [], enrollments: [] };
   }
 
   /**
@@ -189,9 +195,42 @@ export class PouchDBService {
     const queue: SyncQueueState = {
       lessonCompletions: [],
       quizSubmissions: [],
+      enrollments: [],
     };
     localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
     console.log('Local sync queue cleared.');
+  }
+
+  /**
+   * Removes a single completed lesson from the offline sync queue after the
+   * server has confirmed it (the optimistic direct POST path). Local progress
+   * is kept; only the pending write is dropped to avoid redundant re-sync.
+   */
+  static async removeLessonFromQueue(lessonId: number): Promise<void> {
+    const queue = await this.getSyncQueue();
+    const completions = (queue.lessonCompletions || []).filter((c: any) => c.lessonId !== lessonId);
+    if (completions.length === queue.lessonCompletions.length) return;
+    const updatedQueue: SyncQueueState = {
+      lessonCompletions: completions,
+      quizSubmissions: queue.quizSubmissions || [],
+      enrollments: queue.enrollments || [],
+    };
+    localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(updatedQueue));
+  }
+
+  /**
+   * Removes a single queued enrollment after the server has confirmed it.
+   */
+  static async removeEnrollmentFromQueue(courseId: number): Promise<void> {
+    const queue = await this.getSyncQueue();
+    const enrollments = (queue.enrollments || []).filter((e) => e.courseId !== courseId);
+    if (enrollments.length === (queue.enrollments || []).length) return;
+    const updatedQueue: SyncQueueState = {
+      lessonCompletions: queue.lessonCompletions || [],
+      quizSubmissions: queue.quizSubmissions || [],
+      enrollments,
+    };
+    localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(updatedQueue));
   }
 
   /**
@@ -208,13 +247,28 @@ export class PouchDBService {
   }
 
   /**
-   * Enrolls in a course. Errors propagate to avoid silent data loss.
+   * Enrolls in a course and queues the enrollment so it is eventually synced
+   * to the server even when the enrollment happens offline.
+   * Errors propagate to avoid silent data loss.
    */
   static async enrollInCourse(courseId: number): Promise<void> {
     const enrolled = await this.getEnrolledCourseIds();
     if (!enrolled.includes(courseId)) {
       enrolled.push(courseId);
       localStorage.setItem(STORAGE_KEYS.ENROLLED_COURSES, JSON.stringify(enrolled));
+    }
+
+    const queue = await this.getSyncQueue();
+    const enrollments = queue.enrollments || [];
+    if (!enrollments.some((e) => e.courseId === courseId)) {
+      enrollments.push({ courseId, enrolledAt: new Date().toISOString() });
+      const updatedQueue: SyncQueueState = {
+        lessonCompletions: queue.lessonCompletions || [],
+        quizSubmissions: queue.quizSubmissions || [],
+        enrollments,
+      };
+      localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(updatedQueue));
+      console.log(`Queued enrollment for course ${courseId}.`);
     }
   }
 }

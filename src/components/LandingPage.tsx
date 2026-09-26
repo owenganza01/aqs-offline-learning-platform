@@ -22,13 +22,13 @@ export interface LandingPageProps {
   initialCourses?: PublicCourse[];
   onLogin: () => void;
   authLoading?: boolean;
+  authError?: string | null;
+  onClearAuthError?: () => void;
   onRegister: (e: FormEvent) => void;
   regName: string;
   setRegName: (val: string) => void;
   regEmail: string;
   setRegEmail: (val: string) => void;
-  regCode: string;
-  setRegCode: (val: string) => void;
   regError: string;
   regSuccess: string;
   regLoading: boolean;
@@ -131,8 +131,8 @@ function Hero({ onExplore, onGetStarted }: HeroProps) {
           </h1>
 
           <p className="mt-5 text-navtext text-base sm:text-lg leading-relaxed">
-            AQS gives you structured courses, practical lessons, and self-paced learning — including lessons you can
-            keep working through when your connection can&apos;t.
+            AQS gives you structured courses, practical lessons, and self-paced learning, including lessons you can keep
+            working through when your connection can&apos;t.
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center md:justify-start gap-3.5">
@@ -517,10 +517,11 @@ function RoleSelect({ onNav }: RoleSelectProps) {
 interface LoginViewProps {
   onLogin: () => void;
   authLoading?: boolean;
+  authError?: string | null;
   onSwitchToSignup: () => void;
 }
 
-function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
+function LoginView({ onLogin, authLoading, authError, onSwitchToSignup }: LoginViewProps) {
   return (
     <div className="min-h-[60vh] flex items-center justify-center bg-paper px-4 py-16">
       <div className="max-w-md w-full text-center bg-paper-2 border border-rule p-8 rounded-3xl shadow-lg relative overflow-hidden">
@@ -536,6 +537,15 @@ function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
         </p>
 
         <div className="mt-8 space-y-4">
+          {authError && (
+            <div
+              className="bg-error-bg border border-error/20 rounded-xl p-4 text-sm font-semibold text-error text-left"
+              role="alert"
+            >
+              {authError}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={onLogin}
@@ -573,7 +583,7 @@ function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
 }
 
 /* =========================================================================
-   LEARNER SIGNUP VIEW COMPONENT (Full 3-field backend integration)
+   LEARNER SIGNUP VIEW COMPONENT
    ========================================================================= */
 interface LearnerSignupProps {
   onRegister: (e: FormEvent) => void;
@@ -582,8 +592,6 @@ interface LearnerSignupProps {
   setRegName: (val: string) => void;
   regEmail: string;
   setRegEmail: (val: string) => void;
-  regCode: string;
-  setRegCode: (val: string) => void;
   regError: string;
   regSuccess: string;
   regLoading: boolean;
@@ -597,8 +605,6 @@ function LearnerSignup({
   setRegName,
   regEmail,
   setRegEmail,
-  regCode,
-  setRegCode,
   regError,
   regSuccess,
   regLoading,
@@ -615,7 +621,7 @@ function LearnerSignup({
           </div>
           <h1 className="font-display text-2xl font-bold text-ink tracking-tight">Join as a Learner</h1>
           <p className="mt-1.5 text-xs sm:text-sm text-ink-2">
-            Enter your student details and cohort invite code provided by your instructor.
+            Enter your details to create a free account and start learning.
           </p>
         </div>
 
@@ -627,7 +633,7 @@ function LearnerSignup({
                 <CheckCircle className="w-4 h-4" /> Account registered!
               </p>
               <p className="text-xs text-ink-2 leading-relaxed mt-1">
-                {regSuccess} Sign in with Google using this email to activate your account and enroll in your cohort.
+                {regSuccess} Sign in with Google using this email to activate your account.
               </p>
             </div>
 
@@ -642,7 +648,7 @@ function LearnerSignup({
             </button>
           </div>
         ) : (
-          /* Form: All 3 required fields matching registerSchema (name, email, inviteCode) */
+          /* Form: name + email (no invite code) */
           <form onSubmit={onRegister} className="space-y-4 text-left">
             {regError && (
               <div className="bg-error-bg border border-error/20 rounded-xl p-4 text-xs font-semibold text-error">
@@ -681,34 +687,19 @@ function LearnerSignup({
               />
             </div>
 
-            <div>
-              <label htmlFor="reg-code" className="block text-[10px] font-bold uppercase text-ink-3 mb-1.5 font-mono">
-                Class / Cohort Invite Code <span className="text-error">*</span>
-              </label>
-              <input
-                id="reg-code"
-                type="text"
-                value={regCode}
-                onChange={(e) => setRegCode(e.target.value)}
-                placeholder="e.g. A1B2C3D4"
-                className="w-full h-11 px-4 rounded-xl border border-rule bg-paper text-sm text-ink placeholder:text-ink-3 font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-ochre/30 focus:border-ochre"
-                required
-              />
-            </div>
-
             <button
               type="submit"
-              disabled={regLoading || !regName.trim() || !regEmail.trim() || !regCode.trim()}
+              disabled={regLoading || !regName.trim() || !regEmail.trim()}
               style={{ minHeight: '48px' }}
               className="w-full bg-ochre hover:bg-ochre/90 disabled:bg-ink-3/40 disabled:text-white/60 text-white font-bold text-sm px-6 rounded-xl transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ochre"
             >
               {regLoading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Validating Class Code...</span>
+                  <span>Creating Account...</span>
                 </>
               ) : (
-                <span>JOIN CLASS</span>
+                <span>CREATE ACCOUNT</span>
               )}
             </button>
 
@@ -773,7 +764,10 @@ function InstructorOnboarding({ onLogin, onBack }: InstructorOnboardingProps) {
         <div className="mt-8 space-y-3">
           <button
             type="button"
-            onClick={onLogin}
+            onClick={() => {
+              sessionStorage.setItem('aqs_auth_intent', 'instructor');
+              onLogin();
+            }}
             style={{ minHeight: '48px' }}
             className="w-full bg-navy hover:bg-navy-2 text-white font-bold text-sm px-6 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-navy"
           >
@@ -822,13 +816,13 @@ export function LandingPage({
   initialCourses,
   onLogin,
   authLoading = false,
+  authError,
+  onClearAuthError,
   onRegister,
   regName,
   setRegName,
   regEmail,
   setRegEmail,
-  regCode,
-  setRegCode,
   regError,
   regSuccess,
   regLoading,
@@ -962,8 +956,10 @@ export function LandingPage({
           <LoginView
             onLogin={onLogin}
             authLoading={authLoading}
+            authError={authError}
             onSwitchToSignup={() => {
               if (onClearRegForm) onClearRegForm();
+              if (onClearAuthError) onClearAuthError();
               setView('signup-role');
             }}
           />
@@ -979,8 +975,6 @@ export function LandingPage({
             setRegName={setRegName}
             regEmail={regEmail}
             setRegEmail={setRegEmail}
-            regCode={regCode}
-            setRegCode={setRegCode}
             regError={regError}
             regSuccess={regSuccess}
             regLoading={regLoading}

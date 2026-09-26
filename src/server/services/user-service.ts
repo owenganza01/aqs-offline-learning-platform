@@ -54,3 +54,112 @@ export async function createInstructorAccount(name: string, email: string): Prom
 
   return users[0];
 }
+
+/** Valid transition states for the instructor onboarding submission. */
+const INSTRUCTOR_ONBOARD_ALLOWED_STATES = ['onboarding', 'rejected'];
+
+/** Valid onboarding statuses for internal guards. */
+export const ONBOARDING_STATUSES = ['onboarding', 'pending_approval', 'active', 'rejected'] as const;
+
+export class StateGuardError extends Error {
+  statusCode: number;
+  constructor(message: string) {
+    super(message);
+    this.name = 'StateGuardError';
+    this.statusCode = 400;
+  }
+}
+
+/**
+ * Submit an instructor onboarding profile for review.
+ *
+ * State guard: only `onboarding` or `rejected` applicants may submit. Any other
+ * state (`active`, `pending_approval`) is rejected with a 400 error rather than
+ * silently overwriting the current status.
+ *
+ * A successful submission ALWAYS clears rejection_reason, regardless of the
+ * previous state (e.g. "Edit and Resubmit" after a rejection starts clean).
+ */
+export async function submitInstructorOnboarding(
+  userId: number,
+  data: { name?: string; bio: string; organization?: string },
+): Promise<any> {
+  const [current] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+  if (!current) {
+    throw new StateGuardError('User not found.');
+  }
+
+  if (!INSTRUCTOR_ONBOARD_ALLOWED_STATES.includes(current.onboardingStatus)) {
+    throw new StateGuardError(`Invalid submission: cannot onboard from current status (${current.onboardingStatus}).`);
+  }
+
+  const updateData: any = {
+    bio: data.bio,
+    organization: data.organization ?? null,
+    rejectionReason: null,
+    submittedAt: new Date(),
+    onboardingStatus: 'pending_approval',
+  };
+  if (data.name !== undefined) updateData.name = data.name;
+
+  const updated = await db.update(schema.users).set(updateData).where(eq(schema.users.id, userId)).returning();
+  return updated[0];
+}
+
+/**
+ * Reopen a rejected instructor application ("Edit and Resubmit").
+ * Only a `rejected` application can be reopened. Clears rejection_reason and
+ * submitted_at and returns the applicant to the onboarding form state.
+ */
+export async function reopenInstructorOnboarding(userId: number): Promise<any> {
+  const [current] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+  if (!current) {
+    throw new StateGuardError('User not found.');
+  }
+  if (current.onboardingStatus !== 'rejected') {
+    throw new StateGuardError('Only rejected applications can be reopened.');
+  }
+
+  const updated = await db
+    .update(schema.users)
+    .set({ onboardingStatus: 'onboarding', rejectionReason: null, submittedAt: null })
+    .where(eq(schema.users.id, userId))
+    .returning();
+  return updated[0];
+}
+
+/** Admin approval of an instructor application. */
+export async function approveInstructor(userId: number): Promise<any> {
+  const [current] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+  if (!current) {
+    throw new StateGuardError('User not found.');
+  }
+  if (current.role !== 'instructor') {
+    throw new StateGuardError('Only instructor accounts can be approved as instructors.');
+  }
+
+  const updated = await db
+    .update(schema.users)
+    .set({ onboardingStatus: 'active', rejectionReason: null, submittedAt: null })
+    .where(eq(schema.users.id, userId))
+    .returning();
+  return updated[0];
+}
+
+/** Admin decline of an instructor application. Reason is required. */
+export async function declineInstructor(userId: number, reason: string): Promise<any> {
+  const [current] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+  if (!current) {
+    throw new StateGuardError('User not found.');
+  }
+  if (current.role !== 'instructor') {
+    throw new StateGuardError('Only instructor accounts can be declined.');
+  }
+
+  const updated = await db
+    .update(schema.users)
+    .set({ onboardingStatus: 'rejected', rejectionReason: reason })
+    .where(eq(schema.users.id, userId))
+    .returning();
+  return updated[0];
+}

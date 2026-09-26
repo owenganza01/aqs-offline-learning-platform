@@ -36,10 +36,10 @@ describe('enrollmentSchema validation', () => {
   });
 
   it('rejects extra unexpected fields silently passing as valid input shape check', () => {
-    const result = enrollmentSchema.safeParse({ courseId: 1, inviteCode: 'EXTRA' });
+    const result = enrollmentSchema.safeParse({ courseId: 1, extraField: 'EXTRA' });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.inviteCode).toBeUndefined();
+      expect(result.data).not.toHaveProperty('extraField');
     }
   });
 });

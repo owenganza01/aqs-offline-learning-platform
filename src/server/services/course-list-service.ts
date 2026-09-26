@@ -1,6 +1,7 @@
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { effectiveClosureStatus, closureDeadline } from './closure-service.js';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -20,6 +21,21 @@ export async function listCourses(limit: number, offset: number) {
 
   const allCourses = await db.select().from(schema.courses).limit(limit).offset(offset);
   const courseIds = allCourses.map((c) => c.id);
+
+  const creatorIds = Array.from(new Set(allCourses.map((c) => c.createdBy).filter((id): id is number => id !== null)));
+  const creators =
+    creatorIds.length > 0 ? await db.select().from(schema.users).where(inArray(schema.users.id, creatorIds)) : [];
+  const creatorById = new Map(creators.map((u) => [u.id, u]));
+  const enrichCourse = (course: (typeof allCourses)[number]) => {
+    const creator = course.createdBy !== null ? creatorById.get(course.createdBy) : undefined;
+    return {
+      ...course,
+      instructorClosureStatus: creator ? effectiveClosureStatus(creator) : null,
+      instructorClosureDeadline:
+        creator && creator.closureStatus === 'pending' ? (closureDeadline(creator)?.toISOString() ?? null) : null,
+    };
+  };
+  const enrichedCourses = allCourses.map(enrichCourse);
 
   const lessonsByCourse = new Map<
     number,
@@ -68,7 +84,7 @@ export async function listCourses(limit: number, offset: number) {
     }
   }
 
-  const coursesWithDetails = allCourses.map((course) => ({
+  const coursesWithDetails = enrichedCourses.map((course) => ({
     ...course,
     lessons: lessonsByCourse.get(course.id) || [],
     quiz: quizByCourse.get(course.id) || null,
@@ -82,6 +98,18 @@ export async function getCourseDetail(courseId: number, userId: number) {
   if (courseRows.length === 0) return null;
 
   const course = courseRows[0];
+
+  const creator =
+    course.createdBy !== null
+      ? (await db.select().from(schema.users).where(eq(schema.users.id, course.createdBy)))[0]
+      : undefined;
+
+  const courseWithClosure = {
+    ...course,
+    instructorClosureStatus: creator ? effectiveClosureStatus(creator) : null,
+    instructorClosureDeadline:
+      creator && creator.closureStatus === 'pending' ? (closureDeadline(creator)?.toISOString() ?? null) : null,
+  };
 
   const courseLessons = await db
     .select()
@@ -122,7 +150,13 @@ export async function getCourseDetail(courseId: number, userId: number) {
         .orderBy(desc(schema.quizAttempts.attemptedAt))
     : [];
 
-  return { course, lessons: courseLessons, quiz, completedLessonIds: completionsIds, quizAttempts: quizAttemptsList };
+  return {
+    course: courseWithClosure,
+    lessons: courseLessons,
+    quiz,
+    completedLessonIds: completionsIds,
+    quizAttempts: quizAttemptsList,
+  };
 }
 
 export async function listPublicCourses() {

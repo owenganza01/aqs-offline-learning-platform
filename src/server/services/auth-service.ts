@@ -1,15 +1,8 @@
-import { randomUUID } from 'crypto';
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 
-export async function registerUser(name: string, email: string, inviteCode: string) {
-  const cohortRows = await db.select().from(schema.cohorts).where(eq(schema.cohorts.inviteCode, inviteCode));
-  if (cohortRows.length === 0) {
-    throw Object.assign(new Error('Code not recognized — check with your instructor.'), { statusCode: 400 });
-  }
-  const cohort = cohortRows[0];
-
+export async function registerUser(name: string, email: string) {
   const existingUser = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (existingUser.length > 0) {
     if (existingUser[0].uid.startsWith('pending-')) {
@@ -18,6 +11,7 @@ export async function registerUser(name: string, email: string, inviteCode: stri
     throw Object.assign(new Error('Email already registered.'), { statusCode: 400 });
   }
 
+  const { randomUUID } = await import('crypto');
   const result = await db
     .insert(schema.users)
     .values({
@@ -25,7 +19,6 @@ export async function registerUser(name: string, email: string, inviteCode: stri
       email,
       name,
       role: 'learner',
-      cohortId: cohort.id,
     })
     .returning();
 

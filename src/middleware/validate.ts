@@ -21,14 +21,13 @@ export const validateBody = (schema: z.ZodType) => {
 
 // === Validation schemas for new endpoints ===
 
-// Student registration with cohort invite code
+// Student registration (open access — no invite code required)
 export const registerSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   email: z
     .string()
     .email('Valid email is required')
     .transform((s) => s.trim().toLowerCase()),
-  inviteCode: z.string().min(1, 'Invite code is required'),
 });
 
 // Admin creates instructor account
@@ -38,11 +37,6 @@ export const createInstructorSchema = z.object({
     .string()
     .email('Valid email is required')
     .transform((s) => s.trim().toLowerCase()),
-});
-
-// Create a cohort
-export const createCohortSchema = z.object({
-  name: z.string().min(1, 'Cohort name is required').max(100),
 });
 
 // Update user profile (name and/or avatar URL)
@@ -73,8 +67,8 @@ export const courseSchema = z.object({
 export const lessonSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   content: z.string().min(1, 'Content is required').max(50000),
-  videoUrl: z.string().max(500).optional(),
-  slidesUrl: z.string().max(500).optional(),
+  videoUrl: z.string().max(500).nullish(),
+  slidesUrl: z.string().max(5000).nullish(),
   sortOrder: z
     .union([
       z.number().int().min(0),
@@ -136,6 +130,14 @@ export const syncSchema = z.object({
       attemptedAt: z.string().optional(),
     }),
   ),
+  enrollments: z
+    .array(
+      z.object({
+        courseId: z.union([z.number(), z.string()]),
+        enrolledAt: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 // Change a user's role
@@ -144,3 +146,57 @@ export const changeRoleSchema = z.object({
     message: 'Role must be learner, instructor, or admin',
   }),
 });
+
+// Instructor submits their onboarding profile for review
+export const instructorOnboardSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100).optional(),
+  bio: z.string().min(1, 'Bio is required').max(2000, 'Bio is too long'),
+  organization: z.string().max(200, 'Organization name is too long').optional(),
+});
+
+// Admin declines an instructor application (reason required)
+export const instructorDeclineSchema = z.object({
+  rejectionReason: z.string().min(1, 'A reason is required to decline an application').max(1000, 'Reason is too long'),
+});
+
+// Admin initiates instructor account closure.
+// retentionDays: 7..30 (default applied by the service when omitted).
+export const closureInitiateSchema = z.object({
+  retentionDays: z.number().int('Retention period must be a whole number of days').min(7).max(30).optional(),
+  reason: z.string().max(1000, 'Closure reason is too long').optional(),
+});
+
+// Admin transfers a course to another instructor.
+export const courseTransferSchema = z.object({
+  targetUserId: z.number().int('Target user ID must be an integer'),
+});
+
+// Send a message: either into an existing conversation (conversationId) or to
+// a new/existing course-thread resolved atomically via (courseId + instructorId)
+// for a learner-initiated thread, or (courseId + learnerId) when the course
+// instructor starts a conversation with one of their learners.
+//
+// Ids use z.coerce so numeric strings from the multipart (attachment) path
+// parse into integers — plain-JSON requests with real numbers keep working.
+export const sendMessageSchema = z
+  .object({
+    conversationId: z.coerce.number().int().positive().optional(),
+    courseId: z.coerce.number().int().positive().optional(),
+    instructorId: z.coerce.number().int().positive().optional(),
+    learnerId: z.coerce.number().int().positive().optional(),
+    content: z.string().min(1, 'Message cannot be empty').max(5000, 'Message is too long'),
+  })
+  .refine(
+    (v) =>
+      Boolean(v.conversationId) ||
+      (Boolean(v.courseId) && Boolean(v.instructorId)) ||
+      (Boolean(v.courseId) && Boolean(v.learnerId)),
+    {
+      message: 'Provide conversationId, courseId + instructorId, or courseId + learnerId',
+      path: ['conversationId'],
+    },
+  )
+  .refine((v) => !/(?:javascript|data|vbscript)\s*:/i.test(v.content), {
+    message: 'Message cannot contain unsafe link schemes',
+    path: ['content'],
+  });

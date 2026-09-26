@@ -25,6 +25,8 @@ import {
   GraduationCap,
   Clock,
   X,
+  Download,
+  MessageCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -33,6 +35,8 @@ interface LearnerCoursePlayerProps {
   token: string | null;
   onBack: () => void;
   onProgressUpdated: () => void;
+  onLessonCompleted: (lessonId: number) => void;
+  onNavigateToMessages?: (courseId: number, instructorId: number) => void;
 }
 
 export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
@@ -40,6 +44,8 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   token,
   onBack,
   onProgressUpdated,
+  onLessonCompleted,
+  onNavigateToMessages,
 }) => {
   // Loading & Data states
   const [course, setCourse] = useState<Course | null>(null);
@@ -47,9 +53,20 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [completedLessonIds, setCompletedLessonIds] = useState<number[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
+  const [certStatus, setCertStatus] = useState<{
+    enabled: boolean;
+    eligible: boolean;
+    issued: boolean;
+    certificate?: {
+      verificationCode: string;
+      issuedAt: string;
+    };
+    reasons?: string[];
+  } | null>(null);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [downloadingCert, setDownloadingCert] = useState<boolean>(false);
 
   // Course Player Navigation state
   const [activeLessonIndex, setActiveLessonIndex] = useState<number>(-1);
@@ -65,6 +82,11 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
   } | null>(null);
   const [quizLoading, setQuizLoading] = useState<boolean>(false);
   const [quizPendingSync, setQuizPendingSync] = useState<boolean>(false);
+  const [quizSubmitError, setQuizSubmitError] = useState<{
+    message: string;
+    requiresEnrollment?: boolean;
+  } | null>(null);
+  const [enrollingForQuiz, setEnrollingForQuiz] = useState<boolean>(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
 
   const [completionData, setCompletionData] = useState<{ completionId: string; completedAt: string } | null>(null);
@@ -135,6 +157,45 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
     loadCourseData();
   }, [courseId, token]);
 
+  // Load certificate status when course is loaded
+  useEffect(() => {
+    if (!token || !courseId) return;
+    apiFetch(`/api/courses/${courseId}/certificate-status`)
+      .then(({ ok, data }) => {
+        if (ok && data) {
+          setCertStatus(data);
+        }
+      })
+      .catch(() => {
+        setCertStatus(null);
+      });
+  }, [courseId, token]);
+
+  const handleDownloadCertificate = async () => {
+    if (!certStatus?.certificate?.verificationCode) return;
+    setDownloadingCert(true);
+    try {
+      const code = certStatus.certificate.verificationCode;
+      const res = await fetch(`/api/certificates/download/${code}`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeTitle = course?.title ? course.title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30) : 'Course';
+      a.download = `Certificate_${safeTitle}_${code}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Error downloading certificate:', err);
+      alert('Unable to download certificate at this time. Please try again.');
+    } finally {
+      setDownloadingCert(false);
+    }
+  };
+
   useEffect(() => {
     if (!course || completionData || completionInFlight.current) return;
     const allLessonsDone = lessons.length > 0 && lessons.every((l) => completedLessonIds.includes(l.id));
@@ -194,21 +255,29 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
       setCompletedLessonIds(updated);
     }
 
+    // Queue locally first (offline-first): the completion is reflected
+    // immediately and replayed later if the direct POST can't reach the server.
     await PouchDBService.queueLessonCompletionOffline(lessonId);
 
-    if (navigator.onLine && token) {
-      try {
-        await withBackoff(() =>
-          apiFetch(`/api/lessons/${lessonId}/complete`, {
-            method: 'POST',
-          }),
-        );
-      } catch (e) {
-        console.warn('Server completion post skipped offline; queued in PouchDB.');
-      }
-    }
+    // Lightweight UI refresh — no full course reload, no catalog re-fetch.
+    onLessonCompleted(lessonId);
 
-    onProgressUpdated();
+    // Fire-and-forget direct POST: never block the UI on the network. On
+    // success the queued duplicate is dropped so a later sync doesn't replay
+    // it; on failure the queue entry keeps the completion safe.
+    if (navigator.onLine && token) {
+      withBackoff(() =>
+        apiFetch(`/api/lessons/${lessonId}/complete`, {
+          method: 'POST',
+        }),
+      )
+        .then(({ ok }) => {
+          if (ok) return PouchDBService.removeLessonFromQueue(lessonId);
+        })
+        .catch((e) => {
+          console.warn('Server completion post failed; keeping completion in the sync queue.', e);
+        });
+    }
   };
 
   const handleOptionSelect = (questionId: number, optionIndex: number) => {
@@ -241,11 +310,18 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
     }
 
     setQuizLoading(true);
+    setQuizSubmitError(null);
 
     if (navigator.onLine && token) {
       try {
-        const { ok, data } = await withBackoff(() =>
-          apiFetch(`/api/quizzes/${quiz.id}/submit`, {
+        const { ok, status, data } = await withBackoff(() =>
+          apiFetch<{
+            score: number;
+            passed: boolean;
+            correctCount: number;
+            totalQuestions: number;
+            error?: string;
+          }>(`/api/quizzes/${quiz.id}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ answers: answersArray }),
@@ -263,7 +339,15 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
           await loadCourseData();
           onProgressUpdated();
         } else {
-          throw new Error('Server submission error');
+          // The server rejected the submission (e.g. the learner is not
+          // enrolled). Surface the real server error and NEVER queue it for
+          // offline sync — a rejected attempt must not be retried later and
+          // reported as a misleading "attempt was not recorded" warning.
+          const serverMessage = data?.error || 'Failed to submit quiz. Please try again.';
+          setQuizSubmitError({
+            message: serverMessage,
+            requiresEnrollment: status === 403 && serverMessage.toLowerCase().includes('enrolled in this course'),
+          });
         }
       } catch (err) {
         console.error('Quiz submission network error; fallback to offline queue:', err);
@@ -286,6 +370,31 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
       correctCount: 0,
       totalQuestions: quiz?.questions?.length || 0,
     });
+  };
+
+  const handleEnrollForQuiz = async () => {
+    if (!course) return;
+    setEnrollingForQuiz(true);
+    try {
+      const { ok, data } = await apiFetch<{ error?: string }>('/api/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: course.id }),
+      });
+
+      if (ok) {
+        setQuizSubmitError({
+          message: `You are now enrolled in "${course.title}". Submit your quiz again.`,
+        });
+      } else {
+        setQuizSubmitError({ message: data?.error || 'Enrollment failed. Please try again.' });
+      }
+    } catch (err) {
+      console.error('Enrollment error:', err);
+      setQuizSubmitError({ message: 'Network error while enrolling — please try again.' });
+    } finally {
+      setEnrollingForQuiz(false);
+    }
   };
 
   if (loading) {
@@ -373,7 +482,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                 <div className="absolute inset-0 bg-gradient-to-t from-navy/90 via-navy/30 to-transparent flex items-end p-6 md:p-8">
                   <div className="text-white space-y-1">
                     <span className="bg-ochre text-white text-[9px] uppercase px-2.5 py-0.5 rounded-full font-mono tracking-wider">
-                      Active Syllabus
+                      {course.isArchived ? 'Archived Syllabus' : 'Active Syllabus'}
                     </span>
                     <h2 className="text-xl md:text-2xl font-display font-bold tracking-tight">{course.title}</h2>
                   </div>
@@ -387,6 +496,25 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                   </h3>
                   <p className="text-ink-2 text-sm font-medium leading-relaxed">{course.description}</p>
                 </div>
+
+                {/* Message the instructor (learners only, hidden while the account is closing) */}
+                {onNavigateToMessages &&
+                  !course.instructorClosureStatus &&
+                  (course.createdBy ? (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToMessages!(course.id, course.createdBy!)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-navy text-white text-sm font-bold shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Message Instructor
+                    </button>
+                  ) : (
+                    <div className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-paper-2 border border-rule text-ink-3 text-sm font-bold">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      Instructor unavailable — contact an administrator.
+                    </div>
+                  ))}
 
                 {/* Syllabus Progress */}
                 <div className="bg-paper-2 border border-rule rounded-2xl p-4 space-y-3">
@@ -404,6 +532,65 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                   </div>
                 </div>
 
+                {/* Instructor Account Closure Notice */}
+                {course.instructorClosureStatus && (
+                  <div
+                    className={`rounded-2xl p-5 flex items-start gap-4 ${
+                      course.instructorClosureStatus === 'pending'
+                        ? 'bg-ochre/10 border border-ochre/30'
+                        : 'bg-ink/5 border border-rule'
+                    }`}
+                  >
+                    <div
+                      className={`p-2.5 rounded-xl shrink-0 ${
+                        course.instructorClosureStatus === 'pending' ? 'bg-ochre text-white' : 'bg-ink/10 text-ink-3'
+                      }`}
+                    >
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-display font-bold tracking-tight text-ink">
+                        {course.instructorClosureStatus === 'pending'
+                          ? 'Instructor Account Closing'
+                          : 'Course Now Read-Only'}
+                      </h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        {course.instructorClosureStatus === 'pending' ? (
+                          <>
+                            The instructor's account is in the process of closing.{' '}
+                            {course.instructorClosureDeadline && (
+                              <span className="block text-xs font-mono mt-0.5 text-ink-3">
+                                Availability deadline: {new Date(course.instructorClosureDeadline).toLocaleDateString()}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            The instructor's account has been closed. This course is now preserved for enrolled learners
+                            and is no longer accepting new enrollments or messages.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Archived Course Notice */}
+                {course.isArchived && !course.instructorClosureStatus && (
+                  <div className="rounded-2xl p-5 flex items-start gap-4 bg-ink/5 border border-rule">
+                    <div className="p-2.5 rounded-xl shrink-0 bg-ink/10 text-ink-3">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-display font-bold tracking-tight text-ink">Course Archived</h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        An administrator has archived this course for reference. Existing enrolled learners can continue
+                        accessing the material.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Completion Banner */}
                 {allLessonsCompleted && isQuizPassed && completionData && (
                   <div className="bg-success/10 border border-success/30 rounded-2xl p-5 flex items-start gap-4">
@@ -420,6 +607,79 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                           <span className="block text-xs font-mono mt-0.5 text-ink-3">
                             Completed {new Date(completionData.completedAt).toLocaleDateString()}
                           </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Certificate Status */}
+                {certStatus?.enabled && (
+                  <div
+                    className={`rounded-2xl p-5 flex items-start gap-4 ${
+                      certStatus.issued
+                        ? 'bg-ochre/10 border border-ochre/30'
+                        : certStatus.eligible
+                          ? 'bg-success/10 border border-success/30'
+                          : 'bg-ink/5 border border-rule'
+                    }`}
+                  >
+                    <div
+                      className={`p-2.5 rounded-xl shrink-0 ${
+                        certStatus.issued
+                          ? 'bg-ochre text-white'
+                          : certStatus.eligible
+                            ? 'bg-success text-white'
+                            : 'bg-ink/10 text-ink-3'
+                      }`}
+                    >
+                      <Award className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3
+                        className={`text-base font-display font-bold tracking-tight ${
+                          certStatus.issued ? 'text-ochre' : certStatus.eligible ? 'text-success' : 'text-ink-3'
+                        }`}
+                      >
+                        {certStatus.issued
+                          ? 'Certificate Issued!'
+                          : certStatus.eligible
+                            ? 'Certificate Eligible'
+                            : 'Certificate Not Yet Available'}
+                      </h3>
+                      <p className="text-sm font-medium text-ink-2 mt-1">
+                        {certStatus.issued && certStatus.certificate ? (
+                          <>
+                            Your certificate has been issued.
+                            <span className="block text-xs font-mono mt-0.5 text-ink-3">
+                              Verification: {certStatus.certificate.verificationCode}
+                            </span>
+                            <span className="block text-xs font-mono text-ink-3">
+                              Issued {new Date(certStatus.certificate.issuedAt).toLocaleDateString()}
+                            </span>
+                            <span className="inline-block mt-3">
+                              <button
+                                type="button"
+                                onClick={handleDownloadCertificate}
+                                disabled={downloadingCert}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-ochre hover:bg-ochre/90 text-white font-semibold text-xs rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                              >
+                                <Download className="w-4 h-4" />
+                                <span>{downloadingCert ? 'Preparing PDF...' : 'Download Certificate (PDF)'}</span>
+                              </button>
+                            </span>
+                          </>
+                        ) : certStatus.eligible ? (
+                          'You meet the requirements for a certificate.'
+                        ) : (
+                          <>
+                            Complete all lessons and pass the quiz to earn your certificate.
+                            {certStatus.reasons && certStatus.reasons.length > 0 && (
+                              <span className="block text-xs font-mono mt-0.5 text-ink-3">
+                                {certStatus.reasons.join('; ')}
+                              </span>
+                            )}
+                          </>
                         )}
                       </p>
                     </div>
@@ -633,58 +893,74 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
 
                 {/* Lesson body — constrained reading width */}
                 <div className="max-w-[600px] space-y-6">
-                  {/* Slides Document Link */}
+                  {/* Slides / Attached Documents Links */}
                   {activeLesson.slidesUrl &&
                     (() => {
-                      const isDocRef = activeLesson.slidesUrl.startsWith('doc:');
-                      const docId = isDocRef ? activeLesson.slidesUrl.slice(4) : null;
-                      const href = isDocRef
-                        ? `/api/documents/${docId}/file${token ? `?token=${encodeURIComponent(token)}` : ''}`
-                        : activeLesson.slidesUrl;
-                      // Self-hosted (doc:) files may already be cached by the service worker
-                      // from a prior online view, so the link should still render offline —
-                      // only external (non-doc:) links truly require a live network connection.
-                      const canAccessOffline = isDocRef;
-                      const showLiveLink = isOnline || canAccessOffline;
+                      const items = activeLesson.slidesUrl
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean);
                       return (
-                        <div className="mb-6 bg-ochre-dim/30 border border-ochre/30 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <div
-                              className={`p-2.5 rounded-xl ${showLiveLink ? 'bg-ochre text-white' : 'bg-paper-2 text-ink-3'}`}
-                            >
-                              <FileText className={`w-5 h-5 ${showLiveLink ? 'animate-pulse' : ''}`} />
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold uppercase text-ink font-mono tracking-wider">
-                                {isDocRef ? 'Uploaded Document' : 'Presentation Slides Included'}
-                              </h4>
-                              <p className="text-ink-3 text-[11px] mt-1 font-medium">
-                                {isOnline
-                                  ? isDocRef
-                                    ? 'A document file is attached for this topic. Click to view or download.'
-                                    : 'A lecture slideshow/PDF file is attached for this topic.'
-                                  : isDocRef
-                                    ? 'Offline — available if previously viewed, otherwise reconnect to access.'
-                                    : 'Slides unavailable offline. Reconnect to access.'}
-                              </p>
-                            </div>
-                          </div>
-                          {showLiveLink ? (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-4 h-10 bg-ochre hover:bg-ochre/90 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 shrink-0"
-                            >
-                              <span>{isDocRef ? 'View / Download Document' : 'Open Slides / PDF'}</span>
-                              <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
-                            </a>
-                          ) : (
-                            <span className="px-4 h-10 bg-paper-2 text-ink-3 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shrink-0 cursor-not-allowed">
-                              <WifiOff className="w-3.5 h-3.5" />
-                              <span>Offline</span>
-                            </span>
-                          )}
+                        <div className="mb-6 space-y-3">
+                          {items.map((item, idx) => {
+                            const isDocRef = item.startsWith('doc:');
+                            const docId = isDocRef ? item.slice(4) : null;
+                            const href = isDocRef
+                              ? `/api/documents/${docId}/file${token ? `?token=${encodeURIComponent(token)}` : ''}`
+                              : item;
+                            const canAccessOffline = isDocRef;
+                            const showLiveLink = isOnline || canAccessOffline;
+                            return (
+                              <div
+                                key={idx}
+                                className="bg-ochre-dim/30 border border-ochre/30 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div
+                                    className={`p-2.5 rounded-xl ${showLiveLink ? 'bg-ochre text-white' : 'bg-paper-2 text-ink-3'}`}
+                                  >
+                                    <FileText className={`w-5 h-5 ${showLiveLink ? 'animate-pulse' : ''}`} />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-xs font-bold uppercase text-ink font-mono tracking-wider">
+                                      {isDocRef
+                                        ? items.length > 1
+                                          ? `Attached Document ${idx + 1}`
+                                          : 'Uploaded Document'
+                                        : items.length > 1
+                                          ? `Presentation Slides ${idx + 1}`
+                                          : 'Presentation Slides Included'}
+                                    </h4>
+                                    <p className="text-ink-3 text-[11px] mt-1 font-medium">
+                                      {isOnline
+                                        ? isDocRef
+                                          ? 'A document file is attached for this topic. Click to view or download.'
+                                          : 'A lecture presentation/slides link is attached for this topic.'
+                                        : isDocRef
+                                          ? 'Offline — available if previously viewed, otherwise reconnect to access.'
+                                          : 'Slides unavailable offline. Reconnect to access.'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {showLiveLink ? (
+                                  <a
+                                    href={href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-4 h-10 bg-ochre hover:bg-ochre/90 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 shrink-0"
+                                  >
+                                    <span>{isDocRef ? 'View / Download Document' : 'Open Slides'}</span>
+                                    <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
+                                  </a>
+                                ) : (
+                                  <span className="px-4 h-10 bg-paper-2 text-ink-3 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shrink-0 cursor-not-allowed">
+                                    <WifiOff className="w-3.5 h-3.5" />
+                                    <span>Offline</span>
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })()}
@@ -783,6 +1059,26 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                   </div>
                 )}
 
+                {quizSubmitError && (
+                  <div className="mb-6 max-w-[560px] flex flex-col gap-3 items-start bg-error-bg/70 border-l-[3px] border-error rounded-r-lg px-3.5 py-3">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-error shrink-0 mt-0.5" />
+                      <p className="text-[12.5px] leading-relaxed text-error">{quizSubmitError.message}</p>
+                    </div>
+                    {quizSubmitError.requiresEnrollment && course && (
+                      <button
+                        type="button"
+                        onClick={handleEnrollForQuiz}
+                        disabled={enrollingForQuiz}
+                        style={{ minHeight: '40px' }}
+                        className="shrink-0 px-4 py-2 rounded-xl bg-navy text-white text-xs font-bold shadow-sm hover:bg-navy-2 transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+                      >
+                        {enrollingForQuiz ? 'Enrolling…' : 'Enroll Now'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {quizResult ? (
                   /* EXAM SUBMISSION RESPONSE BOX */
                   <div className="bg-paper-2 border border-rule p-8 rounded-2xl text-ink mb-6 text-center relative overflow-hidden">
@@ -825,6 +1121,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                     <button
                       onClick={() => {
                         setQuizResult(null);
+                        setQuizSubmitError(null);
                         setSelectedAnswers({});
                         setCurrentQuestionIndex(0);
                         loadCourseData();
