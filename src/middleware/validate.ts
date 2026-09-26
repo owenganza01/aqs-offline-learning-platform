@@ -67,8 +67,8 @@ export const courseSchema = z.object({
 export const lessonSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   content: z.string().min(1, 'Content is required').max(50000),
-  videoUrl: z.string().max(500).optional(),
-  slidesUrl: z.string().max(5000).optional(),
+  videoUrl: z.string().max(500).nullish(),
+  slidesUrl: z.string().max(5000).nullish(),
   sortOrder: z
     .union([
       z.number().int().min(0),

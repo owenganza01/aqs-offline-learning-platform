@@ -126,19 +126,25 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
         : `/api/admin/courses/${selectedCourse.id}/lessons`;
       const method = editingLessonId ? 'PUT' : 'POST';
 
-      const { ok } = await apiFetch(url, {
+      const { ok, data } = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (ok) {
-        await loadCourseFullDetails(selectedCourse.id);
-        onRefreshCourses();
-        onClose?.();
+      if (!ok) {
+        const details = Array.isArray(data?.details)
+          ? data.details.map((d: { path: string; message: string }) => `${d.path}: ${d.message}`).join('; ')
+          : '';
+        throw new Error(details || data?.error || 'Unable to save the lesson. Please try again.');
       }
-    } catch (err) {
+
+      await loadCourseFullDetails(selectedCourse.id);
+      onRefreshCourses();
+      onClose?.();
+    } catch (err: any) {
       console.error('Failed to save lesson:', err);
+      alert(`Failed to save lesson: ${err.message || 'Please try again.'}`);
     }
   };
 
