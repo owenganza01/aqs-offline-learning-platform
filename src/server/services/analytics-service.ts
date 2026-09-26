@@ -215,6 +215,15 @@ export async function getAnalytics() {
   const allQuizzes = await db.select().from(schema.quizzes);
   const allCompletions = await db.select().from(schema.lessonCompletions);
   const allAttempts = await db.select().from(schema.quizAttempts);
+  const allIssuedCertificates = await db.select().from(schema.issuedCertificates);
+
+  // course_id is ON DELETE SET NULL, so a certificate outliving its course has a
+  // NULL here. Count it in the global total but attribute it to no course.
+  const certificatesCountByCourse: Record<number, number> = {};
+  for (const cert of allIssuedCertificates) {
+    if (cert.courseId == null) continue;
+    certificatesCountByCourse[cert.courseId] = (certificatesCountByCourse[cert.courseId] || 0) + 1;
+  }
 
   const lessonsByCourse: Record<number, typeof allLessons> = {};
   for (const lesson of allLessons) {
@@ -291,6 +300,7 @@ export async function getAnalytics() {
       passedQuizzes: passedQuizStudentsCount,
       averageScore: avgScore,
       completionRate,
+      certificatesIssued: certificatesCountByCourse[course.id] || 0,
     });
   }
 
@@ -339,7 +349,13 @@ export async function getAnalytics() {
     )
     .slice(0, 10);
 
-  return { totalLearnersCount, lessonCompletions: allCompletions.length, courseStats, recentActivity };
+  return {
+    totalLearnersCount,
+    lessonCompletions: allCompletions.length,
+    certificatesIssued: allIssuedCertificates.length,
+    courseStats,
+    recentActivity,
+  };
 }
 
 // Instructor-scoped analytics — only includes courses owned by the logged-in instructor
