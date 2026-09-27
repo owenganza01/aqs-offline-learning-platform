@@ -13,13 +13,14 @@ import {
   ArrowUp,
   ArrowDown,
   Edit3,
+  GripVertical,
   Trash2,
   LayoutDashboard,
   GraduationCap,
   MessageCircle,
   Settings,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, Reorder, motion, useDragControls } from 'motion/react';
 
 const CourseFactory = lazy(() => import('./admin/CourseFactory.tsx').then((m) => ({ default: m.CourseFactory })));
 const LessonManager = lazy(() => import('./admin/LessonManager.tsx').then((m) => ({ default: m.LessonManager })));
@@ -75,6 +76,121 @@ interface AdminLMSProps {
   messagesIntent?: { courseId: number; instructorId: number } | null;
   onClearMessagesIntent?: () => void;
 }
+
+interface LessonRowProps {
+  lesson: Lesson;
+  index: number;
+  total: number;
+  isActive: boolean;
+  hasContent: boolean;
+  meta: string;
+  reorderDisabled: boolean;
+  onOpen: (lesson: Lesson) => void;
+  onMove: (index: number, direction: 'up' | 'down') => void;
+  onDelete: (lessonId: number) => void;
+}
+
+/**
+ * A single row in the draggable curriculum outline (DEF-010).
+ *
+ * `useDragControls` is a hook, so each row needs its own component instance —
+ * it cannot be called from inside the Reorder.Group render callback. The row
+ * itself is a click target that opens the lesson editor, so dragging is bound
+ * to the grip handle only (dragListener={false}); otherwise every drag would
+ * also fire the open-editor click.
+ */
+const LessonRow: React.FC<LessonRowProps> = ({
+  lesson,
+  index,
+  total,
+  isActive,
+  hasContent,
+  meta,
+  reorderDisabled,
+  onOpen,
+  onMove,
+  onDelete,
+}) => {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={lesson}
+      dragListener={false}
+      dragControls={dragControls}
+      whileDrag={{ backgroundColor: 'var(--color-steel-lt)' }}
+      className={`flex items-center gap-[9px] px-4 py-[9px] cursor-pointer border-l-[3px] transition-colors ${
+        isActive ? 'bg-steel-lt border-l-steel' : 'border-l-transparent hover:bg-canvas'
+      }`}
+    >
+      <span
+        onPointerDown={(e) => dragControls.start(e)}
+        onClick={(e) => e.stopPropagation()}
+        title="Drag to reorder"
+        aria-label={`Drag to reorder ${lesson.title}`}
+        className={`shrink-0 text-text-3 hover:text-steel active:scale-90 transition-colors ${
+          reorderDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+        }`}
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </span>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasContent ? 'bg-success' : 'bg-stroke'}`} />
+      <div className="min-w-0 flex-1" onClick={() => onOpen(lesson)}>
+        <div className="text-[12.5px] text-text font-medium truncate leading-snug">{lesson.title}</div>
+        <div className="text-[11px] text-text-3">{meta}</div>
+      </div>
+      <div className="flex items-center gap-[2px] shrink-0 font-mono">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMove(index, 'up');
+          }}
+          disabled={index === 0 || reorderDisabled}
+          title="Move up"
+          aria-label="Move lesson up"
+          className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
+        >
+          <ArrowUp className="w-3.5 h-3.5 text-text-2" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMove(index, 'down');
+          }}
+          disabled={index === total - 1 || reorderDisabled}
+          title="Move down"
+          aria-label="Move lesson down"
+          className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
+        >
+          <ArrowDown className="w-3.5 h-3.5 text-text-2" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(lesson);
+          }}
+          title="Edit"
+          aria-label="Edit lesson"
+          className="w-6 h-6 bg-steel-lt border border-steel/30 hover:bg-steel/20 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center ml-[2px]"
+        >
+          <Edit3 className="w-3.5 h-3.5 text-steel" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(lesson.id);
+          }}
+          title="Delete"
+          aria-label="Delete lesson"
+          className="w-6 h-6 bg-error-bg border border-error/20 hover:bg-error/15 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center"
+        >
+          <Trash2 className="w-3.5 h-3.5 text-error" />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
+};
 
 export const AdminLMS: React.FC<AdminLMSProps> = ({
   token,
@@ -155,6 +271,12 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
     title: string;
     questions: { questionText: string; options: string[]; correctOptionIndex: number }[];
   }>({ title: '', questions: [] });
+  // Authoritative lesson order used by the drag-and-drop curriculum list.
+  // Reorder.Group matches items by object identity, so this must be a
+  // state-owned array rather than selectedCourse.lessons (a prop that gets
+  // replaced wholesale on every fetch).
+  const [orderedLessons, setOrderedLessons] = useState<Lesson[]>([]);
+  const [savingLessonOrder, setSavingLessonOrder] = useState(false);
 
   const loadCourseFullDetails = async (courseId: number) => {
     if (!token) return;
@@ -163,6 +285,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
       if (ok) {
         const quizObj = data.quiz || { title: `${data.course.title} Exam`, questions: [] };
         setQuizForm({ title: quizObj.title, questions: quizObj.questions || [] });
+        setOrderedLessons(data.lessons || []);
         setSelectedCourse({ ...data.course, lessons: data.lessons, quiz: quizObj });
       }
     } catch (err) {
@@ -202,36 +325,62 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
     }
   };
 
-  const handleMoveLesson = async (index: number, direction: 'up' | 'down') => {
+  /**
+   * Persists a full lesson sequence for the selected course.
+   *
+   * The endpoint only renumbers the ids present in `orderedIds`, so a partial
+   * payload silently leaves stale/duplicated sort_order values behind. We
+   * therefore always send the complete list. On failure the local order is
+   * rolled back from the server so the UI never shows a sequence the backend
+   * rejected.
+   */
+  const persistLessonOrder = async (nextOrder: Lesson[]) => {
     if (!selectedCourse || !token) return;
-    const currentLessons = selectedCourse.lessons ? [...selectedCourse.lessons] : [];
-    if (currentLessons.length === 0) return;
-
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= currentLessons.length) return;
-
-    const firstLesson = currentLessons[index];
-    const secondLesson = currentLessons[targetIdx];
-    const originalFirstOrder = firstLesson.sortOrder;
-    firstLesson.sortOrder = secondLesson.sortOrder;
-    secondLesson.sortOrder = originalFirstOrder;
-    currentLessons[index] = secondLesson;
-    currentLessons[targetIdx] = firstLesson;
-
+    setSavingLessonOrder(true);
     try {
       const { ok } = await apiFetch(`/api/admin/courses/${selectedCourse.id}/lessons/reorder`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedIds: currentLessons.map((l) => l.id) }),
+        body: JSON.stringify({ orderedIds: nextOrder.map((l) => l.id) }),
       });
 
       if (ok) {
         await loadCourseFullDetails(selectedCourse.id);
         onRefreshCourses();
+      } else {
+        await loadCourseFullDetails(selectedCourse.id);
       }
     } catch (e) {
       console.error('Failed to reorder lessons:', e);
+      await loadCourseFullDetails(selectedCourse.id);
+    } finally {
+      setSavingLessonOrder(false);
     }
+  };
+
+  const sameLessonSequence = (a: Lesson[], b: Lesson[]) =>
+    a.length === b.length && a.every((lesson, i) => lesson.id === b[i]?.id);
+
+  // Drag-and-drop handler (Reorder.Group) — optimistic local update, persisted
+  // immediately, with rollback on failure handled by persistLessonOrder.
+  const handleReorder = (nextOrder: Lesson[]) => {
+    if (savingLessonOrder) return;
+    if (sameLessonSequence(orderedLessons, nextOrder)) return;
+    setOrderedLessons(nextOrder);
+    void persistLessonOrder(nextOrder);
+  };
+
+  // Keyboard/pointer-accessible fallback that drives the same persistence path.
+  const handleMoveLesson = (index: number, direction: 'up' | 'down') => {
+    if (savingLessonOrder) return;
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || index >= orderedLessons.length) return;
+    if (targetIdx < 0 || targetIdx >= orderedLessons.length) return;
+
+    const nextOrder = [...orderedLessons];
+    const [moved] = nextOrder.splice(index, 1);
+    nextOrder.splice(targetIdx, 0, moved);
+    handleReorder(nextOrder);
   };
 
   useEffect(() => {
@@ -371,77 +520,34 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                                 + Add
                               </span>
                             </div>
-                            {(selectedCourse.lessons || []).length === 0 && (
+                            {orderedLessons.length === 0 && (
                               <div className="px-4 py-3 text-[11px] text-text-3 italic">No lessons yet.</div>
                             )}
-                            {(selectedCourse.lessons || []).map((lesson, index) => {
-                              const isActive = lessonEditor.open && lessonEditor.lesson?.id === lesson.id;
-                              return (
-                                <div
-                                  key={lesson.id}
-                                  onClick={() => openLessonEditor(lesson)}
-                                  className={`flex items-center gap-[9px] px-4 py-[9px] cursor-pointer border-l-[3px] transition-colors ${isActive ? 'bg-steel-lt border-l-steel' : 'border-l-transparent hover:bg-canvas'}`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasLessonContent(lesson) ? 'bg-success' : 'bg-stroke'}`}
+                            {orderedLessons.length > 0 && (
+                              <Reorder.Group
+                                as="div"
+                                axis="y"
+                                values={orderedLessons}
+                                onReorder={handleReorder}
+                                className="list-none"
+                              >
+                                {orderedLessons.map((lesson, index) => (
+                                  <LessonRow
+                                    key={lesson.id}
+                                    lesson={lesson}
+                                    index={index}
+                                    total={orderedLessons.length}
+                                    isActive={lessonEditor.open && lessonEditor.lesson?.id === lesson.id}
+                                    hasContent={hasLessonContent(lesson)}
+                                    meta={lessonMeta(lesson)}
+                                    reorderDisabled={savingLessonOrder}
+                                    onOpen={openLessonEditor}
+                                    onMove={handleMoveLesson}
+                                    onDelete={handleDeleteLesson}
                                   />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="text-[12.5px] text-text font-medium truncate leading-snug">
-                                      {lesson.title}
-                                    </div>
-                                    <div className="text-[11px] text-text-3">{lessonMeta(lesson)}</div>
-                                  </div>
-                                  <div className="flex items-center gap-[2px] shrink-0 font-mono">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleMoveLesson(index, 'up');
-                                      }}
-                                      disabled={index === 0}
-                                      title="Move up"
-                                      aria-label="Move lesson up"
-                                      className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
-                                    >
-                                      <ArrowUp className="w-3.5 h-3.5 text-text-2" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleMoveLesson(index, 'down');
-                                      }}
-                                      disabled={index === (selectedCourse.lessons || []).length - 1}
-                                      title="Move down"
-                                      aria-label="Move lesson down"
-                                      className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
-                                    >
-                                      <ArrowDown className="w-3.5 h-3.5 text-text-2" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openLessonEditor(lesson);
-                                      }}
-                                      title="Edit"
-                                      aria-label="Edit lesson"
-                                      className="w-6 h-6 bg-steel-lt border border-steel/30 hover:bg-steel/20 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center ml-[2px]"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5 text-steel" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteLesson(lesson.id);
-                                      }}
-                                      title="Delete"
-                                      aria-label="Delete lesson"
-                                      className="w-6 h-6 bg-error-bg border border-error/20 hover:bg-error/15 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5 text-error" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                ))}
+                              </Reorder.Group>
+                            )}
                             <div
                               onClick={openAddLesson}
                               className="mx-3 mt-2 mb-3 flex items-center justify-center gap-1.5 text-[12px] text-steel py-[7px] px-[10px] rounded-[5px] cursor-pointer border border-dashed border-stroke hover:bg-steel-lt transition-colors select-none"

@@ -30,6 +30,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
     videoUrl: string;
     slidesUrl: string;
     sortOrder: number;
+    durationSeconds: number | null;
   }>(() =>
     activeLesson
       ? {
@@ -38,6 +39,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           videoUrl: activeLesson.videoUrl || '',
           slidesUrl: activeLesson.slidesUrl || '',
           sortOrder: activeLesson.sortOrder,
+          durationSeconds: activeLesson.durationSeconds ?? null,
         }
       : {
           title: '',
@@ -45,6 +47,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           videoUrl: '',
           slidesUrl: '',
           sortOrder: selectedCourse.lessons?.length || 0,
+          durationSeconds: null,
         },
   );
 
@@ -118,6 +121,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
       videoUrl: toYouTubeEmbed(lessonForm.videoUrl),
       slidesUrl: lessonForm.slidesUrl || null,
       sortOrder: lessonForm.sortOrder,
+      durationSeconds: lessonForm.durationSeconds,
     };
 
     try {
@@ -188,6 +192,22 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Extract duration before uploading so we can persist it with the lesson.
+    const duration = await new Promise<number | null>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration) : null);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      video.src = url;
+    });
+
     setUploadingVideo(true);
     try {
       const formData = new FormData();
@@ -203,7 +223,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
         throw new Error(data?.error || 'Upload failed');
       }
 
-      setLessonForm((l) => ({ ...l, videoUrl: `doc:${data.id}` }));
+      setLessonForm((l) => ({ ...l, videoUrl: `doc:${data.id}`, durationSeconds: duration }));
     } catch (err: any) {
       console.error('Failed to upload video:', err);
       alert(`Failed to upload: ${err.message || 'Please try again.'}`);

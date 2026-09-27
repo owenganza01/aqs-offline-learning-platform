@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lessonSchema } from './validate.js';
+import { lessonSchema, reorderSchema, courseIdParamSchema } from './validate.js';
 
 // Regression coverage for DEF-008 (instructor lesson creation/save failure).
 //
@@ -102,5 +102,66 @@ describe('lessonSchema validation', () => {
     if (result.success) {
       expect(result.data.sortOrder).toBe(3);
     }
+  });
+});
+
+// Coverage for the lesson-reorder payload (DEF-010). The admin curriculum list
+// now always sends the complete ordered id list, so the schema's job is to
+// reject an empty or malformed sequence rather than to default it.
+describe('reorderSchema validation', () => {
+  it('accepts a full ordered id list', () => {
+    const result = reorderSchema.safeParse({ orderedIds: [3, 1, 2] });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty orderedIds array', () => {
+    expect(reorderSchema.safeParse({ orderedIds: [] }).success).toBe(false);
+  });
+
+  it('rejects a missing orderedIds key', () => {
+    expect(reorderSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('coerces string ids to numbers', () => {
+    const result = reorderSchema.safeParse({ orderedIds: ['7', '8'] });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.orderedIds).toEqual([7, 8]);
+    }
+  });
+});
+
+// Coverage for the DELETE /api/enrollments/:courseId param (DEF-007). This
+// route triggers a destructive purge, so a malformed id must be rejected before
+// any delete runs.
+describe('courseIdParamSchema validation', () => {
+  it('accepts a positive integer courseId', () => {
+    const result = courseIdParamSchema.safeParse({ courseId: 42 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.courseId).toBe(42);
+    }
+  });
+
+  it('coerces a numeric string, as Express path params arrive', () => {
+    const result = courseIdParamSchema.safeParse({ courseId: '42' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.courseId).toBe(42);
+    }
+  });
+
+  it('rejects zero and negative ids', () => {
+    expect(courseIdParamSchema.safeParse({ courseId: 0 }).success).toBe(false);
+    expect(courseIdParamSchema.safeParse({ courseId: -1 }).success).toBe(false);
+  });
+
+  it('rejects non-numeric and missing ids', () => {
+    expect(courseIdParamSchema.safeParse({ courseId: 'abc' }).success).toBe(false);
+    expect(courseIdParamSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('rejects fractional ids', () => {
+    expect(courseIdParamSchema.safeParse({ courseId: 1.5 }).success).toBe(false);
   });
 });

@@ -33,6 +33,7 @@ const migrations = [
   'drizzle/0027_update_wipe_user_comments.sql',
   'drizzle/0028_add_sync_idempotency.sql',
   'drizzle/0029_message_attachments.sql',
+  'drizzle/0030_add_lesson_duration.sql',
 ];
 
 async function run() {

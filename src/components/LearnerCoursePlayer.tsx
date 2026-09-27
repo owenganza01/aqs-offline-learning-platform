@@ -698,6 +698,14 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
               <div className="space-y-3">
                 {lessons.map((lesson, idx) => {
                   const isDone = completedLessonIds.includes(lesson.id);
+                  const lessonMins =
+                    lesson.durationSeconds != null
+                      ? Math.max(1, Math.round(lesson.durationSeconds / 60))
+                      : lesson.videoUrl
+                        ? 15
+                        : lesson.content?.trim()
+                          ? 8
+                          : 5;
                   return (
                     <button
                       key={lesson.id}
@@ -723,7 +731,7 @@ export const LearnerCoursePlayer: React.FC<LearnerCoursePlayerProps> = ({
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs font-bold text-ink-3 font-mono shrink-0">15 min</span>
+                      <span className="text-xs font-bold text-ink-3 font-mono shrink-0">{lessonMins} min</span>
                     </button>
                   );
                 })}

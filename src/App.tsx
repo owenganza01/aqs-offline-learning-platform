@@ -18,6 +18,7 @@ import { LandingPage } from './components/LandingPage.tsx';
 import { InstructorOnboardingFlow } from './components/InstructorOnboardingFlow.tsx';
 import { apiFetch, setApiToken } from './lib/api.js';
 import { useOnlineStatus } from './hooks/useOnlineStatus.js';
+import { reconcileEnrolledCourseIds } from './lib/enrollment-sync.js';
 import {
   BookOpen,
   LogOut,
@@ -231,8 +232,16 @@ export default function App() {
           const { ok: enrollOk, data: enrollData } = enrollResult;
           if (enrollOk && enrollData) {
             const existing: number[] = JSON.parse(localStorage.getItem('aqs_enrolled_courses') ?? '[]');
-            const merged = Array.from(new Set([...existing, ...enrollData.courseIds]));
-            localStorage.setItem('aqs_enrolled_courses', JSON.stringify(merged));
+            const hadPendingEnrollments = (pendingQueue.enrollments || []).length > 0;
+
+            const localIds = reconcileEnrolledCourseIds({
+              localIds: existing,
+              serverIds: enrollData.courseIds,
+              syncOk,
+              hadPendingEnrollments,
+            });
+
+            localStorage.setItem('aqs_enrolled_courses', JSON.stringify(localIds));
           }
         } catch (err) {
           console.warn(
@@ -814,6 +823,7 @@ export default function App() {
                             user={dbUser}
                             token={token}
                             onProfileUpdated={() => token && syncUserProfile(token)}
+                            onProgressChanged={loadAppData}
                           />
                         )
                       ) : (

@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Course, User } from '../../types.js';
 import { apiFetch } from '../../lib/api.js';
+import { MAX_COVER_UPLOAD_SIZE_BYTES, ALLOWED_IMAGE_EXTENSIONS } from '../../lib/mime-types.js';
+import { DEFAULT_THUMBNAIL_TINT, hasRealThumbnail, COVER_THUMBNAIL_PREFIX } from '../../lib/course-cover.js';
 import {
   BookOpen,
   Plus,
@@ -260,6 +262,8 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
 
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const [templateMsg, setTemplateMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverMsg, setCoverMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleTemplateFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -340,6 +344,84 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
       setTemplateMsg({ type: 'error', text: 'Network error removing template.' });
     } finally {
       setUploadingTemplate(false);
+    }
+  };
+
+  // --- Course cover image (DEF-004) -------------------------------------
+  // Covers are stored via a dedicated multipart endpoint rather than the
+  // course PATCH body: the thumbnail column holds a `doc:<uuid>` pointer that
+  // the server owns, and it needs an id to attach to, which a brand-new course
+  // does not have yet.
+  const handleCoverFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+    if (!selectedCourse) {
+      setCoverMsg({ type: 'error', text: 'Save the course first, then add a cover image.' });
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_COVER_UPLOAD_SIZE_BYTES) {
+      setCoverMsg({ type: 'error', text: 'Cover images must be 5 MB or smaller.' });
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingCover(true);
+    setCoverMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { ok, data } = await apiFetch<{ thumbnail: string; error?: string }>(
+        `/api/courses/${selectedCourse.id}/cover`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      );
+
+      if (ok && data?.thumbnail) {
+        // Keep the local form in sync so a later title/description save does
+        // not overwrite the freshly uploaded cover with the 'teal' tint.
+        setCourseForm((prev) => ({ ...prev, thumbnail: data.thumbnail }));
+        setCoverMsg({ type: 'success', text: 'Cover image updated.' });
+        onRefreshCourses();
+        await loadCourseFullDetails(selectedCourse.id);
+      } else {
+        setCoverMsg({ type: 'error', text: data?.error || 'Failed to upload cover image.' });
+      }
+    } catch {
+      setCoverMsg({ type: 'error', text: 'Network error uploading cover image.' });
+    } finally {
+      setUploadingCover(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveCover = async () => {
+    if (!selectedCourse || !token) return;
+    if (!confirm('Remove the cover image and fall back to a generated placeholder?')) return;
+
+    setUploadingCover(true);
+    setCoverMsg(null);
+    try {
+      const { ok, data } = await apiFetch<{ thumbnail: string; error?: string }>(
+        `/api/courses/${selectedCourse.id}/cover`,
+        {
+          method: 'DELETE',
+        },
+      );
+      if (ok) {
+        setCourseForm((prev) => ({ ...prev, thumbnail: data?.thumbnail || DEFAULT_THUMBNAIL_TINT }));
+        setCoverMsg({ type: 'success', text: 'Cover image removed.' });
+        onRefreshCourses();
+        await loadCourseFullDetails(selectedCourse.id);
+      } else {
+        setCoverMsg({ type: 'error', text: data?.error || 'Failed to remove cover image.' });
+      }
+    } catch {
+      setCoverMsg({ type: 'error', text: 'Network error removing cover image.' });
+    } finally {
+      setUploadingCover(false);
     }
   };
 
@@ -476,6 +558,26 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                     className="w-full p-3 border-[1.5px] border-stroke rounded-lg text-sm text-text h-24 outline-none focus:border-steel focus:ring-2 focus:ring-steel/10 transition-all text-text-2 leading-relaxed"
                     placeholder="Explain the quantitative metrics students will learn in simple terms..."
                   />
+                </div>
+                {/* Cover images are attached to a saved course id, so this is
+                    intentionally inert on the create form. */}
+                <div>
+                  <label
+                    htmlFor="course-create-cover"
+                    className="block text-[11px] font-bold uppercase text-text-3 mb-1.5 font-mono"
+                  >
+                    Cover Image:
+                  </label>
+                  <input
+                    id="course-create-cover"
+                    type="file"
+                    accept={ALLOWED_IMAGE_EXTENSIONS}
+                    disabled
+                    className="w-full p-3 border-[1.5px] border-stroke rounded-lg text-sm text-text-3 bg-canvas cursor-not-allowed"
+                  />
+                  <p className="text-[11px] text-text-3 mt-1.5">
+                    Save the course first, then add a cover image from the course Settings tab.
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -844,6 +946,74 @@ export const CourseFactory: React.FC<CourseFactoryProps> = ({
                   <label htmlFor="req-assessment" className="text-sm text-text">
                     Require assessment
                   </label>
+                </div>
+              </div>
+
+              {/* Course cover image (DEF-004) — shown whenever a course is selected,
+              independently of whether the edit form is open. */}
+              <div className="border-t border-stroke pt-4 mt-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="w-full sm:w-48 h-24 rounded-lg border border-stroke bg-canvas overflow-hidden flex items-center justify-center shrink-0">
+                    {hasRealThumbnail(selectedCourse.thumbnail) ? (
+                      <img
+                        src={
+                          selectedCourse.thumbnail?.startsWith(COVER_THUMBNAIL_PREFIX)
+                            ? `/api/courses/${selectedCourse.id}/cover${token ? `?token=${encodeURIComponent(token)}` : ''}`
+                            : selectedCourse.thumbnail || ''
+                        }
+                        alt={`${selectedCourse.title} cover`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[11px] text-text-3 font-mono">No cover set</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-text text-sm">Cover Image</h4>
+                    <p className="text-[11.5px] text-text-3 mt-0.5 mb-2.5">
+                      JPG, PNG or WebP, up to 5 MB. Shown on learner course cards for everyone, enrolled or not.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label
+                        className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-stroke bg-white text-xs font-semibold text-text-2 transition-all ${
+                          uploadingCover ? 'opacity-60 cursor-not-allowed' : 'hover:bg-canvas cursor-pointer'
+                        }`}
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingCover ? 'Uploading...' : 'Upload cover'}</span>
+                        <input
+                          type="file"
+                          accept={ALLOWED_IMAGE_EXTENSIONS}
+                          onChange={handleCoverFileSelect}
+                          disabled={uploadingCover}
+                          className="sr-only"
+                          aria-label="Upload course cover image"
+                        />
+                      </label>
+                      {hasRealThumbnail(selectedCourse.thumbnail) &&
+                        selectedCourse.thumbnail?.startsWith(COVER_THUMBNAIL_PREFIX) && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveCover}
+                            disabled={uploadingCover}
+                            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-stroke bg-white text-xs font-semibold text-error hover:bg-error-bg transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                    </div>
+                    {coverMsg && (
+                      <p
+                        className={`text-[11.5px] mt-2 font-medium ${
+                          coverMsg.type === 'success' ? 'text-success' : 'text-error'
+                        }`}
+                        role="status"
+                      >
+                        {coverMsg.text}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

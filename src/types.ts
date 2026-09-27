@@ -53,6 +53,7 @@ export interface Lesson {
   content: string;
   videoUrl: string | null;
   slidesUrl: string | null;
+  durationSeconds: number | null;
   sortOrder: number;
   createdAt?: string;
 }

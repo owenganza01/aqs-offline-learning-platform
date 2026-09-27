@@ -1,9 +1,23 @@
 // src/components/LearnerDashboard.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Course, QuizAttempt, User } from '../types.js';
-import { Search, X, Inbox, Plus, BookOpen, Clock, CheckCircle, ArrowRight, Flame } from 'lucide-react';
+import {
+  Search,
+  X,
+  Inbox,
+  Plus,
+  BookOpen,
+  Clock,
+  CheckCircle,
+  ArrowRight,
+  Flame,
+  ChevronDown,
+  Trash2,
+} from 'lucide-react';
 import { PouchDBService } from '../lib/pouchdb-service.js';
 import { apiFetch } from '../lib/api.js';
+import { useOnlineStatus } from '../hooks/useOnlineStatus.js';
+import { COVER_THUMBNAIL_PREFIX, hasRealThumbnail } from '../lib/course-cover.js';
 
 interface LearnerDashboardProps {
   courses: Course[];
@@ -13,6 +27,11 @@ interface LearnerDashboardProps {
   user: User | null;
   token: string | null;
   onProfileUpdated: () => void;
+  /**
+   * Re-reads progress from the (now purged) local store. Required after leaving
+   * a course because progress props are owned by App, not by this component.
+   */
+  onProgressChanged?: () => void | Promise<void>;
   initialTab?: 'my-courses' | 'browse';
 }
 
@@ -27,9 +46,22 @@ const getCourseInitials = (title: string): string => {
   return (words[0][0] + words[1][0]).toUpperCase();
 };
 
-const hasRealThumbnail = (course: Course): boolean => {
+const hasRealThumbnailFor = (course: Course): boolean => hasRealThumbnail(course.thumbnail);
+
+/**
+ * Resolves a course thumbnail to a URL an <img> can load (DEF-004).
+ *
+ * Stored covers are served by GET /api/courses/:courseId/cover, which requires
+ * auth — and <img src> cannot attach an Authorization header, hence the token
+ * query parameter. data:/http: values are already usable as-is.
+ */
+const coverSrc = (course: Course, token: string | null): string => {
   const t = course.thumbnail;
-  return !!t && (t.startsWith('http') || t.startsWith('data:'));
+  if (!t) return '';
+  if (t.startsWith(COVER_THUMBNAIL_PREFIX)) {
+    return `/api/courses/${course.id}/cover${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  }
+  return t;
 };
 
 const greetingForHour = (): string => {
@@ -39,6 +71,62 @@ const greetingForHour = (): string => {
   return 'Good evening';
 };
 
+// Only surface the Read more toggle for descriptions long enough to actually
+// be clipped. A character threshold stands in for measuring rendered overflow,
+// which would otherwise need a ref plus a layout pass on every card render.
+const DESCRIPTION_CLAMP_CHARS = 150;
+
+interface CourseDescriptionProps {
+  courseId: number;
+  description: string;
+  expanded: boolean;
+  onToggle: (courseId: number) => void;
+  className?: string;
+}
+
+/**
+ * Course description with a Read more / Show less toggle (DEF-001).
+ *
+ * Descriptions were not rendered on either card variant, so any course whose
+ * description carried the real syllabus was effectively unreadable from the
+ * dashboard. Text is clamped to a few lines until the learner expands it.
+ */
+const CourseDescription: React.FC<CourseDescriptionProps> = ({
+  courseId,
+  description,
+  expanded,
+  onToggle,
+  className = '',
+}) => {
+  const text = description?.trim() ?? '';
+  if (text.length === 0) return null;
+
+  const collapsible = text.length > DESCRIPTION_CLAMP_CHARS;
+
+  return (
+    <div className={className}>
+      <p className={`text-[11.5px] text-ink-2 leading-relaxed ${collapsible && !expanded ? 'line-clamp-3' : ''}`}>
+        {text}
+      </p>
+      {collapsible && (
+        <button
+          onClick={(e) => {
+            // The "My courses" card is itself a click target that opens the
+            // course, so without this the toggle navigates away instead.
+            e.stopPropagation();
+            onToggle(courseId);
+          }}
+          aria-expanded={expanded}
+          className="text-[11px] font-semibold text-ochre hover:underline mt-0.5 cursor-pointer inline-flex items-center gap-1"
+        >
+          {expanded ? 'Show less' : 'Read more'}
+          <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   courses,
   completedLessonIds,
@@ -46,12 +134,69 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   onSelectCourse,
   user,
   token,
+  onProgressChanged,
   initialTab,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<number[]>([]);
   const [dayStreak, setDayStreak] = useState(0);
+  // Which card currently has its description expanded (DEF-001). Tracked as a
+  // single id rather than a Set so only one card is ever open at a time.
+  const [expandedCourseId, setExpandedCourseId] = useState<number | null>(null);
+
+  const toggleDescription = useCallback((courseId: number) => {
+    setExpandedCourseId((current) => (current === courseId ? null : courseId));
+  }, []);
+
+  // Leaving a course (DEF-007).
+  const isOnline = useOnlineStatus();
+  const [unenrollTarget, setUnenrollTarget] = useState<{ id: number; title: string } | null>(null);
+  const [unenrolling, setUnenrolling] = useState(false);
+  const [unenrollMsg, setUnenrollMsg] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
+
+  /**
+   * Leaves the course and destroys the learner's progress for it.
+   *
+   * Online-only by design: the operation is a destructive purge that cannot be
+   * rolled back, so it is never queued for later sync the way enrolment and
+   * lesson completions are. The local purge runs only after the server confirms,
+   * which keeps the two stores from diverging on a failed request.
+   */
+  const handleConfirmUnenroll = async () => {
+    if (!unenrollTarget || unenrolling) return;
+
+    if (!isOnline) {
+      setUnenrollMsg({ type: 'error', text: 'You need to be online to leave a course and reset your progress.' });
+      return;
+    }
+    if (!token) return;
+
+    const courseId = unenrollTarget.id;
+    setUnenrolling(true);
+    setUnenrollMsg(null);
+    try {
+      const { ok, data } = await apiFetch<{ error?: string }>(`/api/enrollments/${courseId}`, {
+        method: 'DELETE',
+      });
+
+      if (!ok) {
+        setUnenrollMsg({ type: 'error', text: data?.error || 'Failed to leave the course. Please try again.' });
+        return;
+      }
+
+      await PouchDBService.purgeCourseProgress(courseId);
+      setEnrolledCourseIds(await PouchDBService.getEnrolledCourseIds());
+      setExpandedCourseId((current) => (current === courseId ? null : current));
+      setUnenrollTarget(null);
+      setUnenrollMsg({ type: 'info', text: `You left “${unenrollTarget.title}”. Your progress was reset.` });
+      await onProgressChanged?.();
+    } catch {
+      setUnenrollMsg({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setUnenrolling(false);
+    }
+  };
 
   useEffect(() => {
     const loadEnrolled = async () => {
@@ -383,6 +528,23 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
 
       {/* === Flat layout: My courses section → Explore section === */}
       <div className="space-y-8">
+        {unenrollMsg && (
+          <div
+            role="status"
+            className={`flex items-start gap-2 px-3.5 py-2.5 rounded-lg border text-[12.5px] font-medium ${
+              unenrollMsg.type === 'error'
+                ? 'bg-error-bg border-error/30 text-error'
+                : 'bg-success/5 border-success/30 text-success'
+            }`}
+          >
+            {unenrollMsg.type === 'error' ? (
+              <X className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            ) : (
+              <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            )}
+            <span>{unenrollMsg.text}</span>
+          </div>
+        )}
         {/* My Courses Section */}
         <section id="my-courses-section">
           <h3 className="text-sm font-bold text-ink uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -413,7 +575,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                 const courseCompletedCount = courseLessons.filter((l) => completedLessonIds.includes(l.id)).length;
                 const progressPct =
                   courseLessons.length > 0 ? Math.round((courseCompletedCount / courseLessons.length) * 100) : 0;
-                const showImg = hasRealThumbnail(course);
+                const showImg = hasRealThumbnailFor(course);
 
                 return (
                   <div
@@ -425,7 +587,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                     <div className="h-20 relative flex items-center justify-center overflow-hidden">
                       {showImg ? (
                         <img
-                          src={course.thumbnail || ''}
+                          src={coverSrc(course, token)}
                           alt={course.title}
                           loading="lazy"
                           referrerPolicy="no-referrer"
@@ -451,12 +613,56 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                       <div className="text-[13px] font-semibold text-ink leading-snug mb-1 line-clamp-2 min-h-[34px]">
                         {course.title}
                       </div>
+                      <CourseDescription
+                        courseId={course.id}
+                        description={course.description}
+                        expanded={expandedCourseId === course.id}
+                        onToggle={toggleDescription}
+                        className="mb-1.5"
+                      />
                       <div className="flex items-center justify-between text-[11px] text-ink-3">
                         <span>
                           {courseCompletedCount} of {courseLessons.length} lessons
                         </span>
                         <span className="font-mono text-ochre font-medium">{progressPct}%</span>
                       </div>
+                      {courseLessons.length > 0 &&
+                        (() => {
+                          const estMins = courseLessons.reduce((sum, l) => {
+                            if (l.durationSeconds != null) return sum + Math.round(l.durationSeconds / 60);
+                            if (l.videoUrl) return sum + 15;
+                            if (l.content && l.content.trim()) return sum + 8;
+                            return sum + 5;
+                          }, 0);
+                          const h = Math.floor(estMins / 60);
+                          const m = estMins % 60;
+                          const dur = h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
+                          return (
+                            <div className="flex items-center gap-1 text-[10px] text-ink-3 mt-0.5">
+                              <Clock className="w-3 h-3" />
+                              <span>{dur}</span>
+                            </div>
+                          );
+                        })()}
+                      <button
+                        onClick={(e) => {
+                          // The whole card opens the course, so this must not bubble.
+                          e.stopPropagation();
+                          if (!isOnline) {
+                            setUnenrollMsg({
+                              type: 'error',
+                              text: 'You need to be online to leave a course and reset your progress.',
+                            });
+                            return;
+                          }
+                          setUnenrollMsg(null);
+                          setUnenrollTarget({ id: course.id, title: course.title });
+                        }}
+                        className="mt-2 w-full h-7 text-[11px] font-semibold text-ink-3 hover:text-error hover:bg-error-bg rounded-md border border-transparent hover:border-error/20 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Leave course</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -492,11 +698,16 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
               {exploreCourses.map((course) => {
                 const courseLessons = course.lessons || [];
-                const estMinutes = courseLessons.length * 20;
+                const estMinutes = courseLessons.reduce((sum, l) => {
+                  if (l.durationSeconds != null) return sum + Math.round(l.durationSeconds / 60);
+                  if (l.videoUrl) return sum + 15;
+                  if (l.content && l.content.trim()) return sum + 8;
+                  return sum + 5;
+                }, 0);
                 const hours = Math.floor(estMinutes / 60);
                 const mins = estMinutes % 60;
-                const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-                const showImg = hasRealThumbnail(course);
+                const durationStr = hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ''}`.trim() : `${mins}m`;
+                const showImg = hasRealThumbnailFor(course);
 
                 return (
                   <div
@@ -507,7 +718,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                     <div className="h-20 relative flex items-center justify-center overflow-hidden">
                       {showImg ? (
                         <img
-                          src={course.thumbnail || ''}
+                          src={coverSrc(course, token)}
                           alt={course.title}
                           loading="lazy"
                           referrerPolicy="no-referrer"
@@ -530,6 +741,13 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                       <div className="text-[13px] font-semibold text-ink leading-snug line-clamp-2 min-h-[34px]">
                         {course.title}
                       </div>
+                      <CourseDescription
+                        courseId={course.id}
+                        description={course.description}
+                        expanded={expandedCourseId === course.id}
+                        onToggle={toggleDescription}
+                        className="mt-1 mb-1.5"
+                      />
                       <div className="flex items-center gap-3 text-[11px] text-ink-3 mt-1 mb-3">
                         <span className="flex items-center gap-1">
                           <BookOpen className="w-3 h-3" />
@@ -556,6 +774,105 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             </div>
           )}
         </section>
+      </div>
+      {unenrollTarget && (
+        <UnenrollDialog
+          courseTitle={unenrollTarget.title}
+          busy={unenrolling}
+          onConfirm={handleConfirmUnenroll}
+          onCancel={() => {
+            if (!unenrolling) {
+              setUnenrollTarget(null);
+              setUnenrollMsg(null);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+interface UnenrollDialogProps {
+  courseTitle: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * Confirmation dialog for leaving a course (DEF-007).
+ *
+ * Leaving is a full, irreversible reset, so the copy states exactly what is
+ * destroyed. Focus moves to the panel on open, Escape cancels, and focus is
+ * restored to the trigger on unmount.
+ */
+const UnenrollDialog: React.FC<UnenrollDialogProps> = ({ courseTitle, busy, onConfirm, onCancel }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onCancel, busy]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/45 backdrop-blur-[2px] z-[80] flex items-center justify-center p-4"
+      onClick={busy ? undefined : onCancel}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="unenroll-dialog-title"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-paper border border-rule rounded-xl shadow-2xl w-full max-w-md p-6 outline-none"
+      >
+        <h3 id="unenroll-dialog-title" className="text-base font-bold text-ink mb-2">
+          Leave “{courseTitle}”?
+        </h3>
+        <p className="text-[13px] text-ink-2 leading-relaxed mb-3">
+          Leaving this course resets it completely. This cannot be undone.
+        </p>
+        <ul className="text-[12.5px] text-ink-2 leading-relaxed list-disc pl-5 mb-4 space-y-1">
+          <li>Your lesson progress for this course is deleted</li>
+          <li>Your quiz attempts and scores for this course are deleted</li>
+        </ul>
+        <p className="text-[12px] text-ink-3 leading-relaxed mb-1.5">
+          Re-joining later starts this course from the beginning. Your other courses and any certificates you have
+          already earned are not affected.
+        </p>
+        <p className="text-[12px] text-ink-3 leading-relaxed mb-5">
+          Your message history for this course is kept and stays readable. You can keep posting only if you still have
+          participation history here — a completed lesson, a quiz attempt, or a certificate you have earned — otherwise
+          you can post again after re-joining.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex-grow h-10 bg-error hover:opacity-90 disabled:opacity-60 text-white text-[13px] font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{busy ? 'Leaving...' : 'Leave & reset progress'}</span>
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="h-10 px-5 bg-white hover:bg-canvas text-text-2 text-[13px] font-semibold rounded-lg border border-stroke transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+          >
+            Keep course
+          </button>
+        </div>
       </div>
     </div>
   );

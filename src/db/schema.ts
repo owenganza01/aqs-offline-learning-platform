@@ -43,6 +43,7 @@ export const lessons = pgTable('lessons', {
   content: text('content').notNull(),
   videoUrl: text('video_url'), // unlisted YouTube video URL or ID
   slidesUrl: text('slides_url'), // PowerPoint, PDF, or slides link
+  durationSeconds: integer('duration_seconds'), // null = unknown; set on upload or manual entry
   sortOrder: integer('sort_order').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

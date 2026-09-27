@@ -136,11 +136,11 @@ export async function processQuizSubmissions(
       .where(and(eq(schema.enrollments.userId, userId), eq(schema.enrollments.courseId, quiz[0].courseId)))
       .limit(1);
     if (enrolled.length === 0) {
-      // This rejection path currently only fires for a payload referencing a course
-      // the learner was never enrolled in - unenroll doesn't exist yet, so a
-      // genuinely-enrolled learner can never legitimately reach this state. Revisit
-      // durability of this notice if an unenroll feature is ever added, since it
-      // would then affect real completed attempts, not just invalid ones.
+      // Now that unenroll exists (DEF-007), this rejection path also fires for a
+      // learner who genuinely left the course. Their queued quiz submissions for
+      // that course are discarded rather than durably stored: leaving a course
+      // is defined as a full progress reset, so re-queuing the attempt would
+      // contradict what the learner just asked for.
       rejectedQuizzes.push({ quizId, reason: 'You must be enrolled in this course to submit the quiz.' });
       continue;
     }

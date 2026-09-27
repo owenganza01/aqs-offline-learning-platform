@@ -87,6 +87,13 @@ export const reorderSchema = z.object({
     .min(1, 'orderedIds must be a non-empty array'),
 });
 
+// A :courseId path parameter. Kept as a shared schema (rather than ad-hoc
+// parseInt + isNaN checks per controller) so the accepted range is defined in
+// exactly one place and is directly unit-testable.
+export const courseIdParamSchema = z.object({
+  courseId: z.coerce.number({ message: 'courseId is required' }).int().positive(),
+});
+
 // Quiz question option
 const questionOptionSchema = z.object({
   questionText: z.string().min(1, 'Question text is required').max(1000),

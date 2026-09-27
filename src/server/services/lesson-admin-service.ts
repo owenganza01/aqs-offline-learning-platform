@@ -21,7 +21,14 @@ function extractDocIds(url: string | null | undefined): string[] {
 
 export async function createLesson(
   courseId: number,
-  data: { title: string; content: string; videoUrl?: string; slidesUrl?: string; sortOrder?: number },
+  data: {
+    title: string;
+    content: string;
+    videoUrl?: string;
+    slidesUrl?: string;
+    sortOrder?: number;
+    durationSeconds?: number | null;
+  },
 ) {
   const result = await db
     .insert(schema.lessons)
@@ -31,6 +38,7 @@ export async function createLesson(
       content: data.content,
       videoUrl: toYouTubeEmbed(data.videoUrl),
       slidesUrl: data.slidesUrl,
+      durationSeconds: data.durationSeconds ?? null,
       sortOrder: data.sortOrder !== undefined ? parseInt(data.sortOrder as any) : 0,
     })
     .returning();
@@ -54,6 +62,7 @@ export async function updateLesson(
     videoUrl?: string;
     slidesUrl?: string;
     sortOrder?: number;
+    durationSeconds?: number | null;
   },
 ) {
   const updated = await db
@@ -63,6 +72,7 @@ export async function updateLesson(
       content: data.content,
       videoUrl: data.videoUrl !== undefined ? toYouTubeEmbed(data.videoUrl) : undefined,
       slidesUrl: data.slidesUrl,
+      durationSeconds: 'durationSeconds' in data ? (data.durationSeconds ?? null) : undefined,
       sortOrder: data.sortOrder !== undefined ? parseInt(data.sortOrder as any) : undefined,
     })
     .where(and(eq(schema.lessons.id, lessonId), eq(schema.lessons.courseId, courseId)))

@@ -1,7 +1,14 @@
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, sql, inArray } from 'drizzle-orm';
 import { effectiveClosureStatus, closureDeadline } from './closure-service.js';
+
+// sort_order is NOT unique and every lesson defaults to 0, so several lessons of
+// the same course routinely share a value. Ordering by sort_order alone leaves
+// Postgres free to return tied rows in any order, which made an instructor's
+// saved curriculum sequence shuffle between refreshes (DEF-010). The id
+// tiebreak makes the sequence stable and deterministic.
+const LESSON_ORDER_BY = [asc(schema.lessons.sortOrder), asc(schema.lessons.id)];
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -62,7 +69,7 @@ export async function listCourses(limit: number, offset: number) {
       })
       .from(schema.lessons)
       .where(inArray(schema.lessons.courseId, courseIds))
-      .orderBy(schema.lessons.sortOrder);
+      .orderBy(...LESSON_ORDER_BY);
 
     for (const lesson of allLessons) {
       if (!lessonsByCourse.has(lesson.courseId)) {
@@ -115,7 +122,7 @@ export async function getCourseDetail(courseId: number, userId: number) {
     .select()
     .from(schema.lessons)
     .where(eq(schema.lessons.courseId, courseId))
-    .orderBy(schema.lessons.sortOrder);
+    .orderBy(...LESSON_ORDER_BY);
 
   const courseQuizzes = await db.select().from(schema.quizzes).where(eq(schema.quizzes.courseId, courseId));
   let quiz: any = null;
