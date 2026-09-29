@@ -69,6 +69,12 @@ export const lessonSchema = z.object({
   content: z.string().min(1, 'Content is required').max(50000),
   videoUrl: z.string().max(500).nullish(),
   slidesUrl: z.string().max(5000).nullish(),
+  // Real duration of the uploaded video, read from the browser's video
+  // metadata on upload. Persisted to the nullable `lessons.duration_seconds`
+  // column so the learner's card shows the actual length instead of an
+  // estimate. nullish(): absent or null both mean "duration not known", which
+  // matches the nullable, default-less column.
+  durationSeconds: z.number().int('Video duration must be a whole number of seconds').min(0).nullish(),
   sortOrder: z
     .union([
       z.number().int().min(0),

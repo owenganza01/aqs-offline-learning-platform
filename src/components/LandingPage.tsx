@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { PublicCourse } from '../types.js';
 import { apiFetch } from '../lib/api.js';
+import { CourseDescription } from './shared/CourseDescription.js';
 import {
   BookOpen,
   LogIn,
@@ -314,6 +315,13 @@ interface CourseDiscoveryProps {
 }
 
 function CourseDiscovery({ courses, coursesLoading, coursesError, onRetry }: CourseDiscoveryProps) {
+  // Which catalogue card currently has its description expanded (DEF-001).
+  // One at a time, matching the learner dashboard.
+  const [expandedCourseId, setExpandedCourseId] = useState<number | null>(null);
+  const toggleDescription = useCallback((courseId: number) => {
+    setExpandedCourseId((current) => (current === courseId ? null : courseId));
+  }, []);
+
   return (
     <section id="courses" className="bg-paper-2 border-b border-rule py-16 sm:py-20">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
@@ -380,8 +388,8 @@ function CourseDiscovery({ courses, coursesLoading, coursesError, onRetry }: Cou
             </div>
             <h3 className="font-display text-lg font-bold text-ink">No published courses available yet</h3>
             <p className="mt-2 text-ink-2 text-xs leading-relaxed">
-              New analytics and quantitative curriculum is currently being prepared by AQS instructors. Sign up with
-              your cohort code to get notified upon release.
+              New analytics and quantitative curriculum is currently being prepared by AQS instructors. Create a learner
+              account to be able to join courses as they are released.
             </p>
           </div>
         )}
@@ -413,9 +421,15 @@ function CourseDiscovery({ courses, coursesLoading, coursesError, onRetry }: Cou
                       <h3 className="font-display text-lg font-bold text-ink group-hover:text-ochre transition-colors line-clamp-2">
                         {course.title}
                       </h3>
-                      <p className="mt-2 text-xs text-ink-2 leading-relaxed line-clamp-3">
-                        {course.description || 'Comprehensive curriculum with video lessons and interactive exercises.'}
-                      </p>
+                      <CourseDescription
+                        courseId={course.id}
+                        description={
+                          course.description || 'Comprehensive curriculum with video lessons and interactive exercises.'
+                        }
+                        expanded={expandedCourseId === course.id}
+                        onToggle={toggleDescription}
+                        className="mt-2"
+                      />
                     </div>
                   </div>
 
@@ -573,7 +587,7 @@ function LoginView({ onLogin, authLoading, authError, onSwitchToSignup }: LoginV
               onClick={onSwitchToSignup}
               className="text-ochre font-bold hover:underline cursor-pointer focus:outline-none"
             >
-              Join with Class Code
+              Create a learner account
             </button>
           </div>
         </div>
@@ -755,8 +769,8 @@ function InstructorOnboarding({ onLogin, onBack }: InstructorOnboardingProps) {
             <ul className="list-disc list-inside space-y-1 text-ink-3">
               <li>Course Factory & rich Markdown/video syllabus publishing</li>
               <li>Interactive quiz authoring & scoring rules</li>
-              <li>Cohort management with auto-generated class invite codes</li>
-              <li>Cohort gradebooks & real-time offline-sync analytics</li>
+              <li>Course enrollment, messaging & learner progress tracking</li>
+              <li>Real-time offline-sync analytics for enrolled learners</li>
             </ul>
           </div>
         </div>

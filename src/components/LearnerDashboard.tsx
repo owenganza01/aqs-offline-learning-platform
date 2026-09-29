@@ -1,23 +1,13 @@
 // src/components/LearnerDashboard.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Course, QuizAttempt, User } from '../types.js';
-import {
-  Search,
-  X,
-  Inbox,
-  Plus,
-  BookOpen,
-  Clock,
-  CheckCircle,
-  ArrowRight,
-  Flame,
-  ChevronDown,
-  Trash2,
-} from 'lucide-react';
+import { Search, X, Inbox, Plus, BookOpen, Clock, CheckCircle, ArrowRight, Flame, Trash2 } from 'lucide-react';
 import { PouchDBService } from '../lib/pouchdb-service.js';
 import { apiFetch } from '../lib/api.js';
 import { useOnlineStatus } from '../hooks/useOnlineStatus.js';
 import { COVER_THUMBNAIL_PREFIX, hasRealThumbnail } from '../lib/course-cover.js';
+import { formatCourseDuration } from '../lib/course-duration.js';
+import { CourseDescription } from './shared/CourseDescription.js';
 
 interface LearnerDashboardProps {
   courses: Course[];
@@ -69,62 +59,6 @@ const greetingForHour = (): string => {
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
-};
-
-// Only surface the Read more toggle for descriptions long enough to actually
-// be clipped. A character threshold stands in for measuring rendered overflow,
-// which would otherwise need a ref plus a layout pass on every card render.
-const DESCRIPTION_CLAMP_CHARS = 150;
-
-interface CourseDescriptionProps {
-  courseId: number;
-  description: string;
-  expanded: boolean;
-  onToggle: (courseId: number) => void;
-  className?: string;
-}
-
-/**
- * Course description with a Read more / Show less toggle (DEF-001).
- *
- * Descriptions were not rendered on either card variant, so any course whose
- * description carried the real syllabus was effectively unreadable from the
- * dashboard. Text is clamped to a few lines until the learner expands it.
- */
-const CourseDescription: React.FC<CourseDescriptionProps> = ({
-  courseId,
-  description,
-  expanded,
-  onToggle,
-  className = '',
-}) => {
-  const text = description?.trim() ?? '';
-  if (text.length === 0) return null;
-
-  const collapsible = text.length > DESCRIPTION_CLAMP_CHARS;
-
-  return (
-    <div className={className}>
-      <p className={`text-[11.5px] text-ink-2 leading-relaxed ${collapsible && !expanded ? 'line-clamp-3' : ''}`}>
-        {text}
-      </p>
-      {collapsible && (
-        <button
-          onClick={(e) => {
-            // The "My courses" card is itself a click target that opens the
-            // course, so without this the toggle navigates away instead.
-            e.stopPropagation();
-            onToggle(courseId);
-          }}
-          aria-expanded={expanded}
-          className="text-[11px] font-semibold text-ochre hover:underline mt-0.5 cursor-pointer inline-flex items-center gap-1"
-        >
-          {expanded ? 'Show less' : 'Read more'}
-          <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-        </button>
-      )}
-    </div>
-  );
 };
 
 export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
@@ -626,24 +560,12 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                         </span>
                         <span className="font-mono text-ochre font-medium">{progressPct}%</span>
                       </div>
-                      {courseLessons.length > 0 &&
-                        (() => {
-                          const estMins = courseLessons.reduce((sum, l) => {
-                            if (l.durationSeconds != null) return sum + Math.round(l.durationSeconds / 60);
-                            if (l.videoUrl) return sum + 15;
-                            if (l.content && l.content.trim()) return sum + 8;
-                            return sum + 5;
-                          }, 0);
-                          const h = Math.floor(estMins / 60);
-                          const m = estMins % 60;
-                          const dur = h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
-                          return (
-                            <div className="flex items-center gap-1 text-[10px] text-ink-3 mt-0.5">
-                              <Clock className="w-3 h-3" />
-                              <span>{dur}</span>
-                            </div>
-                          );
-                        })()}
+                      {courseLessons.length > 0 && (
+                        <div className="flex items-center gap-1 text-[10px] text-ink-3 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          <span>{formatCourseDuration(courseLessons)}</span>
+                        </div>
+                      )}
                       <button
                         onClick={(e) => {
                           // The whole card opens the course, so this must not bubble.
@@ -698,15 +620,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
               {exploreCourses.map((course) => {
                 const courseLessons = course.lessons || [];
-                const estMinutes = courseLessons.reduce((sum, l) => {
-                  if (l.durationSeconds != null) return sum + Math.round(l.durationSeconds / 60);
-                  if (l.videoUrl) return sum + 15;
-                  if (l.content && l.content.trim()) return sum + 8;
-                  return sum + 5;
-                }, 0);
-                const hours = Math.floor(estMinutes / 60);
-                const mins = estMinutes % 60;
-                const durationStr = hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ''}`.trim() : `${mins}m`;
+                const durationStr = formatCourseDuration(courseLessons);
                 const showImg = hasRealThumbnailFor(course);
 
                 return (

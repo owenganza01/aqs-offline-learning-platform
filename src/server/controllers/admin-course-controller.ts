@@ -135,7 +135,7 @@ export async function restoreCourse(req: AuthRequest, res: Response): Promise<vo
 export async function createLesson(req: AuthRequest, res: Response): Promise<void> {
   try {
     const courseId = parseInt(req.params.courseId);
-    const { title, content, videoUrl, slidesUrl, sortOrder } = req.body;
+    const { title, content, videoUrl, slidesUrl, sortOrder, durationSeconds } = req.body;
     if (isNaN(courseId) || !title || !content) {
       res.status(400).json({ error: 'Course ID, title and content are required.' });
       return;
@@ -147,7 +147,14 @@ export async function createLesson(req: AuthRequest, res: Response): Promise<voi
         return;
       }
     }
-    const lesson = await lessonAdminService.createLesson(courseId, { title, content, videoUrl, slidesUrl, sortOrder });
+    const lesson = await lessonAdminService.createLesson(courseId, {
+      title,
+      content,
+      videoUrl,
+      slidesUrl,
+      sortOrder,
+      durationSeconds,
+    });
     res.status(201).json(lesson);
   } catch (error: unknown) {
     console.error('CMS Lesson creation error:', error);
@@ -159,7 +166,7 @@ export async function updateLesson(req: AuthRequest, res: Response): Promise<voi
   try {
     const lessonId = parseInt(req.params.id);
     const courseId = parseInt(req.params.courseId);
-    const { title, content, videoUrl, slidesUrl, sortOrder } = req.body;
+    const { title, content, videoUrl, slidesUrl, sortOrder, durationSeconds } = req.body;
     if (isNaN(lessonId)) {
       res.status(400).json({ error: 'Invalid lesson ID' });
       return;
@@ -177,6 +184,11 @@ export async function updateLesson(req: AuthRequest, res: Response): Promise<voi
       videoUrl,
       slidesUrl,
       sortOrder,
+      // Forward the key only when the client actually sent it. The service
+      // distinguishes "not supplied" (leave the stored value alone) from
+      // "explicitly null" (clear it) via `'durationSeconds' in data`, so
+      // always passing the key would wipe the duration on unrelated edits.
+      ...(durationSeconds === undefined ? {} : { durationSeconds }),
     });
     if (!updated) {
       res.status(404).json({ error: 'Lesson not found' });

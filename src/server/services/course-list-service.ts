@@ -53,6 +53,7 @@ export async function listCourses(limit: number, offset: number) {
       sortOrder: number;
       videoUrl: string | null;
       slidesUrl: string | null;
+      durationSeconds: number | null;
     }[]
   >();
   const quizByCourse = new Map<number, { id: number; courseId: number; title: string }>();
@@ -66,6 +67,9 @@ export async function listCourses(limit: number, offset: number) {
         sortOrder: schema.lessons.sortOrder,
         videoUrl: schema.lessons.videoUrl,
         slidesUrl: schema.lessons.slidesUrl,
+        // Without this the learner dashboard's course cards can never show a
+        // real duration and fall back to the fixed per-lesson estimate.
+        durationSeconds: schema.lessons.durationSeconds,
       })
       .from(schema.lessons)
       .where(inArray(schema.lessons.courseId, courseIds))
