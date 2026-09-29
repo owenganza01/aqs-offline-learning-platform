@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { PublicCourse } from '../types.js';
 import { apiFetch } from '../lib/api.js';
+import { CourseDescription } from './shared/CourseDescription.js';
 import {
   BookOpen,
   LogIn,
@@ -22,6 +23,8 @@ export interface LandingPageProps {
   initialCourses?: PublicCourse[];
   onLogin: () => void;
   authLoading?: boolean;
+  authError?: string | null;
+  onClearAuthError?: () => void;
   onRegister: (e: FormEvent) => void;
   regName: string;
   setRegName: (val: string) => void;
@@ -312,6 +315,13 @@ interface CourseDiscoveryProps {
 }
 
 function CourseDiscovery({ courses, coursesLoading, coursesError, onRetry }: CourseDiscoveryProps) {
+  // Which catalogue card currently has its description expanded (DEF-001).
+  // One at a time, matching the learner dashboard.
+  const [expandedCourseId, setExpandedCourseId] = useState<number | null>(null);
+  const toggleDescription = useCallback((courseId: number) => {
+    setExpandedCourseId((current) => (current === courseId ? null : courseId));
+  }, []);
+
   return (
     <section id="courses" className="bg-paper-2 border-b border-rule py-16 sm:py-20">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
@@ -378,8 +388,8 @@ function CourseDiscovery({ courses, coursesLoading, coursesError, onRetry }: Cou
             </div>
             <h3 className="font-display text-lg font-bold text-ink">No published courses available yet</h3>
             <p className="mt-2 text-ink-2 text-xs leading-relaxed">
-              New analytics and quantitative curriculum is currently being prepared by AQS instructors. Sign up with
-              your cohort code to get notified upon release.
+              New analytics and quantitative curriculum is currently being prepared by AQS instructors. Create a learner
+              account to be able to join courses as they are released.
             </p>
           </div>
         )}
@@ -411,9 +421,15 @@ function CourseDiscovery({ courses, coursesLoading, coursesError, onRetry }: Cou
                       <h3 className="font-display text-lg font-bold text-ink group-hover:text-ochre transition-colors line-clamp-2">
                         {course.title}
                       </h3>
-                      <p className="mt-2 text-xs text-ink-2 leading-relaxed line-clamp-3">
-                        {course.description || 'Comprehensive curriculum with video lessons and interactive exercises.'}
-                      </p>
+                      <CourseDescription
+                        courseId={course.id}
+                        description={
+                          course.description || 'Comprehensive curriculum with video lessons and interactive exercises.'
+                        }
+                        expanded={expandedCourseId === course.id}
+                        onToggle={toggleDescription}
+                        className="mt-2"
+                      />
                     </div>
                   </div>
 
@@ -515,10 +531,11 @@ function RoleSelect({ onNav }: RoleSelectProps) {
 interface LoginViewProps {
   onLogin: () => void;
   authLoading?: boolean;
+  authError?: string | null;
   onSwitchToSignup: () => void;
 }
 
-function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
+function LoginView({ onLogin, authLoading, authError, onSwitchToSignup }: LoginViewProps) {
   return (
     <div className="min-h-[60vh] flex items-center justify-center bg-paper px-4 py-16">
       <div className="max-w-md w-full text-center bg-paper-2 border border-rule p-8 rounded-3xl shadow-lg relative overflow-hidden">
@@ -534,6 +551,15 @@ function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
         </p>
 
         <div className="mt-8 space-y-4">
+          {authError && (
+            <div
+              className="bg-error-bg border border-error/20 rounded-xl p-4 text-sm font-semibold text-error text-left"
+              role="alert"
+            >
+              {authError}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={onLogin}
@@ -561,7 +587,7 @@ function LoginView({ onLogin, authLoading, onSwitchToSignup }: LoginViewProps) {
               onClick={onSwitchToSignup}
               className="text-ochre font-bold hover:underline cursor-pointer focus:outline-none"
             >
-              Join with Class Code
+              Create a learner account
             </button>
           </div>
         </div>
@@ -743,8 +769,8 @@ function InstructorOnboarding({ onLogin, onBack }: InstructorOnboardingProps) {
             <ul className="list-disc list-inside space-y-1 text-ink-3">
               <li>Course Factory & rich Markdown/video syllabus publishing</li>
               <li>Interactive quiz authoring & scoring rules</li>
-              <li>Cohort management with auto-generated class invite codes</li>
-              <li>Cohort gradebooks & real-time offline-sync analytics</li>
+              <li>Course enrollment, messaging & learner progress tracking</li>
+              <li>Real-time offline-sync analytics for enrolled learners</li>
             </ul>
           </div>
         </div>
@@ -752,7 +778,10 @@ function InstructorOnboarding({ onLogin, onBack }: InstructorOnboardingProps) {
         <div className="mt-8 space-y-3">
           <button
             type="button"
-            onClick={onLogin}
+            onClick={() => {
+              sessionStorage.setItem('aqs_auth_intent', 'instructor');
+              onLogin();
+            }}
             style={{ minHeight: '48px' }}
             className="w-full bg-navy hover:bg-navy-2 text-white font-bold text-sm px-6 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-navy"
           >
@@ -801,6 +830,8 @@ export function LandingPage({
   initialCourses,
   onLogin,
   authLoading = false,
+  authError,
+  onClearAuthError,
   onRegister,
   regName,
   setRegName,
@@ -939,8 +970,10 @@ export function LandingPage({
           <LoginView
             onLogin={onLogin}
             authLoading={authLoading}
+            authError={authError}
             onSwitchToSignup={() => {
               if (onClearRegForm) onClearRegForm();
+              if (onClearAuthError) onClearAuthError();
               setView('signup-role');
             }}
           />

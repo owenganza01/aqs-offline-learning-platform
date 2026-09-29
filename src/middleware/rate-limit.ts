@@ -9,7 +9,7 @@ interface RateLimitEntry {
 }
 
 // Abstract store interface — implement RedisStore for multi-instance deployment
-interface RateLimitStore {
+export interface RateLimitStore {
   increment(key: string, windowMs: number): Promise<{ count: number; ttl: number }>;
 }
 

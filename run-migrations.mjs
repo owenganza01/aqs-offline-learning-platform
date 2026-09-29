@@ -1,5 +1,5 @@
 // run-migrations.mjs
-// Directly applies hand-written SQL migrations (0016–0021) that are not in
+// Directly applies hand-written SQL migrations (0016–0029) that are not in
 // the drizzle-kit journal. Run once with: node run-migrations.mjs
 import pg from 'pg';
 import { readFileSync } from 'fs';
@@ -26,6 +26,14 @@ const migrations = [
   'drizzle/0020_add_certificate_tables.sql',
   'drizzle/0021_fix_certificate_uniqueness.sql',
   'drizzle/0022_add_certificate_template.sql',
+  'drizzle/0023_wipe_user_and_preserve_authored_content.sql',
+  'drizzle/0024_add_instructor_onboarding.sql',
+  'drizzle/0025_instructor_closure.sql',
+  'drizzle/0026_messaging.sql',
+  'drizzle/0027_update_wipe_user_comments.sql',
+  'drizzle/0028_add_sync_idempotency.sql',
+  'drizzle/0029_message_attachments.sql',
+  'drizzle/0030_add_lesson_duration.sql',
 ];
 
 async function run() {

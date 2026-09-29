@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Course, Lesson } from '../../types.js';
 import { apiFetch } from '../../lib/api.js';
 import { toYouTubeEmbed } from '../../lib/utils.js';
-import { RefreshCw, Download, Upload } from 'lucide-react';
+import { RefreshCw, Upload, Plus, Trash2, FileText, ExternalLink } from 'lucide-react';
 
 interface LessonManagerProps {
   token: string | null;
@@ -30,6 +30,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
     videoUrl: string;
     slidesUrl: string;
     sortOrder: number;
+    durationSeconds: number | null;
   }>(() =>
     activeLesson
       ? {
@@ -38,6 +39,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           videoUrl: activeLesson.videoUrl || '',
           slidesUrl: activeLesson.slidesUrl || '',
           sortOrder: activeLesson.sortOrder,
+          durationSeconds: activeLesson.durationSeconds ?? null,
         }
       : {
           title: '',
@@ -45,8 +47,55 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           videoUrl: '',
           slidesUrl: '',
           sortOrder: selectedCourse.lessons?.length || 0,
+          durationSeconds: null,
         },
   );
+
+  const [slideList, setSlideList] = useState<string[]>(() => {
+    const raw = activeLesson?.slidesUrl || '';
+    const parts = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return parts.length > 0 ? parts : [''];
+  });
+
+  const updateSlideList = (newList: string[]) => {
+    setSlideList(newList);
+    const serialized = newList
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(', ');
+    setLessonForm((l) => ({ ...l, slidesUrl: serialized }));
+  };
+
+  const handleSlideItemChange = (index: number, val: string) => {
+    if (val.includes(',') || val.includes('\n')) {
+      const parts = val
+        .split(/[,\n]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (parts.length > 1) {
+        const updated = [...slideList];
+        updated.splice(index, 1, ...parts);
+        updateSlideList(updated);
+        return;
+      }
+    }
+    const updated = [...slideList];
+    updated[index] = val;
+    updateSlideList(updated);
+  };
+
+  const handleAddSlideLink = () => {
+    updateSlideList([...slideList, '']);
+  };
+
+  const handleRemoveSlideItem = (index: number) => {
+    const updated = slideList.filter((_, i) => i !== index);
+    updateSlideList(updated.length > 0 ? updated : ['']);
+  };
+
   const [uploadingSlides, setUploadingSlides] = useState<boolean>(false);
   const [uploadingVideo, setUploadingVideo] = useState<boolean>(false);
 
@@ -72,6 +121,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
       videoUrl: toYouTubeEmbed(lessonForm.videoUrl),
       slidesUrl: lessonForm.slidesUrl || null,
       sortOrder: lessonForm.sortOrder,
+      durationSeconds: lessonForm.durationSeconds,
     };
 
     try {
@@ -80,33 +130,41 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
         : `/api/admin/courses/${selectedCourse.id}/lessons`;
       const method = editingLessonId ? 'PUT' : 'POST';
 
-      const { ok } = await apiFetch(url, {
+      const { ok, data } = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (ok) {
-        await loadCourseFullDetails(selectedCourse.id);
-        onRefreshCourses();
-        onClose?.();
+      if (!ok) {
+        const details = Array.isArray(data?.details)
+          ? data.details.map((d: { path: string; message: string }) => `${d.path}: ${d.message}`).join('; ')
+          : '';
+        throw new Error(details || data?.error || 'Unable to save the lesson. Please try again.');
       }
-    } catch (err) {
+
+      await loadCourseFullDetails(selectedCourse.id);
+      onRefreshCourses();
+      onClose?.();
+    } catch (err: any) {
       console.error('Failed to save lesson:', err);
+      alert(`Failed to save lesson: ${err.message || 'Please try again.'}`);
     }
   };
 
   const handleUploadSlides = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setUploadingSlides(true);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
       formData.append('lessonId', String(editingLessonId || 0));
 
-      const { ok, data } = await apiFetch('/api/admin/documents/upload', {
+      const { ok, data } = await apiFetch('/api/admin/documents/upload-batch', {
         method: 'POST',
         body: formData,
       });
@@ -115,9 +173,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
         throw new Error(data?.error || 'Upload failed');
       }
 
-      setLessonForm((l) => ({ ...l, slidesUrl: `doc:${data.id}` }));
+      if (data?.documents && data.documents.length > 0) {
+        const newRefs = data.documents.map((d: { id: string }) => `doc:${d.id}`);
+        const existing = slideList.filter((s) => s.trim().length > 0);
+        updateSlideList([...existing, ...newRefs]);
+      }
     } catch (err: any) {
-      console.error('Failed to upload slide document:', err);
+      console.error('Failed to upload slide document(s):', err);
       alert(`Failed to upload: ${err.message || 'Please try again.'}`);
     } finally {
       setUploadingSlides(false);
@@ -129,6 +191,22 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
   const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Extract duration before uploading so we can persist it with the lesson.
+    const duration = await new Promise<number | null>((resolve) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration) : null);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      video.src = url;
+    });
 
     setUploadingVideo(true);
     try {
@@ -145,7 +223,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
         throw new Error(data?.error || 'Upload failed');
       }
 
-      setLessonForm((l) => ({ ...l, videoUrl: `doc:${data.id}` }));
+      setLessonForm((l) => ({ ...l, videoUrl: `doc:${data.id}`, durationSeconds: duration }));
     } catch (err: any) {
       console.error('Failed to upload video:', err);
       alert(`Failed to upload: ${err.message || 'Please try again.'}`);
@@ -267,46 +345,102 @@ export const LessonManager: React.FC<LessonManagerProps> = ({
           </div>
         </div>
         <div>
-          <label
-            htmlFor="lesson-slides-url"
-            className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 mb-1.5 font-mono"
-          >
-            PowerPoint / Slides Link or Upload Document (Optional):
-          </label>
-          <div className="flex flex-col md:flex-row gap-2">
-            <input
-              id="lesson-slides-url"
-              type="text"
-              value={lessonForm.slidesUrl}
-              onChange={(e) => setLessonForm((l) => ({ ...l, slidesUrl: e.target.value }))}
-              placeholder="e.g. Google Slides link, OneDrive PowerPoint embed URL, PDF link"
-              className="flex-grow p-2.5 border-[1.5px] border-stroke rounded-[7px] text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
-            />
-            <div className="relative shrink-0">
-              <input
-                type="file"
-                id="slides-file-upload"
-                onChange={handleUploadSlides}
-                accept=".pdf,.ppt,.pptx,.key,.odp"
-                className="hidden"
-                disabled={uploadingSlides}
-              />
-              <label
-                htmlFor="slides-file-upload"
-                className={`h-10 px-4 border-[1.5px] border-stroke bg-white hover:bg-canvas rounded-lg text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 select-none ${uploadingSlides ? 'opacity-50 pointer-events-none' : ''}`}
+          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+            <label className="block text-[11px] font-bold uppercase tracking-[0.05em] text-text-3 font-mono">
+              PowerPoint / Slides Links & Documents (Optional):
+            </label>
+            <span className="text-[11px] text-text-3 font-medium">
+              Add multiple Google Slides links or upload PDFs/PPTs
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {slideList.map((item, idx) => {
+              const isDoc = item.startsWith('doc:');
+              return (
+                <div key={idx} className="flex items-center gap-2">
+                  {isDoc ? (
+                    <div className="flex-1 min-w-0 flex items-center justify-between px-3 py-2 bg-paper-2 border border-stroke rounded-[7px] text-xs">
+                      <div className="flex items-center gap-2 text-text font-mono truncate mr-2">
+                        <FileText className="w-4 h-4 text-steel shrink-0" />
+                        <span className="truncate font-semibold text-text">Uploaded File: {item}</span>
+                      </div>
+                      <span className="text-[10px] bg-steel/10 text-steel font-bold px-2 py-0.5 rounded-full shrink-0">
+                        Document
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="relative flex-1 min-w-0">
+                      <input
+                        type="url"
+                        value={item}
+                        onChange={(e) => handleSlideItemChange(idx, e.target.value)}
+                        placeholder={`Slide Link #${idx + 1} (e.g. Google Slides link, OneDrive embed, or PDF URL)`}
+                        className="w-full p-2.5 pr-8 border-[1.5px] border-stroke rounded-[7px] text-sm text-text bg-white outline-none focus:ring-2 focus:ring-steel/10 focus:border-steel transition-all font-medium"
+                      />
+                      {item && (
+                        <a
+                          href={item}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open link in new tab"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-3 hover:text-steel transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSlideItem(idx)}
+                    title="Remove this slide link/document"
+                    className="h-10 w-10 shrink-0 border border-stroke hover:border-error hover:bg-error-bg text-text-3 hover:text-error rounded-[7px] flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleAddSlideLink}
+                className="h-9 px-3 border border-stroke hover:border-steel/50 bg-white hover:bg-canvas rounded-lg text-xs font-semibold flex items-center gap-1.5 text-text transition-all active:scale-95 cursor-pointer"
               >
-                {uploadingSlides ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-text-3" />
-                    <span>Uploading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4 text-text-3 rotate-180" />
-                    <span>Upload PPT/PDF</span>
-                  </>
-                )}
-              </label>
+                <Plus className="w-3.5 h-3.5 text-steel" />
+                <span>+ Add another slide link</span>
+              </button>
+
+              <div className="relative">
+                <input
+                  type="file"
+                  id="slides-file-upload"
+                  onChange={handleUploadSlides}
+                  accept=".pdf,.ppt,.pptx,.key,.odp"
+                  multiple
+                  className="hidden"
+                  disabled={uploadingSlides}
+                />
+                <label
+                  htmlFor="slides-file-upload"
+                  className={`h-9 px-3 border border-stroke bg-white hover:bg-canvas rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 select-none text-text ${uploadingSlides ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  {uploadingSlides ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-text-3" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 text-text-3" />
+                      <span>Upload Document(s)</span>
+                    </>
+                  )}
+                </label>
+              </div>
             </div>
           </div>
         </div>

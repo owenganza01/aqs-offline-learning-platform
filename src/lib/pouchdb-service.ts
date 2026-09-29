@@ -19,6 +19,7 @@ interface ProgressState {
 interface SyncQueueState {
   lessonCompletions: { lessonId: number; completedAt: string }[];
   quizSubmissions: { quizId: number; answers: number[]; attemptedAt: string }[];
+  enrollments: { courseId: number; enrolledAt: string }[];
 }
 
 export class PouchDBService {
@@ -162,7 +163,11 @@ export class PouchDBService {
   /**
    * Fetches the local sync queue.
    */
-  static async getSyncQueue(): Promise<{ lessonCompletions: any[]; quizSubmissions: any[] }> {
+  static async getSyncQueue(): Promise<{
+    lessonCompletions: any[];
+    quizSubmissions: any[];
+    enrollments: { courseId: number; enrolledAt: string }[];
+  }> {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SYNC_QUEUE);
       if (data) {
@@ -170,6 +175,7 @@ export class PouchDBService {
         return {
           lessonCompletions: state.lessonCompletions || [],
           quizSubmissions: state.quizSubmissions || [],
+          enrollments: state.enrollments || [],
         };
       }
     } catch (e) {
@@ -178,7 +184,7 @@ export class PouchDBService {
         e,
       );
     }
-    return { lessonCompletions: [], quizSubmissions: [] };
+    return { lessonCompletions: [], quizSubmissions: [], enrollments: [] };
   }
 
   /**
@@ -189,9 +195,42 @@ export class PouchDBService {
     const queue: SyncQueueState = {
       lessonCompletions: [],
       quizSubmissions: [],
+      enrollments: [],
     };
     localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
     console.log('Local sync queue cleared.');
+  }
+
+  /**
+   * Removes a single completed lesson from the offline sync queue after the
+   * server has confirmed it (the optimistic direct POST path). Local progress
+   * is kept; only the pending write is dropped to avoid redundant re-sync.
+   */
+  static async removeLessonFromQueue(lessonId: number): Promise<void> {
+    const queue = await this.getSyncQueue();
+    const completions = (queue.lessonCompletions || []).filter((c: any) => c.lessonId !== lessonId);
+    if (completions.length === queue.lessonCompletions.length) return;
+    const updatedQueue: SyncQueueState = {
+      lessonCompletions: completions,
+      quizSubmissions: queue.quizSubmissions || [],
+      enrollments: queue.enrollments || [],
+    };
+    localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(updatedQueue));
+  }
+
+  /**
+   * Removes a single queued enrollment after the server has confirmed it.
+   */
+  static async removeEnrollmentFromQueue(courseId: number): Promise<void> {
+    const queue = await this.getSyncQueue();
+    const enrollments = (queue.enrollments || []).filter((e) => e.courseId !== courseId);
+    if (enrollments.length === (queue.enrollments || []).length) return;
+    const updatedQueue: SyncQueueState = {
+      lessonCompletions: queue.lessonCompletions || [],
+      quizSubmissions: queue.quizSubmissions || [],
+      enrollments,
+    };
+    localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(updatedQueue));
   }
 
   /**
@@ -208,7 +247,9 @@ export class PouchDBService {
   }
 
   /**
-   * Enrolls in a course. Errors propagate to avoid silent data loss.
+   * Enrolls in a course and queues the enrollment so it is eventually synced
+   * to the server even when the enrollment happens offline.
+   * Errors propagate to avoid silent data loss.
    */
   static async enrollInCourse(courseId: number): Promise<void> {
     const enrolled = await this.getEnrolledCourseIds();
@@ -216,6 +257,90 @@ export class PouchDBService {
       enrolled.push(courseId);
       localStorage.setItem(STORAGE_KEYS.ENROLLED_COURSES, JSON.stringify(enrolled));
     }
+
+    const queue = await this.getSyncQueue();
+    const enrollments = queue.enrollments || [];
+    if (!enrollments.some((e) => e.courseId === courseId)) {
+      enrollments.push({ courseId, enrolledAt: new Date().toISOString() });
+      const updatedQueue: SyncQueueState = {
+        lessonCompletions: queue.lessonCompletions || [],
+        quizSubmissions: queue.quizSubmissions || [],
+        enrollments,
+      };
+      localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(updatedQueue));
+      console.log(`Queued enrollment for course ${courseId}.`);
+    }
+  }
+
+  /**
+   * Removes a course and all of its locally tracked progress (DEF-007).
+   *
+   * This is a hard reset, not just an unenrolment, and clearing the sync queue
+   * is a correctness requirement rather than housekeeping:
+   * `processLessonCompletions` and `reconcileCourseCompletions` on the server do
+   * not check enrollment, so a queued completion left behind would be replayed
+   * on the next /api/sync and silently re-create the rows the server-side
+   * unenroll just deleted (and potentially re-issue a certificate).
+   *
+   * `aqs_local_progress` is a single flat record rather than being keyed by
+   * course, so the course's lesson and quiz ids are resolved from the cached
+   * course before filtering. The cached course itself is left in place — it is
+   * catalogue content and the Explore grid still needs it.
+   *
+   * Not queued: leaving a course is destructive and must not be deferred to a
+   * later sync, so the caller has to be online.
+   */
+  static async purgeCourseProgress(courseId: number): Promise<void> {
+    const course = await this.getCachedCourseById(courseId);
+    const lessonIds = new Set((course?.lessons || []).map((l) => l.id));
+    const quizIds = new Set(course?.quiz?.id != null ? [course.quiz.id] : []);
+
+    // 1. Drop the enrollment so the course leaves "My courses".
+    const enrolled = await this.getEnrolledCourseIds();
+    const remainingEnrolled = enrolled.filter((id) => id !== courseId);
+    if (remainingEnrolled.length !== enrolled.length) {
+      localStorage.setItem(STORAGE_KEYS.ENROLLED_COURSES, JSON.stringify(remainingEnrolled));
+    }
+
+    // 2. Strip this course's rows out of the flat progress record.
+    const progress = await this.getUserProgress();
+    const remainingLessons = progress.completedLessonIds.filter((id) => !lessonIds.has(id));
+    const remainingAttempts = progress.quizAttempts.filter(
+      (a: { quizId?: number | null }) => !quizIds.has(a?.quizId as number),
+    );
+    if (
+      remainingLessons.length !== progress.completedLessonIds.length ||
+      remainingAttempts.length !== progress.quizAttempts.length
+    ) {
+      await this.saveUserProgress(remainingLessons, remainingAttempts);
+    }
+
+    // 3. Drop queued writes so they cannot be replayed after the server purge.
+    const queue = await this.getSyncQueue();
+    const remainingCompletions = (queue.lessonCompletions || []).filter(
+      (c: { lessonId?: number }) => !lessonIds.has(c?.lessonId as number),
+    );
+    const remainingSubmissions = (queue.quizSubmissions || []).filter(
+      (s: { quizId?: number }) => !quizIds.has(s?.quizId as number),
+    );
+    const remainingQueuedEnrollments = (queue.enrollments || []).filter(
+      (e: { courseId?: number | string }) => e?.courseId !== courseId,
+    );
+
+    if (
+      remainingCompletions.length !== (queue.lessonCompletions || []).length ||
+      remainingSubmissions.length !== (queue.quizSubmissions || []).length ||
+      remainingQueuedEnrollments.length !== (queue.enrollments || []).length
+    ) {
+      const updatedQueue: SyncQueueState = {
+        lessonCompletions: remainingCompletions,
+        quizSubmissions: remainingSubmissions,
+        enrollments: remainingQueuedEnrollments,
+      };
+      localStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(updatedQueue));
+    }
+
+    console.log(`Purged local progress for course ${courseId}.`);
   }
 }
 

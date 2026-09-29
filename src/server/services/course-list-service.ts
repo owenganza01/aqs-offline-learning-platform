@@ -1,6 +1,14 @@
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, sql, inArray } from 'drizzle-orm';
+import { effectiveClosureStatus, closureDeadline } from './closure-service.js';
+
+// sort_order is NOT unique and every lesson defaults to 0, so several lessons of
+// the same course routinely share a value. Ordering by sort_order alone leaves
+// Postgres free to return tied rows in any order, which made an instructor's
+// saved curriculum sequence shuffle between refreshes (DEF-010). The id
+// tiebreak makes the sequence stable and deterministic.
+const LESSON_ORDER_BY = [asc(schema.lessons.sortOrder), asc(schema.lessons.id)];
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -21,6 +29,21 @@ export async function listCourses(limit: number, offset: number) {
   const allCourses = await db.select().from(schema.courses).limit(limit).offset(offset);
   const courseIds = allCourses.map((c) => c.id);
 
+  const creatorIds = Array.from(new Set(allCourses.map((c) => c.createdBy).filter((id): id is number => id !== null)));
+  const creators =
+    creatorIds.length > 0 ? await db.select().from(schema.users).where(inArray(schema.users.id, creatorIds)) : [];
+  const creatorById = new Map(creators.map((u) => [u.id, u]));
+  const enrichCourse = (course: (typeof allCourses)[number]) => {
+    const creator = course.createdBy !== null ? creatorById.get(course.createdBy) : undefined;
+    return {
+      ...course,
+      instructorClosureStatus: creator ? effectiveClosureStatus(creator) : null,
+      instructorClosureDeadline:
+        creator && creator.closureStatus === 'pending' ? (closureDeadline(creator)?.toISOString() ?? null) : null,
+    };
+  };
+  const enrichedCourses = allCourses.map(enrichCourse);
+
   const lessonsByCourse = new Map<
     number,
     {
@@ -30,6 +53,7 @@ export async function listCourses(limit: number, offset: number) {
       sortOrder: number;
       videoUrl: string | null;
       slidesUrl: string | null;
+      durationSeconds: number | null;
     }[]
   >();
   const quizByCourse = new Map<number, { id: number; courseId: number; title: string }>();
@@ -43,10 +67,13 @@ export async function listCourses(limit: number, offset: number) {
         sortOrder: schema.lessons.sortOrder,
         videoUrl: schema.lessons.videoUrl,
         slidesUrl: schema.lessons.slidesUrl,
+        // Without this the learner dashboard's course cards can never show a
+        // real duration and fall back to the fixed per-lesson estimate.
+        durationSeconds: schema.lessons.durationSeconds,
       })
       .from(schema.lessons)
       .where(inArray(schema.lessons.courseId, courseIds))
-      .orderBy(schema.lessons.sortOrder);
+      .orderBy(...LESSON_ORDER_BY);
 
     for (const lesson of allLessons) {
       if (!lessonsByCourse.has(lesson.courseId)) {
@@ -68,7 +95,7 @@ export async function listCourses(limit: number, offset: number) {
     }
   }
 
-  const coursesWithDetails = allCourses.map((course) => ({
+  const coursesWithDetails = enrichedCourses.map((course) => ({
     ...course,
     lessons: lessonsByCourse.get(course.id) || [],
     quiz: quizByCourse.get(course.id) || null,
@@ -83,11 +110,23 @@ export async function getCourseDetail(courseId: number, userId: number) {
 
   const course = courseRows[0];
 
+  const creator =
+    course.createdBy !== null
+      ? (await db.select().from(schema.users).where(eq(schema.users.id, course.createdBy)))[0]
+      : undefined;
+
+  const courseWithClosure = {
+    ...course,
+    instructorClosureStatus: creator ? effectiveClosureStatus(creator) : null,
+    instructorClosureDeadline:
+      creator && creator.closureStatus === 'pending' ? (closureDeadline(creator)?.toISOString() ?? null) : null,
+  };
+
   const courseLessons = await db
     .select()
     .from(schema.lessons)
     .where(eq(schema.lessons.courseId, courseId))
-    .orderBy(schema.lessons.sortOrder);
+    .orderBy(...LESSON_ORDER_BY);
 
   const courseQuizzes = await db.select().from(schema.quizzes).where(eq(schema.quizzes.courseId, courseId));
   let quiz: any = null;
@@ -122,7 +161,13 @@ export async function getCourseDetail(courseId: number, userId: number) {
         .orderBy(desc(schema.quizAttempts.attemptedAt))
     : [];
 
-  return { course, lessons: courseLessons, quiz, completedLessonIds: completionsIds, quizAttempts: quizAttemptsList };
+  return {
+    course: courseWithClosure,
+    lessons: courseLessons,
+    quiz,
+    completedLessonIds: completionsIds,
+    quizAttempts: quizAttemptsList,
+  };
 }
 
 export async function listPublicCourses() {

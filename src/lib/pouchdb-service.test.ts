@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { migrateStore, getDocMimeType, resetForTesting } from './pouchdb-service.js';
+import { migrateStore, getDocMimeType, resetForTesting, PouchDBService } from './pouchdb-service.js';
 import { openDB } from 'idb';
 
 // ─── Minimal localStorage polyfill for vitest node environment ───────
@@ -235,7 +235,7 @@ describe('getDocMimeType', () => {
       json: () => Promise.resolve({ mimeType: 'video/webm' }),
     } as Response);
     const origFetch = globalThis.fetch;
-    globalThis.fetch = fetchFn as any;
+    globalThis.fetch = fetchFn as unknown as typeof globalThis.fetch;
 
     const result = await getDocMimeType('webm123', 'some-token');
 
@@ -249,5 +249,106 @@ describe('getDocMimeType', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
 
     globalThis.fetch = origFetch;
+  });
+});
+
+// ─── purgeCourseProgress (DEF-007) ──────────────────────────────────
+//
+// Leaving a course is a full reset. The subtle failure this guards is the sync
+// queue: the server's processLessonCompletions/reconcileCourseCompletions paths
+// do not check enrollment, so a queued completion surviving the purge would be
+// replayed on the next /api/sync and silently resurrect the progress (and
+// potentially re-issue a certificate) that the server-side purge just deleted.
+describe('purgeCourseProgress', () => {
+  const COURSE_A_LESSONS = [
+    { id: 11, courseId: 1, title: 'A1', sortOrder: 0 },
+    { id: 12, courseId: 1, title: 'A2', sortOrder: 1 },
+  ];
+  const COURSE_B_LESSONS = [{ id: 21, courseId: 2, title: 'B1', sortOrder: 0 }];
+
+  const seed = () => {
+    _lsStore.set(
+      LS_KEYS.COURSES,
+      JSON.stringify([
+        { id: 1, title: 'Course A', description: 'a', thumbnail: 'teal', lessons: COURSE_A_LESSONS, quiz: { id: 101 } },
+        { id: 2, title: 'Course B', description: 'b', thumbnail: 'teal', lessons: COURSE_B_LESSONS, quiz: { id: 202 } },
+      ]),
+    );
+    _lsStore.set(
+      LS_KEYS.PROGRESS,
+      JSON.stringify({
+        completedLessonIds: [11, 12, 21],
+        quizAttempts: [
+          { quizId: 101, score: 90, passed: true },
+          { quizId: 202, score: 75, passed: true },
+        ],
+      }),
+    );
+    _lsStore.set(
+      LS_KEYS.SYNC_QUEUE,
+      JSON.stringify({
+        lessonCompletions: [
+          { lessonId: 11, completedAt: '2026-01-02' },
+          { lessonId: 21, completedAt: '2026-01-03' },
+        ],
+        quizSubmissions: [
+          { quizId: 101, answers: [0], attemptedAt: '2026-01-02' },
+          { quizId: 202, answers: [1], attemptedAt: '2026-01-03' },
+        ],
+        enrollments: [
+          { courseId: 1, enrolledAt: '2026-01-01' },
+          { courseId: 2, enrolledAt: '2026-01-01' },
+        ],
+      }),
+    );
+    _lsStore.set(LS_KEYS.ENROLLED_COURSES, JSON.stringify([1, 2]));
+  };
+
+  beforeEach(() => {
+    _lsStore.clear();
+    seed();
+  });
+
+  it('removes the course from the enrolled ids but leaves other enrollments', async () => {
+    await PouchDBService.purgeCourseProgress(1);
+    expect(await PouchDBService.getEnrolledCourseIds()).toEqual([2]);
+  });
+
+  it('strips only this course’s rows from the flat progress record', async () => {
+    await PouchDBService.purgeCourseProgress(1);
+    const progress = await PouchDBService.getUserProgress();
+    expect(progress.completedLessonIds).toEqual([21]);
+    expect(progress.quizAttempts.map((a) => a.quizId)).toEqual([202]);
+  });
+
+  it('clears queued writes for the course so sync cannot replay them', async () => {
+    await PouchDBService.purgeCourseProgress(1);
+    const queue = await PouchDBService.getSyncQueue();
+    expect(queue.lessonCompletions.map((c) => c.lessonId)).toEqual([21]);
+    expect(queue.quizSubmissions.map((s) => s.quizId)).toEqual([202]);
+    expect(queue.enrollments.map((e) => e.courseId)).toEqual([2]);
+  });
+
+  it('keeps the cached course so the Explore grid still lists it', async () => {
+    await PouchDBService.purgeCourseProgress(1);
+    const cached = await PouchDBService.getCachedCourseById(1);
+    expect(cached).not.toBeNull();
+    expect(cached?.title).toBe('Course A');
+  });
+
+  it('purging twice is safe and does not touch the other course', async () => {
+    await PouchDBService.purgeCourseProgress(1);
+    await PouchDBService.purgeCourseProgress(1);
+    const progress = await PouchDBService.getUserProgress();
+    expect(progress.completedLessonIds).toEqual([21]);
+    expect(progress.quizAttempts).toHaveLength(1);
+  });
+
+  it('drops a queued enrollment for the course being left', async () => {
+    // A pending offline enrollment must not survive an un-enrolment of the
+    // same course, or the next sync would re-create the enrollment.
+    await PouchDBService.purgeCourseProgress(1);
+    const queue = await PouchDBService.getSyncQueue();
+    expect(queue.enrollments.some((e) => e.courseId === 1)).toBe(false);
   });
 });

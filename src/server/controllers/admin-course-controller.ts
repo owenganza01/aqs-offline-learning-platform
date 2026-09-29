@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.js';
 import * as courseAdminService from '../services/course-admin-service.js';
 import * as lessonAdminService from '../services/lesson-admin-service.js';
+import { transferCourseOwnership, setCourseArchived, ClosureError } from '../services/closure-service.js';
 
 export async function createCourse(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -10,7 +11,13 @@ export async function createCourse(req: AuthRequest, res: Response): Promise<voi
       res.status(400).json({ error: 'Title and description are required.' });
       return;
     }
-    const course = await courseAdminService.createCourse(title, description, thumbnail, req.dbUser!.id);
+    const course = await courseAdminService.createCourse(
+      title,
+      description,
+      thumbnail,
+      req.dbUser!.id,
+      req.dbUser!.name || req.dbUser!.email,
+    );
     res.status(201).json(course);
   } catch (error: unknown) {
     console.error('CMS Course creation error:', error);
@@ -67,15 +74,87 @@ export async function deleteCourse(req: AuthRequest, res: Response): Promise<voi
   }
 }
 
+export async function transferCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const courseId = parseInt(req.params.courseId);
+    const { targetUserId } = req.body;
+    if (isNaN(courseId) || typeof targetUserId !== 'number') {
+      res.status(400).json({ error: 'Course ID and target user ID are required.' });
+      return;
+    }
+    const course = await transferCourseOwnership(courseId, targetUserId);
+    res.json({ success: true, course });
+  } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Course transfer error:', error);
+    res.status(500).json({ error: 'Failed to transfer course.' });
+  }
+}
+
+export async function archiveCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const courseId = parseInt(req.params.courseId);
+    if (isNaN(courseId)) {
+      res.status(400).json({ error: 'Invalid course ID' });
+      return;
+    }
+    const course = await setCourseArchived(courseId, true);
+    res.json({ success: true, course });
+  } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Course archive error:', error);
+    res.status(500).json({ error: 'Failed to archive course.' });
+  }
+}
+
+export async function restoreCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const courseId = parseInt(req.params.courseId);
+    if (isNaN(courseId)) {
+      res.status(400).json({ error: 'Invalid course ID' });
+      return;
+    }
+    const course = await setCourseArchived(courseId, false);
+    res.json({ success: true, course });
+  } catch (error: unknown) {
+    if (error instanceof ClosureError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error('Course restore error:', error);
+    res.status(500).json({ error: 'Failed to restore course.' });
+  }
+}
+
 export async function createLesson(req: AuthRequest, res: Response): Promise<void> {
   try {
     const courseId = parseInt(req.params.courseId);
-    const { title, content, videoUrl, slidesUrl, sortOrder } = req.body;
+    const { title, content, videoUrl, slidesUrl, sortOrder, durationSeconds } = req.body;
     if (isNaN(courseId) || !title || !content) {
       res.status(400).json({ error: 'Course ID, title and content are required.' });
       return;
     }
-    const lesson = await lessonAdminService.createLesson(courseId, { title, content, videoUrl, slidesUrl, sortOrder });
+    if (req.dbUser!.role !== 'admin') {
+      const course = await courseAdminService.getCourseById(courseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only create lessons in your own courses' });
+        return;
+      }
+    }
+    const lesson = await lessonAdminService.createLesson(courseId, {
+      title,
+      content,
+      videoUrl,
+      slidesUrl,
+      sortOrder,
+      durationSeconds,
+    });
     res.status(201).json(lesson);
   } catch (error: unknown) {
     console.error('CMS Lesson creation error:', error);
@@ -87,7 +166,7 @@ export async function updateLesson(req: AuthRequest, res: Response): Promise<voi
   try {
     const lessonId = parseInt(req.params.id);
     const courseId = parseInt(req.params.courseId);
-    const { title, content, videoUrl, slidesUrl, sortOrder } = req.body;
+    const { title, content, videoUrl, slidesUrl, sortOrder, durationSeconds } = req.body;
     if (isNaN(lessonId)) {
       res.status(400).json({ error: 'Invalid lesson ID' });
       return;
@@ -105,6 +184,11 @@ export async function updateLesson(req: AuthRequest, res: Response): Promise<voi
       videoUrl,
       slidesUrl,
       sortOrder,
+      // Forward the key only when the client actually sent it. The service
+      // distinguishes "not supplied" (leave the stored value alone) from
+      // "explicitly null" (clear it) via `'durationSeconds' in data`, so
+      // always passing the key would wipe the duration on unrelated edits.
+      ...(durationSeconds === undefined ? {} : { durationSeconds }),
     });
     if (!updated) {
       res.status(404).json({ error: 'Lesson not found' });
@@ -124,6 +208,13 @@ export async function reorderLessons(req: AuthRequest, res: Response): Promise<v
     if (isNaN(courseId)) {
       res.status(400).json({ error: 'Invalid course ID' });
       return;
+    }
+    if (req.dbUser!.role !== 'admin') {
+      const course = await courseAdminService.getCourseById(courseId);
+      if (!course || course.createdBy !== req.dbUser!.id) {
+        res.status(403).json({ error: 'Forbidden: You can only reorder lessons in your own courses' });
+        return;
+      }
     }
     const parsedIds = orderedIds.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
     await lessonAdminService.reorderLessons(courseId, parsedIds);

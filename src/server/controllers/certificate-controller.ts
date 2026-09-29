@@ -132,6 +132,7 @@ export async function uploadCertificateTemplate(req: AuthRequest, res: Response)
       req.file.buffer,
       req.file.originalname,
       req.dbUser!.id,
+      req.dbUser!.name || req.dbUser!.email,
     );
 
     res.status(201).json({

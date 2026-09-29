@@ -1,10 +1,30 @@
 import { db } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { scoreQuiz } from '../../lib/scoring.js';
 import { issueCertificate } from './certificate-service.js';
 
 export async function submitQuiz(userId: number, quizId: number, answers: any[]) {
+  const quiz = await db
+    .select({ courseId: schema.quizzes.courseId })
+    .from(schema.quizzes)
+    .where(eq(schema.quizzes.id, quizId))
+    .limit(1);
+  if (quiz.length === 0) {
+    throw Object.assign(new Error('Quiz not found.'), { statusCode: 404 });
+  }
+
+  const enrolled = await db
+    .select({ id: schema.enrollments.id })
+    .from(schema.enrollments)
+    .where(and(eq(schema.enrollments.userId, userId), eq(schema.enrollments.courseId, quiz[0].courseId)))
+    .limit(1);
+  if (enrolled.length === 0) {
+    throw Object.assign(new Error('Forbidden: You must be enrolled in this course to submit the quiz.'), {
+      statusCode: 403,
+    });
+  }
+
   const questionsList = await db
     .select({ correctOptionIndex: schema.questions.correctOptionIndex })
     .from(schema.questions)

@@ -1,9 +1,13 @@
 // src/components/LearnerDashboard.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Course, QuizAttempt, User } from '../types.js';
-import { Search, X, Inbox, Plus, BookOpen, Clock, CheckCircle, ArrowRight, Flame } from 'lucide-react';
+import { Search, X, Inbox, Plus, BookOpen, Clock, CheckCircle, ArrowRight, Flame, Trash2 } from 'lucide-react';
 import { PouchDBService } from '../lib/pouchdb-service.js';
 import { apiFetch } from '../lib/api.js';
+import { useOnlineStatus } from '../hooks/useOnlineStatus.js';
+import { COVER_THUMBNAIL_PREFIX, hasRealThumbnail } from '../lib/course-cover.js';
+import { formatCourseDuration } from '../lib/course-duration.js';
+import { CourseDescription } from './shared/CourseDescription.js';
 
 interface LearnerDashboardProps {
   courses: Course[];
@@ -13,6 +17,11 @@ interface LearnerDashboardProps {
   user: User | null;
   token: string | null;
   onProfileUpdated: () => void;
+  /**
+   * Re-reads progress from the (now purged) local store. Required after leaving
+   * a course because progress props are owned by App, not by this component.
+   */
+  onProgressChanged?: () => void | Promise<void>;
   initialTab?: 'my-courses' | 'browse';
 }
 
@@ -27,9 +36,22 @@ const getCourseInitials = (title: string): string => {
   return (words[0][0] + words[1][0]).toUpperCase();
 };
 
-const hasRealThumbnail = (course: Course): boolean => {
+const hasRealThumbnailFor = (course: Course): boolean => hasRealThumbnail(course.thumbnail);
+
+/**
+ * Resolves a course thumbnail to a URL an <img> can load (DEF-004).
+ *
+ * Stored covers are served by GET /api/courses/:courseId/cover, which requires
+ * auth — and <img src> cannot attach an Authorization header, hence the token
+ * query parameter. data:/http: values are already usable as-is.
+ */
+const coverSrc = (course: Course, token: string | null): string => {
   const t = course.thumbnail;
-  return !!t && (t.startsWith('http') || t.startsWith('data:'));
+  if (!t) return '';
+  if (t.startsWith(COVER_THUMBNAIL_PREFIX)) {
+    return `/api/courses/${course.id}/cover${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  }
+  return t;
 };
 
 const greetingForHour = (): string => {
@@ -46,12 +68,69 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
   onSelectCourse,
   user,
   token,
+  onProgressChanged,
   initialTab,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<number[]>([]);
   const [dayStreak, setDayStreak] = useState(0);
+  // Which card currently has its description expanded (DEF-001). Tracked as a
+  // single id rather than a Set so only one card is ever open at a time.
+  const [expandedCourseId, setExpandedCourseId] = useState<number | null>(null);
+
+  const toggleDescription = useCallback((courseId: number) => {
+    setExpandedCourseId((current) => (current === courseId ? null : courseId));
+  }, []);
+
+  // Leaving a course (DEF-007).
+  const isOnline = useOnlineStatus();
+  const [unenrollTarget, setUnenrollTarget] = useState<{ id: number; title: string } | null>(null);
+  const [unenrolling, setUnenrolling] = useState(false);
+  const [unenrollMsg, setUnenrollMsg] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
+
+  /**
+   * Leaves the course and destroys the learner's progress for it.
+   *
+   * Online-only by design: the operation is a destructive purge that cannot be
+   * rolled back, so it is never queued for later sync the way enrolment and
+   * lesson completions are. The local purge runs only after the server confirms,
+   * which keeps the two stores from diverging on a failed request.
+   */
+  const handleConfirmUnenroll = async () => {
+    if (!unenrollTarget || unenrolling) return;
+
+    if (!isOnline) {
+      setUnenrollMsg({ type: 'error', text: 'You need to be online to leave a course and reset your progress.' });
+      return;
+    }
+    if (!token) return;
+
+    const courseId = unenrollTarget.id;
+    setUnenrolling(true);
+    setUnenrollMsg(null);
+    try {
+      const { ok, data } = await apiFetch<{ error?: string }>(`/api/enrollments/${courseId}`, {
+        method: 'DELETE',
+      });
+
+      if (!ok) {
+        setUnenrollMsg({ type: 'error', text: data?.error || 'Failed to leave the course. Please try again.' });
+        return;
+      }
+
+      await PouchDBService.purgeCourseProgress(courseId);
+      setEnrolledCourseIds(await PouchDBService.getEnrolledCourseIds());
+      setExpandedCourseId((current) => (current === courseId ? null : current));
+      setUnenrollTarget(null);
+      setUnenrollMsg({ type: 'info', text: `You left “${unenrollTarget.title}”. Your progress was reset.` });
+      await onProgressChanged?.();
+    } catch {
+      setUnenrollMsg({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setUnenrolling(false);
+    }
+  };
 
   useEffect(() => {
     const loadEnrolled = async () => {
@@ -105,13 +184,20 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
 
   const handleEnroll = async (courseId: number) => {
     await PouchDBService.enrollInCourse(courseId);
-    // Persist enrollment to server (best-effort — offline will sync later)
+    // Persist enrollment to server (best-effort — offline will sync later via
+    // the pending-enrollment queue flushed on reconnect).
     if (token) {
       apiFetch('/api/enrollments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseId }),
-      }).catch(() => {});
+      })
+        .then(({ ok }) => {
+          if (ok) return PouchDBService.removeEnrollmentFromQueue(courseId);
+        })
+        .catch(() => {
+          // Offline or failed — the queue entry keeps the enrollment pending.
+        });
     }
     const ids = await PouchDBService.getEnrolledCourseIds();
     setEnrolledCourseIds(ids);
@@ -376,6 +462,23 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
 
       {/* === Flat layout: My courses section → Explore section === */}
       <div className="space-y-8">
+        {unenrollMsg && (
+          <div
+            role="status"
+            className={`flex items-start gap-2 px-3.5 py-2.5 rounded-lg border text-[12.5px] font-medium ${
+              unenrollMsg.type === 'error'
+                ? 'bg-error-bg border-error/30 text-error'
+                : 'bg-success/5 border-success/30 text-success'
+            }`}
+          >
+            {unenrollMsg.type === 'error' ? (
+              <X className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            ) : (
+              <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            )}
+            <span>{unenrollMsg.text}</span>
+          </div>
+        )}
         {/* My Courses Section */}
         <section id="my-courses-section">
           <h3 className="text-sm font-bold text-ink uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -406,7 +509,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                 const courseCompletedCount = courseLessons.filter((l) => completedLessonIds.includes(l.id)).length;
                 const progressPct =
                   courseLessons.length > 0 ? Math.round((courseCompletedCount / courseLessons.length) * 100) : 0;
-                const showImg = hasRealThumbnail(course);
+                const showImg = hasRealThumbnailFor(course);
 
                 return (
                   <div
@@ -418,7 +521,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                     <div className="h-20 relative flex items-center justify-center overflow-hidden">
                       {showImg ? (
                         <img
-                          src={course.thumbnail || ''}
+                          src={coverSrc(course, token)}
                           alt={course.title}
                           loading="lazy"
                           referrerPolicy="no-referrer"
@@ -444,12 +547,44 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                       <div className="text-[13px] font-semibold text-ink leading-snug mb-1 line-clamp-2 min-h-[34px]">
                         {course.title}
                       </div>
+                      <CourseDescription
+                        courseId={course.id}
+                        description={course.description}
+                        expanded={expandedCourseId === course.id}
+                        onToggle={toggleDescription}
+                        className="mb-1.5"
+                      />
                       <div className="flex items-center justify-between text-[11px] text-ink-3">
                         <span>
                           {courseCompletedCount} of {courseLessons.length} lessons
                         </span>
                         <span className="font-mono text-ochre font-medium">{progressPct}%</span>
                       </div>
+                      {courseLessons.length > 0 && (
+                        <div className="flex items-center gap-1 text-[10px] text-ink-3 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          <span>{formatCourseDuration(courseLessons)}</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          // The whole card opens the course, so this must not bubble.
+                          e.stopPropagation();
+                          if (!isOnline) {
+                            setUnenrollMsg({
+                              type: 'error',
+                              text: 'You need to be online to leave a course and reset your progress.',
+                            });
+                            return;
+                          }
+                          setUnenrollMsg(null);
+                          setUnenrollTarget({ id: course.id, title: course.title });
+                        }}
+                        className="mt-2 w-full h-7 text-[11px] font-semibold text-ink-3 hover:text-error hover:bg-error-bg rounded-md border border-transparent hover:border-error/20 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Leave course</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -485,11 +620,8 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
               {exploreCourses.map((course) => {
                 const courseLessons = course.lessons || [];
-                const estMinutes = courseLessons.length * 20;
-                const hours = Math.floor(estMinutes / 60);
-                const mins = estMinutes % 60;
-                const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-                const showImg = hasRealThumbnail(course);
+                const durationStr = formatCourseDuration(courseLessons);
+                const showImg = hasRealThumbnailFor(course);
 
                 return (
                   <div
@@ -500,7 +632,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                     <div className="h-20 relative flex items-center justify-center overflow-hidden">
                       {showImg ? (
                         <img
-                          src={course.thumbnail || ''}
+                          src={coverSrc(course, token)}
                           alt={course.title}
                           loading="lazy"
                           referrerPolicy="no-referrer"
@@ -523,6 +655,13 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                       <div className="text-[13px] font-semibold text-ink leading-snug line-clamp-2 min-h-[34px]">
                         {course.title}
                       </div>
+                      <CourseDescription
+                        courseId={course.id}
+                        description={course.description}
+                        expanded={expandedCourseId === course.id}
+                        onToggle={toggleDescription}
+                        className="mt-1 mb-1.5"
+                      />
                       <div className="flex items-center gap-3 text-[11px] text-ink-3 mt-1 mb-3">
                         <span className="flex items-center gap-1">
                           <BookOpen className="w-3 h-3" />
@@ -540,7 +679,7 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
                         className="mt-auto w-full h-9 bg-accent hover:opacity-90 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>+ Choose Course</span>
+                        <span>Choose Course</span>
                       </button>
                     </div>
                   </div>
@@ -549,6 +688,105 @@ export const LearnerDashboard: React.FC<LearnerDashboardProps> = ({
             </div>
           )}
         </section>
+      </div>
+      {unenrollTarget && (
+        <UnenrollDialog
+          courseTitle={unenrollTarget.title}
+          busy={unenrolling}
+          onConfirm={handleConfirmUnenroll}
+          onCancel={() => {
+            if (!unenrolling) {
+              setUnenrollTarget(null);
+              setUnenrollMsg(null);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+interface UnenrollDialogProps {
+  courseTitle: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/**
+ * Confirmation dialog for leaving a course (DEF-007).
+ *
+ * Leaving is a full, irreversible reset, so the copy states exactly what is
+ * destroyed. Focus moves to the panel on open, Escape cancels, and focus is
+ * restored to the trigger on unmount.
+ */
+const UnenrollDialog: React.FC<UnenrollDialogProps> = ({ courseTitle, busy, onConfirm, onCancel }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onCancel, busy]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/45 backdrop-blur-[2px] z-[80] flex items-center justify-center p-4"
+      onClick={busy ? undefined : onCancel}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="unenroll-dialog-title"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-paper border border-rule rounded-xl shadow-2xl w-full max-w-md p-6 outline-none"
+      >
+        <h3 id="unenroll-dialog-title" className="text-base font-bold text-ink mb-2">
+          Leave “{courseTitle}”?
+        </h3>
+        <p className="text-[13px] text-ink-2 leading-relaxed mb-3">
+          Leaving this course resets it completely. This cannot be undone.
+        </p>
+        <ul className="text-[12.5px] text-ink-2 leading-relaxed list-disc pl-5 mb-4 space-y-1">
+          <li>Your lesson progress for this course is deleted</li>
+          <li>Your quiz attempts and scores for this course are deleted</li>
+        </ul>
+        <p className="text-[12px] text-ink-3 leading-relaxed mb-1.5">
+          Re-joining later starts this course from the beginning. Your other courses and any certificates you have
+          already earned are not affected.
+        </p>
+        <p className="text-[12px] text-ink-3 leading-relaxed mb-5">
+          Your message history for this course is kept and stays readable. You can keep posting only if you still have
+          participation history here — a completed lesson, a quiz attempt, or a certificate you have earned — otherwise
+          you can post again after re-joining.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex-grow h-10 bg-error hover:opacity-90 disabled:opacity-60 text-white text-[13px] font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{busy ? 'Leaving...' : 'Leave & reset progress'}</span>
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="h-10 px-5 bg-white hover:bg-canvas text-text-2 text-[13px] font-semibold rounded-lg border border-stroke transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+          >
+            Keep course
+          </button>
+        </div>
       </div>
     </div>
   );

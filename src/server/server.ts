@@ -4,11 +4,15 @@ import { shutdownDb } from '../db/index.js';
 
 export async function startServer() {
   const app = await createApp();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n  ➜  Local:   http://localhost:${PORT}/`);
-    console.log(`  ➜  Network: http://127.0.0.1:${PORT}/\n`);
+    console.log(`  ➜  Network: http://0.0.0.0:${PORT}/`);
+    if (process.env.APP_URL) {
+      console.log(`  ➜  Public:  ${process.env.APP_URL}/`);
+    }
+    console.log();
   });
 
   const shutdown = async (signal: string) => {

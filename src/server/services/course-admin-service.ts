@@ -7,10 +7,11 @@ export async function createCourse(
   description: string,
   thumbnail: string | undefined,
   createdBy: number,
+  createdByName?: string,
 ) {
   const result = await db
     .insert(schema.courses)
-    .values({ title, description, thumbnail: thumbnail || 'teal', createdBy })
+    .values({ title, description, thumbnail: thumbnail || 'teal', createdBy, createdByName })
     .returning();
   return result[0];
 }

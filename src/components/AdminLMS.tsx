@@ -1,7 +1,8 @@
 // src/components/AdminLMS.tsx
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { Course, Lesson } from '../types.js';
+import { Course, Lesson, User } from '../types.js';
 import { apiFetch } from '../lib/api.js';
+import type { LucideIcon } from 'lucide-react';
 import {
   Plus,
   ChartLine,
@@ -12,9 +13,14 @@ import {
   ArrowUp,
   ArrowDown,
   Edit3,
+  GripVertical,
   Trash2,
+  LayoutDashboard,
+  GraduationCap,
+  MessageCircle,
+  Settings,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, Reorder, motion, useDragControls } from 'motion/react';
 
 const CourseFactory = lazy(() => import('./admin/CourseFactory.tsx').then((m) => ({ default: m.CourseFactory })));
 const LessonManager = lazy(() => import('./admin/LessonManager.tsx').then((m) => ({ default: m.LessonManager })));
@@ -23,6 +29,39 @@ const AnalyticsDashboard = lazy(() =>
   import('./admin/AnalyticsDashboard.tsx').then((m) => ({ default: m.AnalyticsDashboard })),
 );
 const UserManagement = lazy(() => import('./admin/UserManagement.tsx').then((m) => ({ default: m.UserManagement })));
+const InstructorDashboard = lazy(() =>
+  import('./InstructorDashboard.tsx').then((m) => ({ default: m.InstructorDashboard })),
+);
+const InstructorLearners = lazy(() =>
+  import('./InstructorLearners.tsx').then((m) => ({ default: m.InstructorLearners })),
+);
+const InstructorSettings = lazy(() =>
+  import('./InstructorSettings.tsx').then((m) => ({ default: m.InstructorSettings })),
+);
+const MessagesView = lazy(() => import('./MessagesView.tsx').then((m) => ({ default: m.MessagesView })));
+
+export type AdminLmsTab = 'dashboard' | 'courses' | 'learners' | 'analytics' | 'messages' | 'settings' | 'users';
+
+interface NavTab {
+  key: AdminLmsTab;
+  label: string;
+  icon: LucideIcon;
+}
+
+const INSTRUCTOR_TABS: NavTab[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'courses', label: 'Courses', icon: BookOpen },
+  { key: 'learners', label: 'Learners', icon: GraduationCap },
+  { key: 'analytics', label: 'Analytics', icon: ChartLine },
+  { key: 'messages', label: 'Messages', icon: MessageCircle },
+  { key: 'settings', label: 'Settings', icon: Settings },
+];
+
+const ADMIN_TABS: NavTab[] = [
+  { key: 'courses', label: 'Courses', icon: BookOpen },
+  { key: 'analytics', label: 'Analytics', icon: ChartLine },
+  { key: 'users', label: 'Manage users', icon: SquareUser },
+];
 
 interface AdminLMSProps {
   token: string | null;
@@ -30,9 +69,128 @@ interface AdminLMSProps {
   onRefreshCourses: () => void;
   currentUserId?: number;
   userRole?: string;
-  activeTab: 'courses' | 'analytics' | 'users';
-  onActiveTabChange: (tab: 'courses' | 'analytics' | 'users') => void;
+  activeTab: AdminLmsTab;
+  onActiveTabChange: (tab: AdminLmsTab) => void;
+  user?: User | null;
+  onProfileUpdated?: () => void;
+  messagesIntent?: { courseId: number; instructorId: number } | null;
+  onClearMessagesIntent?: () => void;
 }
+
+interface LessonRowProps {
+  lesson: Lesson;
+  index: number;
+  total: number;
+  isActive: boolean;
+  hasContent: boolean;
+  meta: string;
+  reorderDisabled: boolean;
+  onOpen: (lesson: Lesson) => void;
+  onMove: (index: number, direction: 'up' | 'down') => void;
+  onDelete: (lessonId: number) => void;
+}
+
+/**
+ * A single row in the draggable curriculum outline (DEF-010).
+ *
+ * `useDragControls` is a hook, so each row needs its own component instance —
+ * it cannot be called from inside the Reorder.Group render callback. The row
+ * itself is a click target that opens the lesson editor, so dragging is bound
+ * to the grip handle only (dragListener={false}); otherwise every drag would
+ * also fire the open-editor click.
+ */
+const LessonRow: React.FC<LessonRowProps> = ({
+  lesson,
+  index,
+  total,
+  isActive,
+  hasContent,
+  meta,
+  reorderDisabled,
+  onOpen,
+  onMove,
+  onDelete,
+}) => {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={lesson}
+      dragListener={false}
+      dragControls={dragControls}
+      whileDrag={{ backgroundColor: 'var(--color-steel-lt)' }}
+      className={`flex items-center gap-[9px] px-4 py-[9px] cursor-pointer border-l-[3px] transition-colors ${
+        isActive ? 'bg-steel-lt border-l-steel' : 'border-l-transparent hover:bg-canvas'
+      }`}
+    >
+      <span
+        onPointerDown={(e) => dragControls.start(e)}
+        onClick={(e) => e.stopPropagation()}
+        title="Drag to reorder"
+        aria-label={`Drag to reorder ${lesson.title}`}
+        className={`shrink-0 text-text-3 hover:text-steel active:scale-90 transition-colors ${
+          reorderDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'
+        }`}
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </span>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasContent ? 'bg-success' : 'bg-stroke'}`} />
+      <div className="min-w-0 flex-1" onClick={() => onOpen(lesson)}>
+        <div className="text-[12.5px] text-text font-medium truncate leading-snug">{lesson.title}</div>
+        <div className="text-[11px] text-text-3">{meta}</div>
+      </div>
+      <div className="flex items-center gap-[2px] shrink-0 font-mono">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMove(index, 'up');
+          }}
+          disabled={index === 0 || reorderDisabled}
+          title="Move up"
+          aria-label="Move lesson up"
+          className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
+        >
+          <ArrowUp className="w-3.5 h-3.5 text-text-2" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMove(index, 'down');
+          }}
+          disabled={index === total - 1 || reorderDisabled}
+          title="Move down"
+          aria-label="Move lesson down"
+          className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
+        >
+          <ArrowDown className="w-3.5 h-3.5 text-text-2" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(lesson);
+          }}
+          title="Edit"
+          aria-label="Edit lesson"
+          className="w-6 h-6 bg-steel-lt border border-steel/30 hover:bg-steel/20 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center ml-[2px]"
+        >
+          <Edit3 className="w-3.5 h-3.5 text-steel" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(lesson.id);
+          }}
+          title="Delete"
+          aria-label="Delete lesson"
+          className="w-6 h-6 bg-error-bg border border-error/20 hover:bg-error/15 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center"
+        >
+          <Trash2 className="w-3.5 h-3.5 text-error" />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
+};
 
 export const AdminLMS: React.FC<AdminLMSProps> = ({
   token,
@@ -42,8 +200,67 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
   userRole,
   activeTab,
   onActiveTabChange,
+  user,
+  onProfileUpdated,
+  messagesIntent,
+  onClearMessagesIntent,
 }) => {
   const setActiveTab = onActiveTabChange;
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+
+  // Instructor-initiated thread intent: a learner selected on the Learners tab
+  // with a chosen course. MessagesView consumes it to open/start the thread.
+  const [instructorThreadIntent, setInstructorThreadIntent] = useState<{
+    courseId: number;
+    learnerId: number;
+    learnerName?: string | null;
+  } | null>(null);
+
+  const handleStartConversation = (courseId: number, learnerId: number, learnerName?: string | null) => {
+    setInstructorThreadIntent({ courseId, learnerId, learnerName });
+    setActiveTab('messages');
+  };
+
+  const role: 'instructor' | 'admin' | null =
+    userRole === 'instructor' ? 'instructor' : userRole === 'admin' ? 'admin' : null;
+  const navTabs = role === 'instructor' ? INSTRUCTOR_TABS : ADMIN_TABS;
+  const effectiveTab: AdminLmsTab = navTabs.some((t) => t.key === activeTab)
+    ? activeTab
+    : (navTabs[0]?.key ?? 'courses');
+
+  // Persist a corrected tab whenever the current one is not valid for the role
+  // (e.g. a stored admin-only tab applied to an instructor session).
+  useEffect(() => {
+    if (!role) return;
+    if (!navTabs.some((t) => t.key === activeTab)) {
+      setActiveTab(navTabs[0].key);
+    }
+  }, [role, activeTab, navTabs, setActiveTab]);
+
+  // Unread-message badge for the instructor Messages tab (mirrors the learner
+  // pattern). Polled while the portal is mounted; the learner-side badge in App
+  // only runs on /study paths, so this keeps the portal badge fresh on /lms.
+  useEffect(() => {
+    if (userRole !== 'instructor') return;
+    let cancelled = false;
+    const poll = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const { ok, data } = await apiFetch<{ unreadTotal: number }>('/api/messages/unread-total');
+        if (!cancelled && ok) setUnreadMessageCount(data.unreadTotal);
+      } catch {
+        // Non-critical — badge keeps its last known value while offline.
+      }
+    };
+    poll();
+    const intervalId = window.setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [userRole]);
+
+  const visibleCourses = userRole === 'instructor' ? courses.filter((c) => c.createdBy === currentUserId) : courses;
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [courseSubTab, setCourseSubTab] = useState('lessons');
   const [lessonEditor, setLessonEditor] = useState<{ open: boolean; lesson: Lesson | null }>({
@@ -54,6 +271,12 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
     title: string;
     questions: { questionText: string; options: string[]; correctOptionIndex: number }[];
   }>({ title: '', questions: [] });
+  // Authoritative lesson order used by the drag-and-drop curriculum list.
+  // Reorder.Group matches items by object identity, so this must be a
+  // state-owned array rather than selectedCourse.lessons (a prop that gets
+  // replaced wholesale on every fetch).
+  const [orderedLessons, setOrderedLessons] = useState<Lesson[]>([]);
+  const [savingLessonOrder, setSavingLessonOrder] = useState(false);
 
   const loadCourseFullDetails = async (courseId: number) => {
     if (!token) return;
@@ -62,6 +285,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
       if (ok) {
         const quizObj = data.quiz || { title: `${data.course.title} Exam`, questions: [] };
         setQuizForm({ title: quizObj.title, questions: quizObj.questions || [] });
+        setOrderedLessons(data.lessons || []);
         setSelectedCourse({ ...data.course, lessons: data.lessons, quiz: quizObj });
       }
     } catch (err) {
@@ -101,36 +325,62 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
     }
   };
 
-  const handleMoveLesson = async (index: number, direction: 'up' | 'down') => {
+  /**
+   * Persists a full lesson sequence for the selected course.
+   *
+   * The endpoint only renumbers the ids present in `orderedIds`, so a partial
+   * payload silently leaves stale/duplicated sort_order values behind. We
+   * therefore always send the complete list. On failure the local order is
+   * rolled back from the server so the UI never shows a sequence the backend
+   * rejected.
+   */
+  const persistLessonOrder = async (nextOrder: Lesson[]) => {
     if (!selectedCourse || !token) return;
-    const currentLessons = selectedCourse.lessons ? [...selectedCourse.lessons] : [];
-    if (currentLessons.length === 0) return;
-
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= currentLessons.length) return;
-
-    const firstLesson = currentLessons[index];
-    const secondLesson = currentLessons[targetIdx];
-    const originalFirstOrder = firstLesson.sortOrder;
-    firstLesson.sortOrder = secondLesson.sortOrder;
-    secondLesson.sortOrder = originalFirstOrder;
-    currentLessons[index] = secondLesson;
-    currentLessons[targetIdx] = firstLesson;
-
+    setSavingLessonOrder(true);
     try {
       const { ok } = await apiFetch(`/api/admin/courses/${selectedCourse.id}/lessons/reorder`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedIds: currentLessons.map((l) => l.id) }),
+        body: JSON.stringify({ orderedIds: nextOrder.map((l) => l.id) }),
       });
 
       if (ok) {
         await loadCourseFullDetails(selectedCourse.id);
         onRefreshCourses();
+      } else {
+        await loadCourseFullDetails(selectedCourse.id);
       }
     } catch (e) {
       console.error('Failed to reorder lessons:', e);
+      await loadCourseFullDetails(selectedCourse.id);
+    } finally {
+      setSavingLessonOrder(false);
     }
+  };
+
+  const sameLessonSequence = (a: Lesson[], b: Lesson[]) =>
+    a.length === b.length && a.every((lesson, i) => lesson.id === b[i]?.id);
+
+  // Drag-and-drop handler (Reorder.Group) — optimistic local update, persisted
+  // immediately, with rollback on failure handled by persistLessonOrder.
+  const handleReorder = (nextOrder: Lesson[]) => {
+    if (savingLessonOrder) return;
+    if (sameLessonSequence(orderedLessons, nextOrder)) return;
+    setOrderedLessons(nextOrder);
+    void persistLessonOrder(nextOrder);
+  };
+
+  // Keyboard/pointer-accessible fallback that drives the same persistence path.
+  const handleMoveLesson = (index: number, direction: 'up' | 'down') => {
+    if (savingLessonOrder) return;
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || index >= orderedLessons.length) return;
+    if (targetIdx < 0 || targetIdx >= orderedLessons.length) return;
+
+    const nextOrder = [...orderedLessons];
+    const [moved] = nextOrder.splice(index, 1);
+    nextOrder.splice(targetIdx, 0, moved);
+    handleReorder(nextOrder);
   };
 
   useEffect(() => {
@@ -157,42 +407,31 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
             <p className="hidden lg:block text-[10px] uppercase tracking-[0.09em] text-white/25 px-2 pt-3 pb-[5px] select-none">
               Manage
             </p>
-            <button
-              onClick={() => {
-                setActiveTab('courses');
-                setSelectedCourse(null);
-              }}
-              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'courses' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
-            >
-              <BookOpen
-                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'courses' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
-              />
-              <span>Courses</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('analytics');
-                setSelectedCourse(null);
-              }}
-              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'analytics' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
-            >
-              <ChartLine
-                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'analytics' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
-              />
-              <span>Analytics</span>
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('users');
-                setSelectedCourse(null);
-              }}
-              className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${activeTab === 'users' ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
-            >
-              <SquareUser
-                className={`w-[15px] h-[15px] shrink-0 ${activeTab === 'users' ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
-              />
-              <span>Manage users</span>
-            </button>
+            {navTabs.map(({ key: tabKey, label, icon: Icon }) => {
+              const isActive = effectiveTab === tabKey;
+              return (
+                <button
+                  key={tabKey}
+                  onClick={() => {
+                    setActiveTab(tabKey);
+                    setSelectedCourse(null);
+                  }}
+                  className={`group flex items-center gap-[9px] px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer select-none shrink-0 ${isActive ? 'bg-steel text-white' : 'text-navtext hover:bg-slate-3 hover:text-white'}`}
+                >
+                  <Icon
+                    className={`w-[15px] h-[15px] shrink-0 ${isActive ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
+                  />
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{label}</span>
+                    {tabKey === 'messages' && unreadMessageCount > 0 && (
+                      <span className="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-ochre text-white text-[10px] font-bold leading-none">
+                        {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -205,11 +444,11 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
               </div>
             }
           >
-            {activeTab === 'courses' ? (
+            {effectiveTab === 'courses' ? (
               !selectedCourse ? (
                 <CourseFactory
                   token={token}
-                  courses={courses}
+                  courses={visibleCourses}
                   selectedCourse={null}
                   setSelectedCourse={setSelectedCourse}
                   onRefreshCourses={onRefreshCourses}
@@ -281,77 +520,34 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                                 + Add
                               </span>
                             </div>
-                            {(selectedCourse.lessons || []).length === 0 && (
+                            {orderedLessons.length === 0 && (
                               <div className="px-4 py-3 text-[11px] text-text-3 italic">No lessons yet.</div>
                             )}
-                            {(selectedCourse.lessons || []).map((lesson, index) => {
-                              const isActive = lessonEditor.open && lessonEditor.lesson?.id === lesson.id;
-                              return (
-                                <div
-                                  key={lesson.id}
-                                  onClick={() => openLessonEditor(lesson)}
-                                  className={`flex items-center gap-[9px] px-4 py-[9px] cursor-pointer border-l-[3px] transition-colors ${isActive ? 'bg-steel-lt border-l-steel' : 'border-l-transparent hover:bg-canvas'}`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasLessonContent(lesson) ? 'bg-success' : 'bg-stroke'}`}
+                            {orderedLessons.length > 0 && (
+                              <Reorder.Group
+                                as="div"
+                                axis="y"
+                                values={orderedLessons}
+                                onReorder={handleReorder}
+                                className="list-none"
+                              >
+                                {orderedLessons.map((lesson, index) => (
+                                  <LessonRow
+                                    key={lesson.id}
+                                    lesson={lesson}
+                                    index={index}
+                                    total={orderedLessons.length}
+                                    isActive={lessonEditor.open && lessonEditor.lesson?.id === lesson.id}
+                                    hasContent={hasLessonContent(lesson)}
+                                    meta={lessonMeta(lesson)}
+                                    reorderDisabled={savingLessonOrder}
+                                    onOpen={openLessonEditor}
+                                    onMove={handleMoveLesson}
+                                    onDelete={handleDeleteLesson}
                                   />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="text-[12.5px] text-text font-medium truncate leading-snug">
-                                      {lesson.title}
-                                    </div>
-                                    <div className="text-[11px] text-text-3">{lessonMeta(lesson)}</div>
-                                  </div>
-                                  <div className="flex items-center gap-[2px] shrink-0 font-mono">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleMoveLesson(index, 'up');
-                                      }}
-                                      disabled={index === 0}
-                                      title="Move up"
-                                      aria-label="Move lesson up"
-                                      className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
-                                    >
-                                      <ArrowUp className="w-3.5 h-3.5 text-text-2" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleMoveLesson(index, 'down');
-                                      }}
-                                      disabled={index === (selectedCourse.lessons || []).length - 1}
-                                      title="Move down"
-                                      aria-label="Move lesson down"
-                                      className="w-6 h-6 bg-white border border-stroke hover:bg-canvas rounded-[5px] disabled:opacity-30 active:scale-95 cursor-pointer flex items-center justify-center"
-                                    >
-                                      <ArrowDown className="w-3.5 h-3.5 text-text-2" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openLessonEditor(lesson);
-                                      }}
-                                      title="Edit"
-                                      aria-label="Edit lesson"
-                                      className="w-6 h-6 bg-steel-lt border border-steel/30 hover:bg-steel/20 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center ml-[2px]"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5 text-steel" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteLesson(lesson.id);
-                                      }}
-                                      title="Delete"
-                                      aria-label="Delete lesson"
-                                      className="w-6 h-6 bg-error-bg border border-error/20 hover:bg-error/15 rounded-[5px] active:scale-95 cursor-pointer flex items-center justify-center"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5 text-error" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                ))}
+                              </Reorder.Group>
+                            )}
                             <div
                               onClick={openAddLesson}
                               className="mx-3 mt-2 mb-3 flex items-center justify-center gap-1.5 text-[12px] text-steel py-[7px] px-[10px] rounded-[5px] cursor-pointer border border-dashed border-stroke hover:bg-steel-lt transition-colors select-none"
@@ -429,7 +625,7 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                             {courseSubTab === 'settings' && (
                               <CourseFactory
                                 token={token}
-                                courses={courses}
+                                courses={visibleCourses}
                                 selectedCourse={selectedCourse}
                                 setSelectedCourse={setSelectedCourse}
                                 onRefreshCourses={onRefreshCourses}
@@ -446,10 +642,26 @@ export const AdminLMS: React.FC<AdminLMSProps> = ({
                   </div>
                 </>
               )
-            ) : activeTab === 'analytics' ? (
-              <AnalyticsDashboard token={token} courses={courses} userRole={userRole} />
-            ) : activeTab === 'users' ? (
+            ) : effectiveTab === 'analytics' ? (
+              <AnalyticsDashboard token={token} courses={visibleCourses} userRole={userRole} />
+            ) : effectiveTab === 'users' ? (
               <UserManagement token={token} currentUserId={currentUserId} />
+            ) : effectiveTab === 'dashboard' ? (
+              <InstructorDashboard token={token} />
+            ) : effectiveTab === 'learners' ? (
+              <InstructorLearners token={token} onStartConversation={handleStartConversation} />
+            ) : effectiveTab === 'settings' ? (
+              <InstructorSettings user={user ?? null} token={token} onProfileUpdated={onProfileUpdated} />
+            ) : effectiveTab === 'messages' ? (
+              <MessagesView
+                courses={visibleCourses}
+                currentUserId={currentUserId ?? 0}
+                currentUserRole={userRole === 'admin' ? 'admin' : 'instructor'}
+                messagesIntent={messagesIntent ?? null}
+                onClearMessagesIntent={onClearMessagesIntent ?? (() => {})}
+                instructorThreadIntent={instructorThreadIntent}
+                onClearInstructorThreadIntent={() => setInstructorThreadIntent(null)}
+              />
             ) : null}
           </Suspense>
         </div>

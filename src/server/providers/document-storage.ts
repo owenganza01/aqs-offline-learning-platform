@@ -18,7 +18,8 @@ export interface StoredDocumentMetadata {
   mimeType: string;
   fileSize: number;
   uploadedAt: Date;
-  uploadedBy: number;
+  uploadedBy: number | null;
+  uploadedByName?: string | null;
 }
 
 export interface DocumentStorageProvider {
@@ -51,6 +52,7 @@ export class DatabaseStorageProvider implements DocumentStorageProvider {
       mimeType: metadata.mimeType,
       fileSize: metadata.fileSize,
       uploadedBy: metadata.uploadedBy,
+      uploadedByName: metadata.uploadedByName || null,
       fileData,
     });
 
@@ -76,6 +78,7 @@ export class DatabaseStorageProvider implements DocumentStorageProvider {
         fileSize: row.fileSize,
         uploadedAt: row.uploadedAt,
         uploadedBy: row.uploadedBy,
+        uploadedByName: row.uploadedByName || 'Deleted user',
       },
     };
   }
@@ -110,6 +113,7 @@ export class DatabaseStorageProvider implements DocumentStorageProvider {
         fileSize: schema.documents.fileSize,
         uploadedAt: schema.documents.uploadedAt,
         uploadedBy: schema.documents.uploadedBy,
+        uploadedByName: schema.documents.uploadedByName,
       })
       .from(schema.documents)
       .where(eq(schema.documents.id, documentId));
@@ -126,6 +130,7 @@ export class DatabaseStorageProvider implements DocumentStorageProvider {
       fileSize: row.fileSize,
       uploadedAt: row.uploadedAt,
       uploadedBy: row.uploadedBy,
+      uploadedByName: row.uploadedByName || 'Deleted user',
     };
   }
 }
